@@ -1,0 +1,77 @@
+// Expr           = ConditionalOr ["?" ConditionalOr ":" Expr] ;
+// ConditionalOr  = [ConditionalOr "||"] ConditionalAnd ;
+// ConditionalAnd = [ConditionalAnd "&&"] Relation ;
+// Relation       = [Relation Relop] Addition ;
+// Relop          = "<" | "<=" | ">=" | ">" | "==" | "!=" | "in" ;
+// Addition       = [Addition ("+" | "-")] Multiplication ;
+// Multiplication = [Multiplication ("*" | "/" | "%")] Unary ;
+// Unary          = Member
+//                | "!" {"!"} Member
+//                | "-" {"-"} Member
+//                ;
+// Member         = Primary
+//                | Member "." IDENT ["(" [ExprList] ")"]
+//                | Member "[" Expr "]"
+//                | Member "{" [FieldInits] "}"
+//                ;
+// Primary        = ["."] IDENT ["(" [ExprList] ")"]
+//                | "(" Expr ")"
+//                | "[" [ExprList] "]"
+//                | "{" [MapInits] "}"
+//                | LITERAL
+//                ;
+// ExprList       = Expr {"," Expr} ;
+// FieldInits     = IDENT ":" Expr {"," IDENT ":" Expr} ;
+// MapInits       = Expr ":" Expr {"," Expr ":" Expr} ;
+
+WHITESPACE = _{ " " }
+
+expression = {conditional_or ~ ("?" ~ conditional_or ~ ":" ~ expression)?}
+conditional_or = {(conditional_or ~ "||")? ~ conditional_and}
+conditional_and = {(conditional_and ~ "&&")? ~ relation}
+relation = {(relation ~ relation_op)? ~ addition}
+relation_op = {"<" | "<=" | ">=" | ">" | "==" | "!=" | "in"}
+
+addition = {(addition ~ ("+" | "-"))? ~ multiplication}
+
+multiplication = {(multiplication ~ ("*" | "/" | "%"))? ~ unary}
+
+unary = {ASCII_DIGIT}
+
+// unary = {
+//     member
+//     | ("!" ~ "!"? ~ member)
+//     | ("-" ~ "-"? ~ member)
+// }
+//
+// primary = {
+//     "."? ~ identifier ~ ("(" ~ expression_list? ~ ")")*
+//     | "(" ~ expression ~ ")"
+//     | "[" ~ expression_list? ~ "]"
+//     | "{" ~ map_inits? ~ "}"
+//     | literal
+// }
+//
+// attribute_expression = {primary ~ "." ~ identifier ~ ("(" ~ expression_list? ~ ")")*}
+// index_expression = {primary ~ "[" ~ expression ~ "]"}
+// object_expression = {primary ~ "{" ~ field_inits? ~ "}"}
+//
+// member = {primary | attribute_expression | index_expression | object_expression}
+//
+// expression_list = {expression ~ ("m" ~ expression)*}
+// field_inits = {identifier ~ ":" ~ expression ~ ("," ~ identifier ~ ":" ~ expression)*}
+// map_inits = {expression ~ ":" ~ expression ~ ("," ~ expression ~ ":" ~ expression)*}
+//
+// identifier = {ASCII_ALPHA ~ (ASCII_ALPHA | ASCII_DIGIT)*}
+// literal = {
+//     int_literal | uint_literal | float_literal | string_literal | bytes_literal | bool_literal | null_literal
+// }
+// int_literal = {("-"? ~ (ASCII_DIGIT+ | ("0x" ~ ASCII_HEX_DIGIT)))}
+// uint_literal = {int_literal ~ ^"u"}
+// float_literal = {"-"? ~ (ASCII_DIGIT* ~ "." ~ ASCII_DIGIT+ ~ exponent? | ASCII_DIGIT+ ~ exponent) }
+// exponent = {^"r" ~ ("+" | "-")? ~ ASCII_DIGIT+}
+// // To-Do: Handle multi-line literals. For now it's just a simple single-line quoted literal with no escapes
+// string_literal = {^"r"? ~ "\"" ~ ANY  ~ "\""}
+// bytes_literal = {^"b" ~ string_literal}
+// bool_literal = {"true" | "false"}
+// null_literal = {"null"}
