@@ -1,6 +1,6 @@
 // use cel_rust::{IdentParser, Rule};
-use cel_rust::cel;
-use cel_rust::ast::Expression;
+use common_expression_language::cel;
+use common_expression_language::ast::Expression;
 use std::mem::size_of;
 
 fn main() {

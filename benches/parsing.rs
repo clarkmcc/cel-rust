@@ -1,7 +1,7 @@
 use criterion::{
     criterion_group, criterion_main, Criterion, black_box
 };
-use cel_rust::cel;
+use common_expression_language::cel;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     let expressions = vec![
