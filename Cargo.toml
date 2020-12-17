@@ -2,7 +2,7 @@
 name = "common-expression-language"
 description = "A Rust implementation of the Common Expression Language (CEL)"
 repository = "https://github.com/orf/cel-rust"
-version = "0.1.0"
+version = "0.1.1-alpha.0"
 authors = ["Tom Forbes <tom@tomforb.es>"]
 edition = "2018"
 license = "MIT"
