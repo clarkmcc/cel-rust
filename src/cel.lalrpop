@@ -1,13 +1,19 @@
-use std::str::FromStr;
 use crate::ast::{RelationOp, ArithmeticOp, Expression, UnaryOp, Member, Literal};
 
 grammar;
 
+match {
+    // Skip whitespace and comments
+   r"\s*" => { },
+   r"//[^\n\r]*[\n\r]*" => { },
+} else {
+   _
+}
 
-pub Expression: Box<Expression> = {
-    <left:Expression> <op:ArithmeticOp> <right:Primary> => Expression::Arithmetic{<>}.into(),
-    <left:Expression> <op:RelationOp> <right:Primary> => Expression::Relation{<>}.into(),
-    <condition:Expression> "?" <left:Primary> ":" <right:Primary> => Expression::Ternary{<>}.into(),
+pub Expression: &'a Expression = {
+    <left:Expression> <op:ArithmeticOp> <right:Primary> => Expression::Arithmetic{<>},
+    <left:Expression> <op:RelationOp> <right:Primary> => Expression::Relation{<>},
+    <condition:Expression> "?" <left:Primary> ":" <right:Primary> => Expression::Ternary{<>},
     <left:Expression> "||" <right:Primary> => Expression::Or{<>}.into(),
     <left:Expression> "&&" <right:Primary> => Expression::And{<>}.into(),
     <op:UnaryOp> <right:Primary> => Expression::Unary{<>}.into(),
@@ -76,15 +82,21 @@ RelationOp: RelationOp = {
 }
 
 Literal: Literal = {
-    r"[0-9]+" => Literal::Int(<>.parse().unwrap()),
-    r"[0-9]+ [uU]" => Literal::UInt(<>.parse().unwrap()),
-};
+    // Integer literals. Annoying to parse :/
+    r"-?[0-9]+" => Literal::Int(<>.parse().unwrap()),
+    r"-?0[xX]([0-9a-fA-F]+)" => Literal::Int(i32::from_str_radix(<>, 16).unwrap()),
+    r"-?[0-9]+ [uU]" => Literal::UInt(<>.parse().unwrap()),
+    r"-?0[xX]([0-9a-fA-F]+) [uU]" => Literal::UInt(u32::from_str_radix(<>, 16).unwrap()),
 
-Num: i32 = {
-    r"[0-9]+" => i32::from_str(<>).unwrap()
+    // Float with decimals and optional exponent
+    r"([-+]?[0-9]*\.[0-9]+([eE][-+]?[0-9]+)?)" => Literal::Float(<>.parse().unwrap()),
+    // Float with no decimals and required exponent
+    r"[-+]?[0-9]+[eE][-+]?[0-9]+" => Literal::Float(<>.parse().unwrap()),
+    "true" => Literal::Bool(true),
+    "false" => Literal::Bool(false),
+    "null" => Literal::Null,
 };
-
 
 Ident: String = {
-    r"[_a-zA-Z][_a-zA-Z0-9]*" => String::from(<>)
+    r"[_a-zA-Z][_a-zA-Z0-9]*" => <>.into()
 }
