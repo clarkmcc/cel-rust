@@ -57,5 +57,6 @@ pub enum Member {
 
 #[derive(Debug)]
 pub enum Literal {
-    Int(i32)
+    Int(i32),
+    UInt(u32),
 }

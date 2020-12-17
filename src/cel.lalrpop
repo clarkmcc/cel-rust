@@ -5,29 +5,29 @@ grammar;
 
 
 pub Expression: Box<Expression> = {
-    <left:Expression> <op:ArithmeticOp> <right:Primary> => Box::new(Expression::Arithmetic{<>}),
-    <left:Expression> <op:RelationOp> <right:Primary> => Box::new(Expression::Relation{<>}),
-    <condition:Expression> "?" <left:Primary> ":" <right:Primary> => Box::new(Expression::Ternary{<>}),
-    <left:Expression> "||" <right:Primary> => Box::new(Expression::Or{<>}),
-    <left:Expression> "&&" <right:Primary> => Box::new(Expression::And{<>}),
-    <op:UnaryOp> <right:Primary> => Box::new(Expression::Unary{<>}),
+    <left:Expression> <op:ArithmeticOp> <right:Primary> => Expression::Arithmetic{<>}.into(),
+    <left:Expression> <op:RelationOp> <right:Primary> => Expression::Relation{<>}.into(),
+    <condition:Expression> "?" <left:Primary> ":" <right:Primary> => Expression::Ternary{<>}.into(),
+    <left:Expression> "||" <right:Primary> => Expression::Or{<>}.into(),
+    <left:Expression> "&&" <right:Primary> => Expression::And{<>}.into(),
+    <op:UnaryOp> <right:Primary> => Expression::Unary{<>}.into(),
 
     Member,
 };
 
 pub Member: Box<Expression> = {
     Primary,
-    <primary:Member> "." <identifier:Ident> => Box::new(Expression::Member{primary, member: Member::Attribute{identifier}}),
-    <primary:Member> "." <identifier:Ident> "(" <arguments:CommaSeparated<Expression>> ")" => Box::new(Expression::Member{primary, member: Member::Function{identifier, arguments}}),
-    <primary:Member> "[" <expression:Expression> "]" => Box::new(Expression::Member{primary, member: Member::Index{expression}}),
-    <primary:Member> "{" <fields:CommaSeparated<FieldInits>> "}" => Box::new(Expression::Member{primary, member: Member::Fields{fields}}),
+    <primary:Member> "." <identifier:Ident> => Expression::Member{primary, member: Member::Attribute{identifier}}.into(),
+    <primary:Member> "." <identifier:Ident> "(" <arguments:CommaSeparated<Expression>> ")" => Expression::Member{primary, member: Member::Function{identifier, arguments}}.into(),
+    <primary:Member> "[" <expression:Expression> "]" => Expression::Member{primary, member: Member::Index{expression}}.into(),
+    <primary:Member> "{" <fields:CommaSeparated<FieldInits>> "}" => Expression::Member{primary, member: Member::Fields{fields}}.into(),
 }
 
 pub Primary: Box<Expression> = {
-    "."? <Ident> => Box::new(Expression::Ident(<>)),
-    Literal => Box::new(Expression::Literal(<>)),
-    "[" <members:CommaSeparated<Expression>> "]" => Box::new(Expression::List{<>}),
-    "{" <fields:CommaSeparated<MapInits>> "}" => Box::new(Expression::Map{<>}),
+    "."? <Ident> => Expression::Ident(<>).into(),
+    Literal => Expression::Literal(<>).into(),
+    "[" <members:CommaSeparated<Expression>> "]" => Expression::List{<>}.into(),
+    "{" <fields:CommaSeparated<MapInits>> "}" => Expression::Map{<>}.into(),
     "(" <Expression> ")"
 }
 
@@ -76,12 +76,14 @@ RelationOp: RelationOp = {
 }
 
 Literal: Literal = {
-    Num => Literal::Int(<>),
+    r"[0-9]+" => Literal::Int(<>.parse().unwrap()),
+    r"[0-9]+ [uU]" => Literal::UInt(<>.parse().unwrap()),
 };
 
 Num: i32 = {
     r"[0-9]+" => i32::from_str(<>).unwrap()
 };
+
 
 Ident: String = {
     r"[_a-zA-Z][_a-zA-Z0-9]*" => String::from(<>)
