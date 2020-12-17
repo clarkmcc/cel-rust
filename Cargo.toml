@@ -5,6 +5,7 @@ repository = "https://github.com/orf/cel-rust"
 version = "0.1.0"
 authors = ["Tom Forbes <tom@tomforb.es>"]
 edition = "2018"
+license = "MIT"
 
 [dependencies]
 lalrpop-util = "0.19.0"
