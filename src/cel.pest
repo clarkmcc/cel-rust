@@ -14,6 +14,8 @@
 //                | Member "[" Expr "]"
 //                | Member "{" [FieldInits] "}"
 //                ;
+
+
 // Primary        = ["."] IDENT ["(" [ExprList] ")"]
 //                | "(" Expr ")"
 //                | "[" [ExprList] "]"
@@ -23,6 +25,38 @@
 // ExprList       = Expr {"," Expr} ;
 // FieldInits     = IDENT ":" Expr {"," IDENT ":" Expr} ;
 // MapInits       = Expr ":" Expr {"," Expr ":" Expr} ;
+
+
+// IDENT          ::=  - RESERVED
+// LITERAL        ::= INT_LIT | UINT_LIT | FLOAT_LIT | STRING_LIT | BYTES_LIT
+//                  | BOOL_LIT | NULL_LIT
+// INT_LIT        ::= -? DIGIT+ | -? 0x HEXDIGIT+
+// UINT_LIT       ::= INT_LIT [uU]
+// FLOAT_LIT      ::= -? DIGIT* . DIGIT+ EXPONENT? | -? DIGIT+ EXPONENT
+// DIGIT          ::= [0-9]
+// HEXDIGIT       ::= [0-9abcdefABCDEF]
+// EXPONENT       ::= [eE] [+-]? DIGIT+
+// STRING_LIT     ::= [rR]? ( "    ~( " | NEWLINE )*  "
+//                          | '    ~( ' | NEWLINE )*  '
+//                          | """  ~"""*              """
+//                          | '''  ~'''*              '''
+//                          )
+// BYTES_LIT      ::= [bB] STRING_LIT
+// ESCAPE         ::= \ [bfnrt"'\]
+//                  | \ x HEXDIGIT HEXDIGIT
+//                  | \ u HEXDIGIT HEXDIGIT HEXDIGIT HEXDIGIT
+//                  | \ U HEXDIGIT HEXDIGIT HEXDIGIT HEXDIGIT HEXDIGIT HEXDIGIT HEXDIGIT HEXDIGIT
+//                  | \ [0-3] [0-7] [0-7]
+// NEWLINE        ::= \r\n | \r | \n
+// BOOL_LIT       ::= "true" | "false"
+// NULL_LIT       ::= "null"
+// RESERVED       ::= BOOL_LIT | NULL_LIT | "in"
+//                  | "as" | "break" | "const" | "continue" | "else"
+//                  | "for" | "function" | "if" | "import" | "let"
+//                  | "loop" | "package" | "namespace" | "return"
+//                  | "var" | "void" | "while"
+// WHITESPACE     ::= [\t\n\f\r ]+
+// COMMENT        ::= '//' ~NEWLINE* NEWLINE
 
 WHITESPACE = _{ " " }
 
@@ -60,7 +94,7 @@ unary = {ASCII_DIGIT}
 //
 // expression_list = {expression ~ ("m" ~ expression)*}
 // field_inits = {identifier ~ ":" ~ expression ~ ("," ~ identifier ~ ":" ~ expression)*}
-// map_inits = {expression ~ ":" ~ expression ~ ("," ~ expression ~ ":" ~ expression)*}
+// map_inits = {expression ~ ":" ~ expression ~ ("," ~ expression ~ "a:" ~ expression)*}
 //
 // identifier = {ASCII_ALPHA ~ (ASCII_ALPHA | ASCII_DIGIT)*}
 // literal = {

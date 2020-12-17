@@ -1,0 +1,88 @@
+use std::str::FromStr;
+use crate::ast::{RelationOp, ArithmeticOp, Expression, UnaryOp, Member, Literal};
+
+grammar;
+
+
+pub Expression: Box<Expression> = {
+    <left:Expression> <op:ArithmeticOp> <right:Primary> => Box::new(Expression::Arithmetic{<>}),
+    <left:Expression> <op:RelationOp> <right:Primary> => Box::new(Expression::Relation{<>}),
+    <condition:Expression> "?" <left:Primary> ":" <right:Primary> => Box::new(Expression::Ternary{<>}),
+    <left:Expression> "||" <right:Primary> => Box::new(Expression::Or{<>}),
+    <left:Expression> "&&" <right:Primary> => Box::new(Expression::And{<>}),
+    <op:UnaryOp> <right:Primary> => Box::new(Expression::Unary{<>}),
+
+    Member,
+};
+
+pub Member: Box<Expression> = {
+    Primary,
+    <primary:Member> "." <identifier:Ident> => Box::new(Expression::Member{primary, member: Member::Attribute{identifier}}),
+    <primary:Member> "." <identifier:Ident> "(" <arguments:CommaSeparated<Expression>> ")" => Box::new(Expression::Member{primary, member: Member::Function{identifier, arguments}}),
+    <primary:Member> "[" <expression:Expression> "]" => Box::new(Expression::Member{primary, member: Member::Index{expression}}),
+    <primary:Member> "{" <fields:CommaSeparated<FieldInits>> "}" => Box::new(Expression::Member{primary, member: Member::Fields{fields}}),
+}
+
+pub Primary: Box<Expression> = {
+    "."? <Ident> => Box::new(Expression::Ident(<>)),
+    Literal => Box::new(Expression::Literal(<>)),
+    "[" <members:CommaSeparated<Expression>> "]" => Box::new(Expression::List{<>}),
+    "{" <fields:CommaSeparated<MapInits>> "}" => Box::new(Expression::Map{<>}),
+    "(" <Expression> ")"
+}
+
+pub FieldInits: (String, Box<Expression>) = {
+    <Ident> ":" <Expression>
+}
+
+pub MapInits: (Box<Expression>, Box<Expression>) = {
+    <Expression> ":" <Expression>
+}
+
+CommaSeparated<T>: Vec<T> = {
+    <v:(<T> ",")*> <e:T?> => match e {
+        None => v,
+        Some(e) => {
+            let mut v = v;
+            v.push(e);
+            v
+        }
+    }
+};
+
+ArithmeticOp: ArithmeticOp = { // (3)
+    "+" => ArithmeticOp::Add,
+    "-" => ArithmeticOp::Subtract,
+    "*" => ArithmeticOp::Multiply,
+    "/" => ArithmeticOp::Divide,
+    "%" => ArithmeticOp::Modulus,
+};
+
+UnaryOp: UnaryOp = {
+    "!" => UnaryOp::Not,
+    "!!" => UnaryOp::DoubleNot,
+    "-" => UnaryOp::Minus,
+    "--" => UnaryOp::DoubleMinus,
+}
+
+RelationOp: RelationOp = {
+    "<" => RelationOp::LessThan,
+    "<=" => RelationOp::LessThanEq,
+    ">" => RelationOp::GreaterThan,
+    ">=" => RelationOp::GreaterThanEq,
+    "==" => RelationOp::Equals,
+    "!=" => RelationOp::NotEquals,
+    "in" => RelationOp::In
+}
+
+Literal: Literal = {
+    Num => Literal::Int(<>),
+};
+
+Num: i32 = {
+    r"[0-9]+" => i32::from_str(<>).unwrap()
+};
+
+Ident: String = {
+    r"[_a-zA-Z][_a-zA-Z0-9]*" => String::from(<>)
+}

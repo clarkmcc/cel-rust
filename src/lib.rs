@@ -1,11 +1,8 @@
-use pest_derive::Parser;
-use pest::prec_climber::{PrecClimber, Operator, Assoc};
-use lazy_static::lazy_static;
+use lalrpop_util::lalrpop_mod;
 
-#[derive(Parser)]
-#[grammar = "cel.pest"]
-pub struct IdentParser;
+pub mod ast;
 
+lalrpop_mod!(pub cel); // synthesized by LALRPOP
 
 #[cfg(test)]
 mod tests {
