@@ -1,4 +1,5 @@
-use crate::ast::{RelationOp, ArithmeticOp, Expression, UnaryOp, Member, Literal};
+
+use crate::ast::{RelationOp, ArithmeticOp, Expression, UnaryOp, Member, Atom};
 
 grammar;
 
@@ -10,38 +11,45 @@ match {
    _
 }
 
-pub Expression: &'a Expression = {
-    <left:Expression> <op:ArithmeticOp> <right:Primary> => Expression::Arithmetic{<>},
-    <left:Expression> <op:RelationOp> <right:Primary> => Expression::Relation{<>},
-    <condition:Expression> "?" <left:Primary> ":" <right:Primary> => Expression::Ternary{<>},
-    <left:Expression> "||" <right:Primary> => Expression::Or{<>}.into(),
-    <left:Expression> "&&" <right:Primary> => Expression::And{<>}.into(),
-    <op:UnaryOp> <right:Primary> => Expression::Unary{<>}.into(),
+pub Expression: Expression<'input> = {
+    <left:Expression> <op:ArithmeticOp> <right:Member> => Expression::Arithmetic(left.into(), op, right.into()),
+    <left:Expression> <op:RelationOp> <right:Member> => Expression::Relation(left.into(), op, right.into()),
+    <condition:Expression> "?" <left:Member> ":" <right:Primary> => Expression::Ternary(condition.into(), left.into(), right.into()),
+    <left:Expression> "||" <right:Member> => Expression::Or(left.into(), right.into()),
+    <left:Expression> "&&" <right:Member> => Expression::And(left.into(), right.into()),
+    <op:UnaryOp> <right:Member> => Expression::Unary(op, right.into()),
 
     Member,
 };
 
-pub Member: Box<Expression> = {
+pub Member: Expression<'input> = {
+    <left:Member> "." <identifier:Ident> => Expression::Member(left.into(), Member::Attribute(identifier).into()).into(),
+    <left:Member> "." <identifier:Ident> "(" <arguments:CommaSeparated<Expression>> ")" => {
+            let inner = Expression::Member(left.into(), Member::Attribute(identifier).into()).into();
+            Expression::Member(inner, Member::FunctionCall(arguments).into()).into()
+    },
+    <left:Member> "[" <expression:Expression> "]" => Expression::Member(left.into(), Member::Index(expression.into()).into()).into(),
+    <left:Member> "{" <fields:CommaSeparated<FieldInits>> "}" => Expression::Member(left.into(), Member::Fields(fields).into()).into(),
     Primary,
-    <primary:Member> "." <identifier:Ident> => Expression::Member{primary, member: Member::Attribute{identifier}}.into(),
-    <primary:Member> "." <identifier:Ident> "(" <arguments:CommaSeparated<Expression>> ")" => Expression::Member{primary, member: Member::Function{identifier, arguments}}.into(),
-    <primary:Member> "[" <expression:Expression> "]" => Expression::Member{primary, member: Member::Index{expression}}.into(),
-    <primary:Member> "{" <fields:CommaSeparated<FieldInits>> "}" => Expression::Member{primary, member: Member::Fields{fields}}.into(),
 }
 
-pub Primary: Box<Expression> = {
+pub Primary: Expression<'input> = {
     "."? <Ident> => Expression::Ident(<>).into(),
-    Literal => Expression::Literal(<>).into(),
-    "[" <members:CommaSeparated<Expression>> "]" => Expression::List{<>}.into(),
-    "{" <fields:CommaSeparated<MapInits>> "}" => Expression::Map{<>}.into(),
+    "."? <identifier:Ident> "(" <arguments:CommaSeparated<Expression>> ")" => {
+            let inner = Expression::Ident(identifier).into();
+            Expression::Member(inner, Member::FunctionCall(arguments).into()).into()
+    },
+    Atom => Expression::Atom(<>).into(),
+    "[" <members:CommaSeparated<Expression>> "]" => Expression::List(<>).into(),
+    "{" <fields:CommaSeparated<MapInits>> "}" => Expression::Map(<>).into(),
     "(" <Expression> ")"
 }
 
-pub FieldInits: (String, Box<Expression>) = {
+pub FieldInits: (&'input str, Expression<'input>) = {
     <Ident> ":" <Expression>
 }
 
-pub MapInits: (Box<Expression>, Box<Expression>) = {
+pub MapInits: (Expression<'input>, Expression<'input>) = {
     <Expression> ":" <Expression>
 }
 
@@ -81,22 +89,39 @@ RelationOp: RelationOp = {
     "in" => RelationOp::In
 }
 
-Literal: Literal = {
+Atom: Atom<'input> = {
     // Integer literals. Annoying to parse :/
-    r"-?[0-9]+" => Literal::Int(<>.parse().unwrap()),
-    r"-?0[xX]([0-9a-fA-F]+)" => Literal::Int(i32::from_str_radix(<>, 16).unwrap()),
-    r"-?[0-9]+ [uU]" => Literal::UInt(<>.parse().unwrap()),
-    r"-?0[xX]([0-9a-fA-F]+) [uU]" => Literal::UInt(u32::from_str_radix(<>, 16).unwrap()),
+    r"-?[0-9]+" => Atom::Int(<>.parse().unwrap()),
+    r"-?0[xX]([0-9a-fA-F]+)" => Atom::Int(i32::from_str_radix(<>, 16).unwrap()),
+    r"-?[0-9]+ [uU]" => Atom::UInt(<>.parse().unwrap()),
+    r"-?0[xX]([0-9a-fA-F]+) [uU]" => Atom::UInt(u32::from_str_radix(<>, 16).unwrap()),
 
     // Float with decimals and optional exponent
-    r"([-+]?[0-9]*\.[0-9]+([eE][-+]?[0-9]+)?)" => Literal::Float(<>.parse().unwrap()),
+    r"([-+]?[0-9]*\.[0-9]+([eE][-+]?[0-9]+)?)" => Atom::Float(<>.parse().unwrap()),
     // Float with no decimals and required exponent
-    r"[-+]?[0-9]+[eE][-+]?[0-9]+" => Literal::Float(<>.parse().unwrap()),
-    "true" => Literal::Bool(true),
-    "false" => Literal::Bool(false),
-    "null" => Literal::Null,
+    r"[-+]?[0-9]+[eE][-+]?[0-9]+" => Atom::Float(<>.parse().unwrap()),
+
+    // Double quoted string
+    r#""(\\.|[^"\n])*""# => Atom::String(<>.into()),
+    r#""""(\\.|[^"{3}])*""""# => Atom::String(<>.into()),
+
+    // Single quoted string
+    r#"'(\\.|[^'\n])*'"# => Atom::String(<>.into()),
+    r#"'''(\\.|[^'{3}])*'''"# => Atom::String(<>.into()),
+
+    // Double quoted bytes
+    r#"[bB]"(\\.|[^"\n])*""# => Atom::Bytes(<>.as_bytes().into()),
+    r#"[bB]"""(\\.|[^"{3}])*""""# => Atom::Bytes(<>.as_bytes().into()),
+
+    // Single quoted bytes
+    r#"[bB]'(\\.|[^'\n])*'"# => Atom::Bytes(<>.as_bytes().into()),
+    r#"[bB]'''(\\.|[^'{3}])*'''"# => Atom::Bytes(<>.as_bytes().into()),
+
+    "true" => Atom::Bool(true),
+    "false" => Atom::Bool(false),
+    "null" => Atom::Null,
 };
 
-Ident: String = {
+Ident: &'input str = {
     r"[_a-zA-Z][_a-zA-Z0-9]*" => <>.into()
 }
