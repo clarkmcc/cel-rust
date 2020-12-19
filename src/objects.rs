@@ -3,6 +3,7 @@ use core::ops;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::rc::Rc;
+use crate::context::Context;
 
 #[derive(Debug, Eq, PartialEq, Hash)]
 pub enum CelKey {
@@ -31,6 +32,8 @@ pub enum CelType<'a> {
     List(Rc<[CelType<'a>]>),
     Map(Rc<HashMap<CelKey, CelType<'a>>>),
 
+    Function(Rc<str>, Option<Box<CelType<'a>>>),
+
     // Atoms
     Int(i32),
     UInt(u32),
@@ -42,12 +45,12 @@ pub enum CelType<'a> {
 }
 
 impl<'a> CelType<'a> {
-    pub fn resolve(expr: &'a Expression) -> CelType<'a> {
+    pub fn resolve(expr: &'a Expression<'a>, ctx: &'a Context<'a>) -> CelType<'a> {
         match expr {
             Expression::Atom(atom) => atom.into(),
             Expression::Arithmetic(left, op, right) => {
-                let left = CelType::resolve(left);
-                let right = CelType::resolve(right);
+                let left = CelType::resolve(left, ctx);
+                let right = CelType::resolve(right, ctx);
 
                 match op {
                     ArithmeticOp::Add => left + right,
@@ -59,28 +62,28 @@ impl<'a> CelType<'a> {
             }
             Expression::Relation(_, _, _) => unimplemented!(),
             Expression::Ternary(cond, left, right) => {
-                let cond = CelType::resolve(cond);
+                let cond = CelType::resolve(cond, ctx);
                 if cond.to_bool() {
-                    CelType::resolve(left)
+                    CelType::resolve(left, ctx)
                 } else {
-                    CelType::resolve(right)
+                    CelType::resolve(right, ctx)
                 }
             }
             Expression::Or(left, right) => {
-                let left = CelType::resolve(left);
+                let left = CelType::resolve(left, ctx);
                 if left.to_bool() {
                     left
                 } else {
-                    CelType::resolve(right)
+                    CelType::resolve(right, ctx)
                 }
             }
             Expression::And(left, right) => {
-                let left = CelType::resolve(left);
-                let right = CelType::resolve(right);
+                let left = CelType::resolve(left, ctx);
+                let right = CelType::resolve(right, ctx);
                 CelType::Bool(left.to_bool() && right.to_bool())
             }
             Expression::Unary(op, expr) => {
-                let expr = CelType::resolve(expr);
+                let expr = CelType::resolve(expr, ctx);
                 match op {
                     UnaryOp::Not => CelType::Bool(!expr.to_bool()),
                     UnaryOp::DoubleNot => CelType::Bool(expr.to_bool()),
@@ -98,26 +101,73 @@ impl<'a> CelType<'a> {
                 }
             }
             Expression::Member(left, right) => {
-                let left = CelType::resolve(left);
-                left.member(right)
+                let left = CelType::resolve(left, ctx);
+                left.member(right, ctx)
             }
-            Expression::CallFunction(_) => unimplemented!(),
             Expression::List(items) => {
-                let list = items.iter().map(|i| CelType::resolve(i)).collect();
+                let list = items.iter().map(|i| CelType::resolve(i, ctx)).collect();
                 CelType::List(list)
             }
             Expression::Map(items) => {
                 let map: HashMap<CelKey, CelType> = items
                     .iter()
                     .map(|(k, v)| {
-                        let key = CelType::resolve(k).try_into().unwrap();
-                        let value = CelType::resolve(v);
+                        let key = CelType::resolve(k, ctx).try_into().unwrap();
+                        let value = CelType::resolve(v, ctx);
                         (key, value)
                     })
                     .collect();
                 CelType::Map(Rc::from(map))
             }
-            Expression::Ident(_) => unimplemented!(),
+            Expression::Ident(name) => {
+                if ctx.functions.contains_key(name) {
+                    CelType::Function((*name).into(), None)
+                } else {
+                    unreachable!();
+                }
+            }
+        }
+    }
+
+    // >> a(b)
+    // Member(Ident("a"),
+    //        FunctionCall([Ident("b")]))
+    // >> a.b(c)
+    // Member(Member(Ident("a"),
+    //               Attribute("b")),
+    //        FunctionCall([Ident("c")]))
+
+    fn member(self, member: &'a Member<'a>, ctx: &'a Context<'a>) -> CelType<'a> {
+        match member {
+            Member::Index(idx) => {
+                let idx = CelType::resolve(idx, ctx);
+                match (self, idx) {
+                    (CelType::List(items), CelType::Int(idx)) => {
+                        items.get(idx as usize).unwrap().clone()
+                    }
+                    _ => unimplemented!(),
+                }
+            }
+            Member::Fields(_) => unimplemented!(),
+            Member::Attribute(name) => {
+                if ctx.functions.contains_key(name) {
+                    CelType::Function((*name).into(), Some(self.into()))
+                } else {
+                    unreachable!();
+                }
+            },
+            Member::FunctionCall(args) => {
+                if let CelType::Function(name, target) = self {
+                    let func = ctx.functions.get(name.as_ref()).unwrap();
+                    let target = match target {
+                        None => None,
+                        Some(t) => Some(*t)
+                    };
+                    return func(target.as_ref(), args, ctx)
+                } else {
+                    unreachable!("FunctionCall without CelType::Function - {:?}", self)
+                }
+            },
         }
     }
 
@@ -132,23 +182,7 @@ impl<'a> CelType<'a> {
             CelType::Bytes(v) => !v.is_empty(),
             CelType::Bool(v) => *v,
             CelType::Null => false,
-        }
-    }
-
-    fn member(self, member: &'a Member) -> CelType<'a> {
-        match member {
-            Member::Index(idx) => {
-                let idx = CelType::resolve(idx);
-                match (self, idx) {
-                    (CelType::List(items), CelType::Int(idx)) => {
-                        items.get(idx as usize).unwrap().clone()
-                    }
-                    _ => unimplemented!(),
-                }
-            }
-            Member::Fields(_) => unimplemented!(),
-            Member::Attribute(_) => unimplemented!(),
-            Member::FunctionCall(_) => unimplemented!(),
+            CelType::Function(_, _) => false,
         }
     }
 }

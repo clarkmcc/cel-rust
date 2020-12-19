@@ -2,9 +2,12 @@ use crate::ast::{parser::ExpressionParser, Expression};
 use crate::objects::CelType;
 use std::convert::TryFrom;
 use thiserror::Error;
+use crate::context::Context;
 
 pub mod ast;
 pub mod objects;
+pub mod context;
+mod functions;
 
 #[derive(Error, Debug)]
 #[error("Error parsing {msg}")]
@@ -28,8 +31,8 @@ impl<'a> Program<'a> {
         }
     }
 
-    pub fn execute(&self) -> CelType {
-        CelType::resolve(&self.expression)
+    pub fn execute(&self, context: &'a Context<'a>) -> CelType {
+        CelType::resolve(&self.expression, &context)
     }
 }
 

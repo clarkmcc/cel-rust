@@ -46,7 +46,6 @@ pub enum Expression<'a> {
 
     Member(Box<Expression<'a>>, Box<Member<'a>>),
 
-    CallFunction(Vec<Expression<'a>>),
     List(Vec<Expression<'a>>),
     Map(Vec<(Expression<'a>, Expression<'a>)>),
 

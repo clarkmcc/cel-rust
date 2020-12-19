@@ -1,6 +1,7 @@
 use common_expression_language::Program;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
+use common_expression_language::context::Context;
 
 fn main() {
     // `()` can be used when no completer is required
@@ -14,8 +15,9 @@ fn main() {
             Ok(line) => {
                 rl.add_history_entry(line.as_str());
                 let program = Program::compile(&line).unwrap();
+                let ctx = Context::default();
                 println!("{:?}", program);
-                println!("{:?}", program.execute());
+                println!("{:?}", program.execute(&ctx));
             }
             Err(ReadlineError::Interrupted) => {
                 println!("CTRL-C");
