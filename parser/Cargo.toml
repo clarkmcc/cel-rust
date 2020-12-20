@@ -2,7 +2,7 @@
 name = "cel-parser"
 description = "A parser for the Common Expression Language (CEL)"
 repository = "https://github.com/orf/cel-rust"
-version = "0.1.2"
+version = "0.1.3-alpha.0"
 authors = ["Tom Forbes <tom@tomforb.es>"]
 edition = "2018"
 license = "MIT"
