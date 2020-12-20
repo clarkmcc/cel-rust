@@ -1,6 +1,9 @@
 [workspace]
 members = ["cli", "parser", "interpreter"]
 
+[package.metadata.release]
+consolidate-commits = true
+
 [profile.bench]
 lto = true
 codegen-units = 1
