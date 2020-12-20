@@ -9,7 +9,7 @@ license = "MIT"
 categories = ["interpreter", "cel"]
 
 [dependencies]
-cel-parser = {version="0.1.1-alpha.0", path="../parser"}
+cel-parser = {version="0.1.1", path="../parser"}
 thiserror = "1.0.22"
 
 [dev-dependencies]
