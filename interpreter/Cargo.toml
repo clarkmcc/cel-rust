@@ -13,7 +13,7 @@ cel-parser = {version="0.1.1-alpha.0", path="../parser"}
 thiserror = "1.0.22"
 
 [build-dependencies]
-lalrpop = {version="0.19.0", features = ["lexer"] }
+lalrpop = { version = "0.19.1", features = ["lexer"] }
 
 [dev-dependencies]
 criterion = "0.3.3"
