@@ -10,7 +10,7 @@ categories = ["cli", "cel"]
 
 [dependencies]
 rustyline = "7.1.0"
-cel-interpreter = {version="0.1.1", path="../interpreter"}
+cel-interpreter = {path="../interpreter"}
 dirs = "3.0.1"
 anyhow = "1.0.36"
 
