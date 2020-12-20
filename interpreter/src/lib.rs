@@ -1,13 +1,13 @@
-use crate::ast::{parser::ExpressionParser, Expression};
+use crate::context::Context;
 use crate::objects::CelType;
+use cel_parser::ast::Expression;
+use cel_parser::parser::ExpressionParser;
 use std::convert::TryFrom;
 use thiserror::Error;
-use crate::context::Context;
 
-pub mod ast;
-pub mod objects;
 pub mod context;
 mod functions;
+pub mod objects;
 
 #[derive(Error, Debug)]
 #[error("Error parsing {msg}")]
@@ -16,12 +16,12 @@ pub struct ParseError {
 }
 
 #[derive(Debug)]
-pub struct Program<'a> {
-    expression: Expression<'a>,
+pub struct Program {
+    expression: Expression,
 }
 
-impl<'a> Program<'a> {
-    pub fn compile(source: &'a str) -> Result<Program, ParseError> {
+impl Program {
+    pub fn compile(source: &str) -> Result<Program, ParseError> {
         match ExpressionParser::new().parse(source) {
             Ok(expression) => Ok(Program { expression }),
             // To-Do: Better error handling
@@ -31,15 +31,15 @@ impl<'a> Program<'a> {
         }
     }
 
-    pub fn execute(&self, context: &'a Context<'a>) -> CelType {
+    pub fn execute(&self, context: &Context) -> CelType {
         CelType::resolve(&self.expression, &context)
     }
 }
 
-impl<'a> TryFrom<&'a str> for Program<'a> {
+impl TryFrom<&str> for Program {
     type Error = ParseError;
 
-    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
         Program::compile(value)
     }
 }

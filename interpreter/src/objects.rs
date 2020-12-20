@@ -1,21 +1,34 @@
-use crate::ast::{ArithmeticOp, Atom, Expression, Member, UnaryOp};
+use crate::context::Context;
+use cel_parser::{ArithmeticOp, Atom, Expression, Member, RelationOp, UnaryOp};
 use core::ops;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::rc::Rc;
-use crate::context::Context;
 
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Debug, PartialEq, Clone)]
+pub struct CelMap {
+    pub map: Rc<HashMap<CelKey, CelType>>,
+}
+
+impl PartialOrd for CelMap {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        None
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub enum CelKey {
     Int(i32),
     Uint(u32),
     Bool(bool),
-    String(Rc<str>),
+    String(Rc<String>),
 }
 
-impl<'a> TryInto<CelKey> for CelType<'a> {
+impl<'a> TryInto<CelKey> for CelType {
     type Error = ();
 
+    #[inline(always)]
     fn try_into(self) -> Result<CelKey, Self::Error> {
         match self {
             CelType::Int(v) => Ok(CelKey::Int(v)),
@@ -27,25 +40,26 @@ impl<'a> TryInto<CelKey> for CelType<'a> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum CelType<'a> {
-    List(Rc<[CelType<'a>]>),
-    Map(Rc<HashMap<CelKey, CelType<'a>>>),
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub enum CelType {
+    List(Rc<[CelType]>),
+    Map(CelMap),
 
-    Function(Rc<str>, Option<Box<CelType<'a>>>),
+    Function(Rc<String>, Option<Box<CelType>>),
 
     // Atoms
     Int(i32),
     UInt(u32),
     Float(f64),
-    String(Rc<str>),
-    Bytes(&'a [u8]),
+    String(Rc<String>),
+    Bytes(Rc<Vec<u8>>),
     Bool(bool),
     Null,
 }
 
-impl<'a> CelType<'a> {
-    pub fn resolve(expr: &'a Expression<'a>, ctx: &'a Context<'a>) -> CelType<'a> {
+impl<'a> CelType {
+    #[inline(always)]
+    pub fn resolve(expr: &'a Expression, ctx: &Context) -> CelType {
         match expr {
             Expression::Atom(atom) => atom.into(),
             Expression::Arithmetic(left, op, right) => {
@@ -60,7 +74,25 @@ impl<'a> CelType<'a> {
                     ArithmeticOp::Modulus => unimplemented!(),
                 }
             }
-            Expression::Relation(_, _, _) => unimplemented!(),
+            Expression::Relation(left, op, right) => {
+                let left = CelType::resolve(left, ctx);
+                let right = CelType::resolve(right, ctx);
+                let res = match op {
+                    RelationOp::LessThan => left < right,
+                    RelationOp::LessThanEq => left <= right,
+                    RelationOp::GreaterThan => left > right,
+                    RelationOp::GreaterThanEq => left >= right,
+                    RelationOp::Equals => right.eq(&left),
+                    RelationOp::NotEquals => right.ne(&left),
+                    RelationOp::In => match (left, right) {
+                        (CelType::String(l), CelType::String(r)) => r.contains(&*l),
+                        (any, CelType::List(v)) => v.contains(&any),
+                        (any, CelType::Map(m)) => m.map.contains_key(&any.try_into().unwrap()),
+                        _ => unimplemented!(),
+                    },
+                };
+                CelType::Bool(res)
+            }
             Expression::Ternary(cond, left, right) => {
                 let cond = CelType::resolve(cond, ctx);
                 if cond.to_bool() {
@@ -117,13 +149,15 @@ impl<'a> CelType<'a> {
                         (key, value)
                     })
                     .collect();
-                CelType::Map(Rc::from(map))
+                CelType::Map(CelMap { map: Rc::from(map) })
             }
             Expression::Ident(name) => {
-                if ctx.functions.contains_key(name) {
-                    CelType::Function((*name).into(), None)
+                if ctx.functions.contains_key(&**name) {
+                    CelType::Function(name.clone(), None)
+                } else if ctx.variables.contains_key(&***name) {
+                    ctx.variables.get(&***name).unwrap().clone()
                 } else {
-                    unreachable!();
+                    unreachable!("Unknown variable yo")
                 }
             }
         }
@@ -137,7 +171,8 @@ impl<'a> CelType<'a> {
     //               Attribute("b")),
     //        FunctionCall([Ident("c")]))
 
-    fn member(self, member: &'a Member<'a>, ctx: &'a Context<'a>) -> CelType<'a> {
+    #[inline(always)]
+    fn member(self, member: &Member, ctx: &Context) -> CelType {
         match member {
             Member::Index(idx) => {
                 let idx = CelType::resolve(idx, ctx);
@@ -150,31 +185,39 @@ impl<'a> CelType<'a> {
             }
             Member::Fields(_) => unimplemented!(),
             Member::Attribute(name) => {
-                if ctx.functions.contains_key(name) {
-                    CelType::Function((*name).into(), Some(self.into()))
+                if ctx.functions.contains_key(&***name) {
+                    CelType::Function(name.clone(), Some(self.into()))
                 } else {
                     unreachable!();
                 }
-            },
+            }
             Member::FunctionCall(args) => {
                 if let CelType::Function(name, target) = self {
-                    let func = ctx.functions.get(name.as_ref()).unwrap();
-                    let target = match target {
-                        None => None,
-                        Some(t) => Some(*t)
-                    };
-                    return func(target.as_ref(), args, ctx)
+                    let func = ctx.functions.get(&*name).unwrap();
+                    match target {
+                        None => {
+                            // Strange case, a function with no arguments...!
+                            if args.is_empty() {
+                                func(None, args, ctx)
+                            } else {
+                                let first_arg = CelType::resolve(&args[0], ctx);
+                                func(Some(&first_arg), &args[1..args.len()], ctx)
+                            }
+                        }
+                        Some(t) => func(Some(t.as_ref()), args, ctx),
+                    }
                 } else {
                     unreachable!("FunctionCall without CelType::Function - {:?}", self)
                 }
-            },
+            }
         }
     }
 
+    #[inline(always)]
     fn to_bool(&self) -> bool {
         match self {
             CelType::List(v) => !v.is_empty(),
-            CelType::Map(v) => !v.is_empty(),
+            CelType::Map(v) => !v.map.is_empty(),
             CelType::Int(v) => *v != 0,
             CelType::UInt(v) => *v != 0,
             CelType::Float(v) => *v != 0.0,
@@ -187,24 +230,26 @@ impl<'a> CelType<'a> {
     }
 }
 
-impl<'a> From<&'a Atom<'a>> for CelType<'a> {
-    fn from(atom: &'a Atom<'a>) -> Self {
+impl From<&Atom> for CelType {
+    #[inline(always)]
+    fn from(atom: &Atom) -> Self {
         match atom {
             Atom::Int(v) => CelType::Int(*v),
             Atom::UInt(v) => CelType::UInt(*v),
             Atom::Float(v) => CelType::Float(*v),
-            Atom::String(v) => CelType::String(v.to_string().into()),
-            Atom::Bytes(v) => CelType::Bytes(v),
+            Atom::String(v) => CelType::String(v.clone()),
+            Atom::Bytes(v) => CelType::Bytes(v.clone()),
             Atom::Bool(v) => CelType::Bool(*v),
             Atom::Null => CelType::Null,
         }
     }
 }
 
-impl<'a> ops::Add<CelType<'a>> for CelType<'a> {
-    type Output = CelType<'a>;
+impl ops::Add<CelType> for CelType {
+    type Output = CelType;
 
-    fn add(self, rhs: CelType<'a>) -> Self::Output {
+    #[inline(always)]
+    fn add(self, rhs: CelType) -> Self::Output {
         match (self, rhs) {
             (CelType::Int(l), CelType::Int(r)) => CelType::Int(l + r),
             (CelType::UInt(l), CelType::UInt(r)) => CelType::UInt(l + r),

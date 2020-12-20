@@ -1,27 +1,5 @@
-[package]
-name = "common-expression-language"
-description = "A Rust implementation of the Common Expression Language (CEL)"
-repository = "https://github.com/orf/cel-rust"
-version = "0.1.1-alpha.0"
-authors = ["Tom Forbes <tom@tomforb.es>"]
-edition = "2018"
-license = "MIT"
-
-[dependencies]
-lalrpop-util = "0.19.0"
-regex = "1"
-rustyline = "7.1.0"
-thiserror = "1.0.22"
-
-[build-dependencies]
-lalrpop = {version="0.19.0", features = ["lexer"] }
-
-[dev-dependencies]
-criterion = "0.3.3"
-
-[[bench]]
-name = "parsing"
-harness = false
+[workspace]
+members = ["cli", "parser", "interpreter"]
 
 [profile.bench]
 lto = true

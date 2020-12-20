@@ -1,5 +1,5 @@
-
-use crate::ast::{RelationOp, ArithmeticOp, Expression, UnaryOp, Member, Atom};
+use crate::{RelationOp, ArithmeticOp, Expression, UnaryOp, Member, Atom};
+use std::rc::Rc;
 
 grammar;
 
@@ -11,7 +11,7 @@ match {
    _
 }
 
-pub Expression: Expression<'input> = {
+pub Expression: Expression = {
     <left:Expression> <op:ArithmeticOp> <right:Member> => Expression::Arithmetic(left.into(), op, right.into()),
     <left:Expression> <op:RelationOp> <right:Member> => Expression::Relation(left.into(), op, right.into()),
     <condition:Expression> "?" <left:Member> ":" <right:Primary> => Expression::Ternary(condition.into(), left.into(), right.into()),
@@ -22,21 +22,21 @@ pub Expression: Expression<'input> = {
     Member,
 };
 
-pub Member: Expression<'input> = {
-    <left:Member> "." <identifier:Ident> => Expression::Member(left.into(), Member::Attribute(identifier).into()).into(),
+pub Member: Expression = {
+    <left:Member> "." <identifier:Ident> => Expression::Member(left.into(), Member::Attribute(identifier.into()).into()).into(),
     <left:Member> "." <identifier:Ident> "(" <arguments:CommaSeparated<Expression>> ")" => {
-            let inner = Expression::Member(left.into(), Member::Attribute(identifier).into()).into();
+            let inner = Expression::Member(left.into(), Member::Attribute(identifier.into()).into()).into();
             Expression::Member(inner, Member::FunctionCall(arguments).into()).into()
     },
     <left:Member> "[" <expression:Expression> "]" => Expression::Member(left.into(), Member::Index(expression.into()).into()).into(),
-    <left:Member> "{" <fields:CommaSeparated<FieldInits>> "}" => Expression::Member(left.into(), Member::Fields(fields).into()).into(),
+    <left:Member> "{" <fields:CommaSeparated<FieldInits>> "}" => Expression::Member(left.into(), Member::Fields(fields.into()).into()).into(),
     Primary,
 }
 
-pub Primary: Expression<'input> = {
-    "."? <Ident> => Expression::Ident(<>).into(),
+pub Primary: Expression = {
+    "."? <Ident> => Expression::Ident(<>.into()).into(),
     "."? <identifier:Ident> "(" <arguments:CommaSeparated<Expression>> ")" => {
-            let inner = Expression::Ident(identifier).into();
+            let inner = Expression::Ident(identifier.into()).into();
             Expression::Member(inner, Member::FunctionCall(arguments).into()).into()
     },
     Atom => Expression::Atom(<>).into(),
@@ -45,11 +45,11 @@ pub Primary: Expression<'input> = {
     "(" <Expression> ")"
 }
 
-pub FieldInits: (&'input str, Expression<'input>) = {
+pub FieldInits: (Rc<String>, Expression) = {
     <Ident> ":" <Expression>
 }
 
-pub MapInits: (Expression<'input>, Expression<'input>) = {
+pub MapInits: (Expression, Expression) = {
     <Expression> ":" <Expression>
 }
 
@@ -89,7 +89,7 @@ RelationOp: RelationOp = {
     "in" => RelationOp::In
 }
 
-Atom: Atom<'input> = {
+Atom: Atom = {
     // Integer literals. Annoying to parse :/
     r"-?[0-9]+" => Atom::Int(<>.parse().unwrap()),
     r"-?0[xX]([0-9a-fA-F]+)" => Atom::Int(i32::from_str_radix(<>, 16).unwrap()),
@@ -102,26 +102,26 @@ Atom: Atom<'input> = {
     r"[-+]?[0-9]+[eE][-+]?[0-9]+" => Atom::Float(<>.parse().unwrap()),
 
     // Double quoted string
-    r#""(\\.|[^"\n])*""# => Atom::String(<>.into()),
-    r#""""(\\.|[^"{3}])*""""# => Atom::String(<>.into()),
+    r#""(\\.|[^"\n])*""# => Atom::String(<>.to_string().into()),
+    r#""""(\\.|[^"{3}])*""""# => Atom::String(<>.to_string().into()),
 
     // Single quoted string
-    r#"'(\\.|[^'\n])*'"# => Atom::String(<>.into()),
-    r#"'''(\\.|[^'{3}])*'''"# => Atom::String(<>.into()),
+    r#"'(\\.|[^'\n])*'"# => Atom::String(<>.to_string().into()),
+    r#"'''(\\.|[^'{3}])*'''"# => Atom::String(<>.to_string().into()),
 
     // Double quoted bytes
-    r#"[bB]"(\\.|[^"\n])*""# => Atom::Bytes(<>.as_bytes().into()),
-    r#"[bB]"""(\\.|[^"{3}])*""""# => Atom::Bytes(<>.as_bytes().into()),
+    r#"[bB]"(\\.|[^"\n])*""# => Atom::Bytes(Vec::from(<>.as_bytes()).into()),
+    r#"[bB]"""(\\.|[^"{3}])*""""# => Atom::Bytes(Vec::from(<>.as_bytes()).into()),
 
     // Single quoted bytes
-    r#"[bB]'(\\.|[^'\n])*'"# => Atom::Bytes(<>.as_bytes().into()),
-    r#"[bB]'''(\\.|[^'{3}])*'''"# => Atom::Bytes(<>.as_bytes().into()),
+    r#"[bB]'(\\.|[^'\n])*'"# => Atom::Bytes(Vec::from(<>.as_bytes()).into()),
+    r#"[bB]'''(\\.|[^'{3}])*'''"# => Atom::Bytes(Vec::from(<>.as_bytes()).into()),
 
     "true" => Atom::Bool(true),
     "false" => Atom::Bool(false),
     "null" => Atom::Null,
 };
 
-Ident: &'input str = {
-    r"[_a-zA-Z][_a-zA-Z0-9]*" => <>.into()
+Ident: Rc<String> = {
+    r"[_a-zA-Z][_a-zA-Z0-9]*" => <>.to_string().into()
 }

@@ -1,6 +1,4 @@
-use lalrpop_util::lalrpop_mod;
-
-lalrpop_mod!(#[allow(clippy::all)] pub parser, "/cel.rs");
+use std::rc::Rc;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum RelationOp {
@@ -31,51 +29,47 @@ pub enum UnaryOp {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Expression<'a> {
-    Arithmetic(Box<Expression<'a>>, ArithmeticOp, Box<Expression<'a>>),
-    Relation(Box<Expression<'a>>, RelationOp, Box<Expression<'a>>),
+pub enum Expression {
+    Arithmetic(Box<Expression>, ArithmeticOp, Box<Expression>),
+    Relation(Box<Expression>, RelationOp, Box<Expression>),
 
-    Ternary(
-        Box<Expression<'a>>,
-        Box<Expression<'a>>,
-        Box<Expression<'a>>,
-    ),
-    Or(Box<Expression<'a>>, Box<Expression<'a>>),
-    And(Box<Expression<'a>>, Box<Expression<'a>>),
-    Unary(UnaryOp, Box<Expression<'a>>),
+    Ternary(Box<Expression>, Box<Expression>, Box<Expression>),
+    Or(Box<Expression>, Box<Expression>),
+    And(Box<Expression>, Box<Expression>),
+    Unary(UnaryOp, Box<Expression>),
 
-    Member(Box<Expression<'a>>, Box<Member<'a>>),
+    Member(Box<Expression>, Box<Member>),
 
-    List(Vec<Expression<'a>>),
-    Map(Vec<(Expression<'a>, Expression<'a>)>),
+    List(Vec<Expression>),
+    Map(Vec<(Expression, Expression)>),
 
-    Atom(Atom<'a>),
-    Ident(&'a str),
+    Atom(Atom),
+    Ident(Rc<String>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Member<'a> {
-    Attribute(&'a str),
-    FunctionCall(Vec<Expression<'a>>),
-    Index(Box<Expression<'a>>),
-    Fields(Vec<(&'a str, Expression<'a>)>),
+pub enum Member {
+    Attribute(Rc<String>),
+    FunctionCall(Vec<Expression>),
+    Index(Box<Expression>),
+    Fields(Vec<(Rc<String>, Expression)>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Atom<'a> {
+pub enum Atom {
     Int(i32),
     UInt(u32),
     Float(f64),
-    String(String),
-    Bytes(&'a [u8]),
+    String(Rc<String>),
+    Bytes(Rc<Vec<u8>>),
     Bool(bool),
     Null,
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::Expression;
-    use crate::ast::{parser::ExpressionParser, Atom::*, Expression::*, Member::*};
+    use crate::parser::ExpressionParser;
+    use crate::{Atom::*, Expression, Expression::*, Member::*};
 
     fn parse(input: &str) -> Expression {
         ExpressionParser::new()
@@ -102,7 +96,11 @@ mod tests {
         assert_parse_eq(
             "a.b[1]",
             Member(
-                Member(Ident("a".into()).into(), Attribute("b".into()).into()).into(),
+                Member(
+                    Ident("a".to_string().into()).into(),
+                    Attribute("b".to_string().into()).into(),
+                )
+                .into(),
                 Index(Atom(Int(1)).into()).into(),
             )
             .into(),

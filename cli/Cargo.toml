@@ -1,0 +1,16 @@
+[package]
+name = "cel-cli"
+description = "A cli for the Common Expression Language (CEL)"
+repository = "https://github.com/orf/cel-rust"
+version = "0.1.1-alpha.0"
+authors = ["Tom Forbes <tom@tomforb.es>"]
+edition = "2018"
+license = "MIT"
+categories = ["cli", "cel"]
+
+[dependencies]
+rustyline = "7.1.0"
+cel-interpreter = {version="0.1.1-alpha.0", path="../interpreter"}
+dirs = "3.0.1"
+anyhow = "1.0.36"
+
