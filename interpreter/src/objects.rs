@@ -68,10 +68,10 @@ impl<'a> CelType {
 
                 match op {
                     ArithmeticOp::Add => left + right,
-                    ArithmeticOp::Subtract => unimplemented!(),
-                    ArithmeticOp::Divide => unimplemented!(),
-                    ArithmeticOp::Multiply => unimplemented!(),
-                    ArithmeticOp::Modulus => unimplemented!(),
+                    ArithmeticOp::Subtract => left - right,
+                    ArithmeticOp::Divide => left / right,
+                    ArithmeticOp::Multiply => left * right,
+                    ArithmeticOp::Modulus => left % right,
                 }
             }
             Expression::Relation(left, op, right) => {
@@ -272,6 +272,90 @@ impl ops::Add<CelType> for CelType {
                 new.push_str(&r);
                 CelType::String(new.into())
             }
+            _ => unimplemented!(),
+        }
+    }
+}
+
+impl ops::Sub<CelType> for CelType {
+    type Output = CelType;
+
+    #[inline(always)]
+    fn sub(self, rhs: CelType) -> Self::Output {
+        match (self, rhs) {
+            (CelType::Int(l), CelType::Int(r)) => CelType::Int(l - r),
+            (CelType::UInt(l), CelType::UInt(r)) => CelType::UInt(l - r),
+
+            // Float matrix
+            (CelType::Float(l), CelType::Float(r)) => CelType::Float(l - r),
+            (CelType::Int(l), CelType::Float(r)) => CelType::Float(l as f64 - r),
+            (CelType::Float(l), CelType::Int(r)) => CelType::Float(l - r as f64),
+            (CelType::UInt(l), CelType::Float(r)) => CelType::Float(l as f64 - r),
+            (CelType::Float(l), CelType::UInt(r)) => CelType::Float(l - r as f64),
+
+            _ => unimplemented!(),
+        }
+    }
+}
+
+impl ops::Div<CelType> for CelType {
+    type Output = CelType;
+
+    #[inline(always)]
+    fn div(self, rhs: CelType) -> Self::Output {
+        match (self, rhs) {
+            (CelType::Int(l), CelType::Int(r)) => CelType::Int(l / r),
+            (CelType::UInt(l), CelType::UInt(r)) => CelType::UInt(l / r),
+
+            // Float matrix
+            (CelType::Float(l), CelType::Float(r)) => CelType::Float(l / r),
+            (CelType::Int(l), CelType::Float(r)) => CelType::Float(l as f64 / r),
+            (CelType::Float(l), CelType::Int(r)) => CelType::Float(l / r as f64),
+            (CelType::UInt(l), CelType::Float(r)) => CelType::Float(l as f64 / r),
+            (CelType::Float(l), CelType::UInt(r)) => CelType::Float(l / r as f64),
+
+            _ => unimplemented!(),
+        }
+    }
+}
+
+impl ops::Mul<CelType> for CelType {
+    type Output = CelType;
+
+    #[inline(always)]
+    fn mul(self, rhs: CelType) -> Self::Output {
+        match (self, rhs) {
+            (CelType::Int(l), CelType::Int(r)) => CelType::Int(l * r),
+            (CelType::UInt(l), CelType::UInt(r)) => CelType::UInt(l * r),
+
+            // Float matrix
+            (CelType::Float(l), CelType::Float(r)) => CelType::Float(l * r),
+            (CelType::Int(l), CelType::Float(r)) => CelType::Float(l as f64 * r),
+            (CelType::Float(l), CelType::Int(r)) => CelType::Float(l * r as f64),
+            (CelType::UInt(l), CelType::Float(r)) => CelType::Float(l as f64 * r),
+            (CelType::Float(l), CelType::UInt(r)) => CelType::Float(l * r as f64),
+
+            _ => unimplemented!(),
+        }
+    }
+}
+
+impl ops::Rem<CelType> for CelType {
+    type Output = CelType;
+
+    #[inline(always)]
+    fn rem(self, rhs: CelType) -> Self::Output {
+        match (self, rhs) {
+            (CelType::Int(l), CelType::Int(r)) => CelType::Int(l % r),
+            (CelType::UInt(l), CelType::UInt(r)) => CelType::UInt(l % r),
+
+            // Float matrix
+            (CelType::Float(l), CelType::Float(r)) => CelType::Float(l % r),
+            (CelType::Int(l), CelType::Float(r)) => CelType::Float(l as f64 % r),
+            (CelType::Float(l), CelType::Int(r)) => CelType::Float(l % r as f64),
+            (CelType::UInt(l), CelType::Float(r)) => CelType::Float(l as f64 % r),
+            (CelType::Float(l), CelType::UInt(r)) => CelType::Float(l % r as f64),
+
             _ => unimplemented!(),
         }
     }
