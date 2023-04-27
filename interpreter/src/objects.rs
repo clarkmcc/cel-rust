@@ -109,7 +109,7 @@ impl<K: Into<CelKey>, V: Into<CelType>> From<HashMap<K, V>> for CelMap {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum CelType {
-    List(Rc<[CelType]>),
+    List(Rc<Vec<CelType>>),
     Map(CelMap),
 
     Function(Rc<String>, Option<Box<CelType>>),
@@ -140,7 +140,7 @@ impl CelType {
 // Convert Vec<T> to CelType
 impl<T: Into<CelType>> From<Vec<T>> for CelType {
     fn from(v: Vec<T>) -> Self {
-        CelType::List(v.into_iter().map(|v| v.into()).collect())
+        CelType::List(v.into_iter().map(|v| v.into()).collect::<Vec<_>>().into())
     }
 }
 
@@ -420,9 +420,7 @@ impl ops::Add<CelType> for CelType {
             (CelType::Float(l), CelType::UInt(r)) => CelType::Float(l + r as f64),
 
             (CelType::List(l), CelType::List(r)) => {
-                let new = l.iter().chain(r.iter()).cloned().collect();
-
-                CelType::List(new)
+                CelType::List(l.iter().chain(r.iter()).cloned().collect::<Vec<_>>().into())
             }
             (CelType::String(l), CelType::String(r)) => {
                 let mut new = String::with_capacity(l.len() + r.len());
