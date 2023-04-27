@@ -30,6 +30,11 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         ("size_map", "{1:2}.size()"),
         ("size_map_2", "size({1:2})"),
         // ("complex", "Account{user_id: 123}.user_id == 123"),
+        (
+            "set difference map",
+            "{'a': 1, 'b': 1, 'c': 1} - {'a': 1, 'b': 1} == {'c': 1}",
+        ),
+        ("set difference array", "[1, 2, 3] - [1, 2] == [3]"),
     ];
     // https://gist.github.com/rhnvrm/db4567fcd87b2cb8e997999e1366d406
 

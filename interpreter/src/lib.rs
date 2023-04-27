@@ -150,6 +150,15 @@ mod tests {
             "{'a': 1} + {'a': 2, 'b': 3}",
             Ok(HashMap::from([("a", 2), ("b", 3)]).into()),
         );
+
+        // Test that we can difference two maps, notice how value doesn't matter
+        assert_output(
+            "{'a': 1, 'b': 2} - {'b': 3}",
+            Ok(HashMap::from([("a", 1)]).into()),
+        );
+
+        // Test set difference on arrays
+        assert_output("[1, 2, 3] - [1, 2] == [3]", Ok(true.into()));
     }
 
     #[test]

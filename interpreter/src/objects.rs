@@ -460,6 +460,28 @@ impl ops::Sub<CelType> for CelType {
             (CelType::UInt(l), CelType::Float(r)) => CelType::Float(l as f64 - r),
             (CelType::Float(l), CelType::UInt(r)) => CelType::Float(l - r as f64),
 
+            // Set difference for list
+            (CelType::List(l), CelType::List(r)) => {
+                let mut new = Vec::with_capacity(l.len());
+                for v in l.iter() {
+                    if !r.contains(v) {
+                        new.push(v.clone());
+                    }
+                }
+                CelType::List(Rc::new(new))
+            }
+
+            // Set difference for map
+            (CelType::Map(l), CelType::Map(r)) => {
+                let mut new = HashMap::default();
+                for (k, v) in l.map.iter() {
+                    if !r.map.contains_key(k) {
+                        new.insert(k.clone(), v.clone());
+                    }
+                }
+                CelType::Map(CelMap { map: Rc::new(new) })
+            }
+
             _ => unimplemented!(),
         }
     }

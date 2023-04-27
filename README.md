@@ -27,13 +27,29 @@ fn main() {
 
 ## Extensions
 
-### Map Merging
+### Set Operations
+
+#### Merge Maps
 
 You can merge two maps using the `+` operator. The right hand side map will overwrite any keys that exist in the left
 map.
 
 ```cel
 {'a': 1} + {'b': 2} == {'a': 1, 'b': 2}
+```
+
+#### Difference
+
+Performs a set difference using the keys of the map. Values are ignored.
+
+```cel
+{'a': 1, 'b': 1} - {'b': 2} == {'a': 1}
+```
+
+You can also perform a set difference on arrays:
+
+```cel
+[1, 2, 3] - [2, 3] == [1]
 ```
 
 ### String Indexing
