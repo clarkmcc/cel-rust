@@ -1,12 +1,11 @@
 use crate::context::Context;
-use crate::functions;
+use crate::ExecutionError;
 use cel_parser::{ArithmeticOp, Atom, Expression, Member, RelationOp, UnaryOp};
 use core::ops;
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryInto;
 use std::rc::Rc;
-use thiserror::Error;
 
 // Easily create conversions from primitive types to CelType
 macro_rules! impl_from {
@@ -78,20 +77,6 @@ impl From<u32> for CelKey {
     }
 }
 
-// impl TryFrom<CelType> for CelKey {
-//     type Error = ();
-//
-//     fn try_from(value: CelType) -> Result<Self, Self::Error> {
-//         match value {
-//             CelType::Int(v) => Ok(CelKey::Int(v)),
-//             CelType::UInt(v) => Ok(CelKey::Uint(v)),
-//             CelType::String(v) => Ok(CelKey::String(v)),
-//             CelType::Bool(v) => Ok(CelKey::Bool(v)),
-//             _ => Err(()),
-//         }
-//     }
-// }
-
 /// Implement conversions from [`CelKey`] into [`CelType`]
 
 impl TryInto<CelKey> for CelType {
@@ -139,6 +124,19 @@ pub enum CelType {
     Null,
 }
 
+impl CelType {
+    /// Calculates the size of the [`CelType`] if the type is a list, map, string or bytes.
+    pub(crate) fn size(&self) -> Result<usize, ExecutionError> {
+        Ok(match self {
+            CelType::List(l) => l.len(),
+            CelType::Map(m) => m.map.len(),
+            CelType::String(s) => s.len(),
+            CelType::Bytes(b) => b.len(),
+            _ => Err(ExecutionError::unsupported_target_type(self.clone()))?,
+        })
+    }
+}
+
 // Convert Vec<T> to CelType
 impl<T: Into<CelType>> From<Vec<T>> for CelType {
     fn from(v: Vec<T>) -> Self {
@@ -183,18 +181,13 @@ impl_from!(
     bool => CelType::Bool
 );
 
-#[derive(Error, Debug, PartialEq, Clone)]
-pub enum ResolveError {
-    #[error("Error calling function '{name}': {error}")]
-    FunctionError {
-        name: Rc<String>,
-        error: functions::Error,
-    },
-    #[error("Error converting value {value:?} to key")]
-    ValueToKeyConversionError { value: CelType },
+impl From<ExecutionError> for ResolveResult {
+    fn from(value: ExecutionError) -> Self {
+        Err(value)
+    }
 }
 
-pub type ResolveResult = Result<CelType, ResolveError>;
+pub type ResolveResult = Result<CelType, ExecutionError>;
 
 impl From<CelType> for ResolveResult {
     fn from(value: CelType) -> Self {
@@ -295,7 +288,7 @@ impl<'a> CelType {
                 for (k, v) in items.iter() {
                     let key = CelType::resolve(k, ctx)?
                         .try_into()
-                        .map_err(|e| ResolveError::ValueToKeyConversionError { value: e })?;
+                        .map_err(ExecutionError::UnsupportedKeyType)?;
                     let value = CelType::resolve(v, ctx)?;
                     map.insert(key, value);
                 }
@@ -307,7 +300,7 @@ impl<'a> CelType {
                 } else if ctx.variables.contains_key(&***name) {
                     ctx.variables.get(&***name).unwrap().clone().into()
                 } else {
-                    unreachable!("Unknown variable yo")
+                    ExecutionError::UndeclaredReference(name.clone()).into()
                 }
             }
         }
@@ -321,7 +314,6 @@ impl<'a> CelType {
     //               Attribute("b")),
     //        FunctionCall([Ident("c")]))
 
-    #[inline(always)]
     fn member(self, member: &Member, ctx: &Context) -> ResolveResult {
         match member {
             Member::Index(idx) => {
@@ -330,45 +322,47 @@ impl<'a> CelType {
                     (CelType::List(items), CelType::Int(idx)) => {
                         items.get(idx as usize).unwrap().clone().into()
                     }
+                    (CelType::String(str), CelType::Int(idx)) => {
+                        match str.get(idx as usize..(idx + 1) as usize) {
+                            None => CelType::Null,
+                            Some(str) => CelType::String(str.to_string().into()),
+                        }
+                        .into()
+                    }
                     _ => unimplemented!(),
                 }
             }
             Member::Fields(_) => unimplemented!(),
             Member::Attribute(name) => {
-                // Check if there is a method with this name
-                if ctx.functions.contains_key(&***name) {
-                    CelType::Function(name.clone(), Some(self.into())).into()
-                } else {
-                    // If there is not registered function with this name, then try to traverse
-                    // self to find the attribute.
-                    match self {
-                        CelType::Map(m) => m
-                            .map
-                            .get(&name.clone().into())
-                            .unwrap_or(&CelType::Null)
-                            .clone(),
-                        _ => unimplemented!("Attribute access on {:?}", self),
+                // This will always either be because we're trying to access
+                // a property on self, or a method on self. If it's a method
+                match self {
+                    CelType::Map(m) => m
+                        .map
+                        .get(&name.clone().into())
+                        .ok_or(ExecutionError::no_such_key(&name))?
+                        .clone(),
+                    _ => {
+                        if ctx.functions.contains_key(&***name) {
+                            return CelType::Function(name.clone(), Some(self.into())).into();
+                        } else {
+                            unimplemented!("Attribute access on {:?}", self);
+                        }
                     }
-                    .into()
                 }
+                .into()
             }
             Member::FunctionCall(args) => {
                 if let CelType::Function(name, target) = self {
                     let func = ctx.functions.get(&*name).unwrap();
                     match target {
                         None => {
-                            // Strange case, a function with no arguments...!
                             if args.is_empty() {
-                                func_result_adapter(name, func(None, args, ctx))
-                            } else {
-                                let first_arg = CelType::resolve(&args[0], ctx)?;
-                                func_result_adapter(
-                                    name,
-                                    func(Some(&first_arg), &args[1..args.len()], ctx),
-                                )
+                                return Err(ExecutionError::MissingArgumentOrTarget);
                             }
+                            func(None, args, ctx)
                         }
-                        Some(t) => func_result_adapter(name, func(Some(t.as_ref()), args, ctx)),
+                        Some(t) => func(Some(t.as_ref()), args, ctx),
                     }
                 } else {
                     unreachable!("FunctionCall without CelType::Function - {:?}", self)
@@ -391,13 +385,6 @@ impl<'a> CelType {
             CelType::Null => false,
             CelType::Function(_, _) => false,
         }
-    }
-}
-
-fn func_result_adapter(name: Rc<String>, result: functions::Result) -> ResolveResult {
-    match result {
-        Ok(result) => Ok(result),
-        Err(err) => Err(ResolveError::FunctionError { error: err, name }),
     }
 }
 

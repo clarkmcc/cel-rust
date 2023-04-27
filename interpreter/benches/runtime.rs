@@ -28,9 +28,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         ("size_str_2", "size('a')"),
         ("size_map", "{1:2}.size()"),
         ("size_map_2", "size({1:2})"),
-
         // ("complex", "Account{user_id: 123}.user_id == 123"),
-
     ];
     // https://gist.github.com/rhnvrm/db4567fcd87b2cb8e997999e1366d406
 
@@ -38,15 +36,12 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         c.bench_function(name, |b| {
             let program = Program::compile(expr).expect("Parsing failed");
             let mut ctx = Context::default();
-            ctx.add_variable("TestDouble".into(), CelType::Float(0.0f64));
-            ctx.add_variable(
-                "TestString".into(),
-                CelType::String("World".to_string().into()),
-            );
-            ctx.add_variable("TestTime".into(), CelType::UInt(0));
-            ctx.add_variable("Now".into(), CelType::UInt(1));
-            ctx.add_function("TestFunction".into(), |target, args, ctx| match target {
-                Some(CelType::String(v)) => CelType::String(format!("Hello{}", v).into()),
+            ctx.add_variable("TestDouble", CelType::Float(0.0f64));
+            ctx.add_variable("TestString", CelType::String("World".to_string().into()));
+            ctx.add_variable("TestTime", CelType::UInt(0));
+            ctx.add_variable("Now", CelType::UInt(1));
+            ctx.add_function("TestFunction", |target, _, _| match target {
+                Some(CelType::String(v)) => Ok(CelType::String(format!("Hello{}", v).into())),
                 _ => unreachable!(),
             });
             b.iter(|| program.execute(&ctx))

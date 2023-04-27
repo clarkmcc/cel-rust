@@ -1,46 +1,57 @@
 use crate::context::Context;
 use crate::objects::CelType;
+use crate::ExecutionError;
 use cel_parser::Expression;
-use thiserror::Error;
 
-#[derive(Error, Debug, PartialEq, Clone)]
-pub enum Error {
-    #[error("Invalid argument count: expected {expected}, got {actual}")]
-    InvalidArgumentCount { expected: usize, actual: usize },
-    #[error("Invalid argument type: {:?}", .target)]
-    UnsupportedTargetType { target: CelType },
+/// Calculates the size of either the target, or the provided args depending on how
+/// the function is called. If called as a method, the target will be used. If called
+/// as a function, the first argument will be used.
+///
+/// The following [`CelType`] variants are supported:
+/// * [`CelType::List`]
+/// * [`CelType::Map`]
+/// * [`CelType::String`]
+/// * [`CelType::Bytes`]
+///
+/// If `size` is called on an unsupported type, an [`ExecutionError::UnsupportedTargetType`]
+/// error will be returned.
+///
+/// # Examples
+///
+/// ## Method Form
+/// ```skip
+/// [1, 2, 3].size() == 3
+/// ```
+///
+/// ## Function Form
+/// ```skip
+/// size([1, 2, 3]) == 3
+/// ```
+pub fn size(
+    target: Option<&CelType>,
+    args: &[Expression],
+    ctx: &Context,
+) -> Result<CelType, ExecutionError> {
+    CelType::Int(match (target, args.len()) {
+        // We can assume that we will have either gotten a target or an arg, but we should
+        // have only gotten one of either, and not more than one arg.
+        (Some(target), 0) => target.size()?,
+        (None, 1) => CelType::resolve(&args[0], ctx)?.size()?,
+        (Some(_), _) => Err(ExecutionError::invalid_argument_count(0, args.len()))?,
+        (None, _) => Err(ExecutionError::invalid_argument_count(1, args.len()))?,
+    } as i32)
+    .into()
 }
 
-pub type Result = std::result::Result<CelType, Error>;
-
-pub fn size(target: Option<&CelType>, args: &[Expression], _: &Context) -> Result {
-    let target = target.unwrap();
-    let result = match target {
-        CelType::List(l) => l.len(),
-        CelType::Map(m) => m.map.len(),
-        CelType::String(s) => s.len(),
-        CelType::Bytes(b) => b.len(),
-        _ => Err(Error::UnsupportedTargetType {
-            target: target.clone(),
-        })?,
-    };
-    Ok(CelType::Int(result as i32))
-}
-
-pub fn has(target: Option<&CelType>, args: &[Expression], context: &Context) -> Result {
-    if args.len() != 1 {
-        return Err(Error::InvalidArgumentCount {
-            expected: 1,
-            actual: args.len(),
-        });
+pub fn has(
+    target: Option<&CelType>,
+    args: &[Expression],
+    _: &Context,
+) -> Result<CelType, ExecutionError> {
+    if let Some(target) = target {
+        return ExecutionError::not_supported_as_method("has".into(), target.clone()).into();
+    } else if args.len() != 1 {
+        return ExecutionError::invalid_argument_count(1, args.len()).into();
     }
-    let target = target.unwrap();
-    // let result = match target {
-    //     CelType::List(l) => l.len() > 0,
-    //     CelType::Map(m) => m.map.get(),
-    //     CelType::String(s) => s.len() > 0,
-    //     CelType::Bytes(b) => b.len() > 0,
-    //     _ => unreachable!(),
-    // };
     Ok(CelType::Bool(true))
 }
