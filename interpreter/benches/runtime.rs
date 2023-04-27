@@ -22,6 +22,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         ("add_string", "'abc' + 'def'"),
         ("list", "[1,2,3, Now, ]"),
         ("mapexpr", "{1 + a: 3}"),
+        ("map_merge", "{'a': 1} + {'a': 2, 'b': 3}"),
         ("size_list", "[1].size()"),
         ("size_list_1", "size([1])"),
         ("size_str", "'a'.size()"),

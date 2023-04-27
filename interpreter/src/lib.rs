@@ -144,6 +144,12 @@ mod tests {
 
         // Test that we can index into a string
         assert_output("str[0] == 'f'", Ok(true.into()));
+
+        // Test that we can merge two maps
+        assert_output(
+            "{'a': 1} + {'a': 2, 'b': 3}",
+            Ok(HashMap::from([("a", 2), ("b", 3)]).into()),
+        );
     }
 
     #[test]

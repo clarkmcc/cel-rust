@@ -31,7 +31,7 @@ impl PartialOrd for CelMap {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[derive(Debug, Eq, PartialEq, Hash, Ord, Clone, PartialOrd)]
 pub enum CelKey {
     Int(i32),
     Uint(u32),
@@ -429,6 +429,17 @@ impl ops::Add<CelType> for CelType {
                 new.push_str(&l);
                 new.push_str(&r);
                 CelType::String(new.into())
+            }
+            // Merge two maps should overwrite keys in the left map with the right map
+            (CelType::Map(l), CelType::Map(r)) => {
+                let mut new = HashMap::default();
+                for (k, v) in l.map.iter() {
+                    new.insert(k.clone(), v.clone());
+                }
+                for (k, v) in r.map.iter() {
+                    new.insert(k.clone(), v.clone());
+                }
+                CelType::Map(CelMap { map: Rc::new(new) })
             }
             _ => unimplemented!(),
         }
