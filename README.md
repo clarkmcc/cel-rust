@@ -1,9 +1,54 @@
 # cel-rust
 
-This repository contains several modules that implement a parser, interpreter and CLI for the [Common Expression Language](https://github.com/google/cel-spec).
+This repository contains several modules that implement a parser, interpreter and CLI for
+the [Common Expression Language](https://github.com/google/cel-spec). This has been forked
+from [orf/cel-rust](https://github.com/orf/cel-rust).
 
-The aim is to create a fast, simple and readable interpreter for the language that can be used as an example of how to 
-create other language runtimes. 
+My goal is to bring the crate back up to speed with
+the [CEL spec](https://github.com/google/cel-spec/blob/master/doc/intro.md) and then implement a few handy extensions
+beyond what the spec defines.
+
+Changes in this fork:
+
+* The [extensions](#extensions) described below.
+* Functions are fallible and return an execution error rather than panicking.
+* Attribute accessing on maps which was not working under the original implementation.
+
+## Usage
+
+```rust
+fn main() {
+    let program = Program::compile("1 == 1").unwrap();
+    let context = Context::default();
+    let value = program.execute(&context).unwrap();
+    assert_eq!(value, true.into());
+}
+```
+
+## Extensions
+
+### Map Merging
+
+You can merge two maps using the `+` operator. The right hand side map will overwrite any keys that exist in the left
+map.
+
+```cel
+{'a': 1} + {'b': 2} == {'a': 1, 'b': 2}
+```
+
+### String Indexing
+
+CEL allows you to index into arrays like
+
+```cel
+[1, 2, 3][0] == 1
+```
+
+This extension allows you to index into strings in the same way:
+
+```cel
+'hello'[0] == 'h'
+```
 
 ## Crates
 
