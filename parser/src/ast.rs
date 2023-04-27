@@ -92,6 +92,45 @@ mod tests {
     }
 
     #[test]
+    fn single_quote_str() {
+        assert_parse_eq("'foobar'", Atom(String("foobar".to_string().into()).into()))
+    }
+
+    #[test]
+    fn double_quote_str() {
+        assert_parse_eq(r#""foobar""#, Atom(String("foobar".to_string().into()).into()))
+    }
+
+    #[test]
+    fn single_quote_bytes() {
+        assert_parse_eq("b'foo'", Atom(Bytes(b"foo".to_vec().into())));
+        assert_parse_eq("b''", Atom(Bytes(b"".to_vec().into())));
+    }
+
+    #[test]
+    fn double_quote_bytes() {
+        assert_parse_eq(r#"b"foo""#, Atom(Bytes(b"foo".to_vec().into())));
+        assert_parse_eq(r#"b"""#, Atom(Bytes(b"".to_vec().into())));
+    }
+
+    #[test]
+    fn bools() {
+        assert_parse_eq("true", Atom(Bool(true)));
+        assert_parse_eq("false", Atom(Bool(false)));
+    }
+
+    #[test]
+    fn nulls() {
+        assert_parse_eq("null", Atom(Null));
+    }
+
+    #[test]
+    fn simple_str() {
+        assert_parse_eq(r#"'foobar'"#, Atom(String("foobar".to_string().into()).into()));
+        println!("{:?}", parse(r#"1 == '1'"#))
+    }
+
+    #[test]
     fn nested_attributes() {
         assert_parse_eq(
             "a.b[1]",

@@ -101,21 +101,25 @@ Atom: Atom = {
     // Float with no decimals and required exponent
     r"[-+]?[0-9]+[eE][-+]?[0-9]+" => Atom::Float(<>.parse().unwrap()),
 
+    // NOTE: I've commented out some of the more complex string parsing rules
+    // because they're causing "attempt to subtract with overflow" errors within
+    // the LALRPOP parser.
+
     // Double quoted string
-    r#""(\\.|[^"\n])*""# => Atom::String(<>.to_string().into()),
-    r#""""(\\.|[^"{3}])*""""# => Atom::String(<>.to_string().into()),
+    r#""(\\.|[^"\n])*""# => Atom::String(<>[1..<>.len()-1].to_string().into()),
+    // r#""""(\\.|[^"{3}])*""""# => Atom::String(<>.to_string().into()),
 
     // Single quoted string
-    r#"'(\\.|[^'\n])*'"# => Atom::String(<>.to_string().into()),
-    r#"'''(\\.|[^'{3}])*'''"# => Atom::String(<>.to_string().into()),
+    r#"'(\\.|[^'\n])*'"# => Atom::String(<>[1..<>.len()-1].to_string().into()),
+    // r#"'''(\\.|[^'{3}])*'''"# => Atom::String(<>.to_string().into()),
 
     // Double quoted bytes
-    r#"[bB]"(\\.|[^"\n])*""# => Atom::Bytes(Vec::from(<>.as_bytes()).into()),
-    r#"[bB]"""(\\.|[^"{3}])*""""# => Atom::Bytes(Vec::from(<>.as_bytes()).into()),
+    r#"[bB]"(\\.|[^"\n])*""# => Atom::Bytes(Vec::from(<>[2..<>.len()-1].as_bytes()).into()),
+    // r#"[bB]"""(\\.|[^"{3}])*""""# => Atom::Bytes(Vec::from(<>.as_bytes()).into()),
 
     // Single quoted bytes
-    r#"[bB]'(\\.|[^'\n])*'"# => Atom::Bytes(Vec::from(<>.as_bytes()).into()),
-    r#"[bB]'''(\\.|[^'{3}])*'''"# => Atom::Bytes(Vec::from(<>.as_bytes()).into()),
+    r#"[bB]'(\\.|[^'\n])*'"# => Atom::Bytes(Vec::from(<>[2..<>.len()-1].as_bytes()).into()),
+    // r#"[bB]'''(\\.|[^'{3}])*'''"# => Atom::Bytes(Vec::from(<>.as_bytes()).into()),
 
     "true" => Atom::Bool(true),
     "false" => Atom::Bool(false),
