@@ -42,6 +42,8 @@ pub Primary: Expression = {
     Atom => Expression::Atom(<>).into(),
     "[" <members:CommaSeparated<Expression>> "]" => Expression::List(<>).into(),
     "{" <fields:CommaSeparated<MapInits>> "}" => Expression::Map(<>).into(),
+    "{{" <elements:CommaSeparated<Expression>> "}}" => Expression::Set(<>).into(),
+//    "{" <members:CommaSeparated<Expression>> "}" => Expression::Set(<>).into(),
     "(" <Expression> ")"
 }
 
@@ -70,6 +72,7 @@ ArithmeticOp: ArithmeticOp = { // (3)
     "*" => ArithmeticOp::Multiply,
     "/" => ArithmeticOp::Divide,
     "%" => ArithmeticOp::Modulus,
+    "&" => ArithmeticOp::BitwiseAnd,
 };
 
 UnaryOp: UnaryOp = {

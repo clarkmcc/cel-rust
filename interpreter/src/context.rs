@@ -40,6 +40,8 @@ impl Default for Context {
             variables: Default::default(),
             functions: Default::default(),
         };
+        ctx.add_function("contains", functions::contains);
+        ctx.add_function("intoSet", functions::into_set);
         ctx.add_function("size", functions::size);
         ctx.add_function("has", functions::has);
         ctx
