@@ -18,7 +18,6 @@ pub enum ArithmeticOp {
     Divide,
     Multiply,
     Modulus,
-    BitwiseAnd,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -43,7 +42,6 @@ pub enum Expression {
 
     List(Vec<Expression>),
     Map(Vec<(Expression, Expression)>),
-    Set(Vec<Expression>),
 
     Atom(Atom),
     Ident(Rc<String>),
@@ -138,14 +136,6 @@ mod tests {
             Atom(String("foobar".to_string().into()).into()),
         );
         println!("{:?}", parse(r#"1 == '1'"#))
-    }
-
-    #[test]
-    fn test_set() {
-        assert_parse_eq(
-            "{{1, 2, 3}}",
-            Set(vec![Atom(Int(1)), Atom(Int(2)), Atom(Int(3))]),
-        );
     }
 
     #[test]

@@ -29,20 +29,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         ("size_str_2", "size('a')"),
         ("size_map", "{1:2}.size()"),
         ("size_map_2", "size({1:2})"),
-        ("complex", "Account{user_id: 123}.user_id == 123"),
-        ("set - size", "{{1, 2, 3}}.size()"),
-        ("set - difference", "{{1, 2, 3}} - {{1}}"),
-        ("set - union", "{{1, 2}} + {{3}}"),
-        ("set - intersection", "{{1, 2}} & {{2, 3}}"),
-        ("set - empty intersection", "{{1, 2}} & {{}}"),
-        ("set - contains", "{{1, 2}}.contains(1)"),
-        ("set - not contains", "{{1, 2}}.contains(3)"),
-        ("set - list to set", "[1, 2, 3].intoSet() & {{3}}"),
-        ("set - map to set", "[1, 2, 3].intoSet() & {{3}}"),
-        ("set - set to set", "{{1, 2, 3}}.intoSet()"),
-        ("set - int to set", "1.intoSet()"),
-        ("set - str to set", "'foobar'.intoSet()"),
-        ("set - bool to set", "true.intoSet()"),
+        // ("complex", "Account{user_id: 123}.user_id == 123"),
     ];
     // https://gist.github.com/rhnvrm/db4567fcd87b2cb8e997999e1366d406
 

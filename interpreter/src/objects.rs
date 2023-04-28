@@ -32,17 +32,6 @@ impl PartialOrd for CelMap {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub struct CelSet {
-    pub set: Rc<HashSet<CelKey>>,
-}
-
-impl PartialOrd for CelSet {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        None
-    }
-}
-
 #[derive(Debug, Eq, PartialEq, Hash, Ord, Clone, PartialOrd)]
 pub enum CelKey {
     Int(i32),
@@ -123,7 +112,6 @@ impl<K: Into<CelKey>, V: Into<CelType>> From<HashMap<K, V>> for CelMap {
 pub enum CelType {
     List(Rc<Vec<CelType>>),
     Map(CelMap),
-    Set(CelSet),
 
     Function(Rc<String>, Option<Box<CelType>>),
 
@@ -135,20 +123,6 @@ pub enum CelType {
     Bytes(Rc<Vec<u8>>),
     Bool(bool),
     Null,
-}
-
-impl CelType {
-    /// Calculates the size of the [`CelType`] if the type is a list, map, string or bytes.
-    pub(crate) fn size(&self) -> Result<usize, ExecutionError> {
-        Ok(match self {
-            CelType::List(l) => l.len(),
-            CelType::Map(m) => m.map.len(),
-            CelType::String(s) => s.len(),
-            CelType::Bytes(b) => b.len(),
-            CelType::Set(s) => s.set.len(),
-            _ => Err(ExecutionError::unsupported_target_type(self.clone()))?,
-        })
-    }
 }
 
 // Convert Vec<T> to CelType
@@ -224,7 +198,6 @@ impl<'a> CelType {
                     ArithmeticOp::Divide => left / right,
                     ArithmeticOp::Multiply => left * right,
                     ArithmeticOp::Modulus => left % right,
-                    ArithmeticOp::BitwiseAnd => left & right,
                 }
                 .into()
             }
@@ -318,17 +291,6 @@ impl<'a> CelType {
                     ExecutionError::UndeclaredReference(name.clone()).into()
                 }
             }
-            Expression::Set(items) => {
-                let mut set = HashSet::with_capacity(items.len());
-                for item in items.iter() {
-                    set.insert(
-                        CelType::resolve(item, ctx)?
-                            .try_into()
-                            .map_err(ExecutionError::UnsupportedKeyType)?,
-                    );
-                }
-                CelType::Set(CelSet { set: Rc::new(set) }).into()
-            }
         }
     }
 
@@ -408,7 +370,6 @@ impl<'a> CelType {
             CelType::Bool(v) => *v,
             CelType::Null => false,
             CelType::Function(_, _) => false,
-            CelType::Set(v) => !v.set.is_empty(),
         }
     }
 }
@@ -464,17 +425,6 @@ impl ops::Add<CelType> for CelType {
                 }
                 CelType::Map(CelMap { map: Rc::new(new) })
             }
-            // Merge sets
-            (CelType::Set(l), CelType::Set(r)) => {
-                let mut new = HashSet::default();
-                for v in l.set.iter() {
-                    new.insert(v.clone());
-                }
-                for v in r.set.iter() {
-                    new.insert(v.clone());
-                }
-                CelType::Set(CelSet { set: Rc::new(new) })
-            }
             _ => unimplemented!(),
         }
     }
@@ -495,18 +445,6 @@ impl ops::Sub<CelType> for CelType {
             (CelType::Float(l), CelType::Int(r)) => CelType::Float(l - r as f64),
             (CelType::UInt(l), CelType::Float(r)) => CelType::Float(l as f64 - r),
             (CelType::Float(l), CelType::UInt(r)) => CelType::Float(l - r as f64),
-
-            // Set difference
-            (CelType::Set(l), CelType::Set(r)) => {
-                let mut new = HashSet::default();
-                for v in l.set.iter() {
-                    if !r.set.contains(v) {
-                        new.insert(v.clone());
-                    }
-                }
-                CelType::Set(CelSet { set: Rc::new(new) })
-            }
-
             _ => unimplemented!(),
         }
     }
@@ -569,30 +507,6 @@ impl ops::Rem<CelType> for CelType {
             (CelType::Float(l), CelType::Int(r)) => CelType::Float(l % r as f64),
             (CelType::UInt(l), CelType::Float(r)) => CelType::Float(l as f64 % r),
             (CelType::Float(l), CelType::UInt(r)) => CelType::Float(l % r as f64),
-
-            _ => unimplemented!(),
-        }
-    }
-}
-
-impl ops::BitAnd<CelType> for CelType {
-    type Output = CelType;
-
-    fn bitand(self, rhs: CelType) -> Self::Output {
-        match (self, rhs) {
-            (CelType::Int(l), CelType::Int(r)) => CelType::Int(l & r),
-            (CelType::UInt(l), CelType::UInt(r)) => CelType::UInt(l & r),
-
-            // Set intersection
-            (CelType::Set(l), CelType::Set(r)) => {
-                let mut new = HashSet::default();
-                for v in l.set.iter() {
-                    if r.set.contains(v) {
-                        new.insert(v.clone());
-                    }
-                }
-                CelType::Set(CelSet { set: Rc::new(new) })
-            }
 
             _ => unimplemented!(),
         }

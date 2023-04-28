@@ -178,33 +178,9 @@ mod tests {
     fn test_contains() {
         let tests = vec![
             ("list", "[1, 2, 3].contains(3) == true"),
-            ("set", "{{1, 2, 3}}.contains(3) == true"),
             ("map", "{1: true, 2: true, 3: true}.contains(3) == true"),
             ("string", "'foobar'.contains('bar') == true"),
             ("bytes", "b'foobar'.contains(b'o') == true"),
-        ];
-
-        for (name, script) in tests {
-            assert_eq!(test_script(script), Ok(true.into()), "{}", name);
-        }
-    }
-
-    #[test]
-    fn test_sets() {
-        let tests = vec![
-            ("size", "{{1, 2, 3}}.size() == 3"),
-            ("difference", "{{1, 2, 3}} - {{1}} == {{2, 3}}"),
-            ("union", "{{1, 2}} + {{3}} == {{1, 2, 3}}"),
-            ("intersection", "{{1, 2}} & {{2, 3}} == {{2}}"),
-            ("empty intersection", "{{1, 2}} & {{}} == {{}}"),
-            ("contains", "{{1, 2}}.contains(1)"),
-            ("not contains", "{{1, 2}}.contains(3) == false"),
-            ("list to set", "[1, 2, 3].intoSet() & {{3}} == {{3}}"),
-            ("map to set", "[1, 2, 3].intoSet() & {{3}} == {{3}}"),
-            ("set to set", "{{1, 2, 3}}.intoSet() == {{1, 2, 3}}"),
-            ("int to set", "1.intoSet() == {{1}}"),
-            ("str to set", "'foobar'.intoSet() == {{'foobar'}}"),
-            ("bool to set", "true.intoSet() == {{true}}"),
         ];
 
         for (name, script) in tests {
