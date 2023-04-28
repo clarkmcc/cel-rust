@@ -1,9 +1,10 @@
 use crate::context::Context;
 use crate::ExecutionError;
+use crate::ExecutionError::NoSuchKey;
 use cel_parser::{ArithmeticOp, Atom, Expression, Member, RelationOp, UnaryOp};
 use core::ops;
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::rc::Rc;
 
@@ -26,6 +27,17 @@ pub struct CelMap {
 }
 
 impl PartialOrd for CelMap {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        None
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct CelSet {
+    pub set: Rc<HashSet<CelKey>>,
+}
+
+impl PartialOrd for CelSet {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         None
     }
@@ -107,10 +119,11 @@ impl<K: Into<CelKey>, V: Into<CelType>> From<HashMap<K, V>> for CelMap {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub enum CelType {
     List(Rc<Vec<CelType>>),
     Map(CelMap),
+    Set(CelSet),
 
     Function(Rc<String>, Option<Box<CelType>>),
 
@@ -132,6 +145,7 @@ impl CelType {
             CelType::Map(m) => m.map.len(),
             CelType::String(s) => s.len(),
             CelType::Bytes(b) => b.len(),
+            CelType::Set(s) => s.set.len(),
             _ => Err(ExecutionError::unsupported_target_type(self.clone()))?,
         })
     }
@@ -210,6 +224,7 @@ impl<'a> CelType {
                     ArithmeticOp::Divide => left / right,
                     ArithmeticOp::Multiply => left * right,
                     ArithmeticOp::Modulus => left % right,
+                    ArithmeticOp::BitwiseAnd => left & right,
                 }
                 .into()
             }
@@ -303,6 +318,17 @@ impl<'a> CelType {
                     ExecutionError::UndeclaredReference(name.clone()).into()
                 }
             }
+            Expression::Set(items) => {
+                let mut set = HashSet::with_capacity(items.len());
+                for item in items.iter() {
+                    set.insert(
+                        CelType::resolve(item, ctx)?
+                            .try_into()
+                            .map_err(ExecutionError::UnsupportedKeyType)?,
+                    );
+                }
+                CelType::Set(CelSet { set: Rc::new(set) }).into()
+            }
         }
     }
 
@@ -335,22 +361,20 @@ impl<'a> CelType {
             Member::Fields(_) => unimplemented!(),
             Member::Attribute(name) => {
                 // This will always either be because we're trying to access
-                // a property on self, or a method on self. If it's a method
-                match self {
-                    CelType::Map(m) => m
-                        .map
-                        .get(&name.clone().into())
-                        .ok_or(ExecutionError::no_such_key(&name))?
-                        .clone(),
-                    _ => {
-                        if ctx.functions.contains_key(&***name) {
-                            return CelType::Function(name.clone(), Some(self.into())).into();
-                        } else {
-                            unimplemented!("Attribute access on {:?}", self);
-                        }
-                    }
+                // a property on self, or a method on self.
+                let child = match self {
+                    CelType::Map(ref m) => m.map.get(&name.clone().into()).cloned(),
+                    _ => None,
+                };
+
+                // If the property is both an attribute and a method, then we
+                // give priority to the property. Maybe we can implement lookahead
+                // to see if the next token is a function call?
+                match (child.is_some(), ctx.functions.contains_key(&***name)) {
+                    (false, false) => NoSuchKey(name.clone()).into(),
+                    (true, true) | (true, false) => child.unwrap().into(),
+                    (false, true) => CelType::Function(name.clone(), Some(self.into())).into(),
                 }
-                .into()
             }
             Member::FunctionCall(args) => {
                 if let CelType::Function(name, target) = self {
@@ -384,6 +408,7 @@ impl<'a> CelType {
             CelType::Bool(v) => *v,
             CelType::Null => false,
             CelType::Function(_, _) => false,
+            CelType::Set(v) => !v.set.is_empty(),
         }
     }
 }
@@ -439,6 +464,17 @@ impl ops::Add<CelType> for CelType {
                 }
                 CelType::Map(CelMap { map: Rc::new(new) })
             }
+            // Merge sets
+            (CelType::Set(l), CelType::Set(r)) => {
+                let mut new = HashSet::default();
+                for v in l.set.iter() {
+                    new.insert(v.clone());
+                }
+                for v in r.set.iter() {
+                    new.insert(v.clone());
+                }
+                CelType::Set(CelSet { set: Rc::new(new) })
+            }
             _ => unimplemented!(),
         }
     }
@@ -460,26 +496,15 @@ impl ops::Sub<CelType> for CelType {
             (CelType::UInt(l), CelType::Float(r)) => CelType::Float(l as f64 - r),
             (CelType::Float(l), CelType::UInt(r)) => CelType::Float(l - r as f64),
 
-            // Set difference for list
-            (CelType::List(l), CelType::List(r)) => {
-                let mut new = Vec::with_capacity(l.len());
-                for v in l.iter() {
-                    if !r.contains(v) {
-                        new.push(v.clone());
+            // Set difference
+            (CelType::Set(l), CelType::Set(r)) => {
+                let mut new = HashSet::default();
+                for v in l.set.iter() {
+                    if !r.set.contains(v) {
+                        new.insert(v.clone());
                     }
                 }
-                CelType::List(Rc::new(new))
-            }
-
-            // Set difference for map
-            (CelType::Map(l), CelType::Map(r)) => {
-                let mut new = HashMap::default();
-                for (k, v) in l.map.iter() {
-                    if !r.map.contains_key(k) {
-                        new.insert(k.clone(), v.clone());
-                    }
-                }
-                CelType::Map(CelMap { map: Rc::new(new) })
+                CelType::Set(CelSet { set: Rc::new(new) })
             }
 
             _ => unimplemented!(),
@@ -544,6 +569,30 @@ impl ops::Rem<CelType> for CelType {
             (CelType::Float(l), CelType::Int(r)) => CelType::Float(l % r as f64),
             (CelType::UInt(l), CelType::Float(r)) => CelType::Float(l as f64 % r),
             (CelType::Float(l), CelType::UInt(r)) => CelType::Float(l % r as f64),
+
+            _ => unimplemented!(),
+        }
+    }
+}
+
+impl ops::BitAnd<CelType> for CelType {
+    type Output = CelType;
+
+    fn bitand(self, rhs: CelType) -> Self::Output {
+        match (self, rhs) {
+            (CelType::Int(l), CelType::Int(r)) => CelType::Int(l & r),
+            (CelType::UInt(l), CelType::UInt(r)) => CelType::UInt(l & r),
+
+            // Set intersection
+            (CelType::Set(l), CelType::Set(r)) => {
+                let mut new = HashSet::default();
+                for v in l.set.iter() {
+                    if r.set.contains(v) {
+                        new.insert(v.clone());
+                    }
+                }
+                CelType::Set(CelSet { set: Rc::new(new) })
+            }
 
             _ => unimplemented!(),
         }
