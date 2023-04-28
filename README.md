@@ -27,29 +27,27 @@ fn main() {
 
 ## Extensions
 
-### Set Operations
+### Sets
 
-#### Merge Maps
-
-You can merge two maps using the `+` operator. The right hand side map will overwrite any keys that exist in the left
-map.
-
-```cel
-{'a': 1} + {'b': 2} == {'a': 1, 'b': 2}
-```
+This extension adds support for a Set datatype which is denoted by double-braces, like `{{1, 2, 3}}`. You can perform
+various set operations like difference, merge, and intersection on them.
 
 #### Difference
 
-Performs a set difference using the keys of the map. Values are ignored.
-
 ```cel
-{'a': 1, 'b': 1} - {'b': 2} == {'a': 1}
+{{1, 2, 3}} - {{1}} == {{2, 3}}
 ```
 
-You can also perform a set difference on arrays:
+#### Merge
 
 ```cel
-[1, 2, 3] - [2, 3] == [1]
+{{1, 2}} + {{3}} == {{1, 2, 3}}
+```
+
+#### Intersection
+
+```cel
+{{1, 2, 3}} & {{2, 3, 4}} == {{2, 3}}
 ```
 
 ### String Indexing
