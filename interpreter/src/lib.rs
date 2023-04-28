@@ -9,6 +9,7 @@ use thiserror::Error;
 pub mod context;
 mod functions;
 pub mod objects;
+mod testing;
 
 #[derive(Error, Debug)]
 #[error("Error parsing {msg}")]
@@ -118,15 +119,10 @@ impl TryFrom<&str> for Program {
 mod tests {
     use crate::context::Context;
     use crate::objects::{CelType, ResolveResult};
+    use crate::testing::test_script;
     use crate::{ExecutionError, Program};
     use std::collections::HashMap;
     use std::convert::TryInto;
-
-    fn test_script(script: &str) -> ResolveResult {
-        let program = Program::compile(script).unwrap();
-        let ctx = Context::default();
-        program.execute(&ctx)
-    }
 
     #[test]
     fn parse() {
@@ -146,9 +142,7 @@ mod tests {
             ctx.add_variable("foo", HashMap::from([("bar", 1)]));
             ctx.add_variable("arr", vec![1i32, 2, 3]);
             ctx.add_variable("str", "foobar".to_string());
-            let program = Program::compile(script).unwrap();
-            let res = program.execute(&ctx);
-            assert_eq!(res, expected);
+            assert_eq!(test_script(script, Some(ctx)), expected);
         }
 
         // Test methods
@@ -169,9 +163,6 @@ mod tests {
             "{'a': 1} + {'a': 2, 'b': 3}",
             Ok(HashMap::from([("a", 2), ("b", 3)]).into()),
         );
-
-        // Test set difference on arrays
-        assert_output("{{1, 2, 3}}.size() == 3 ", Ok(true.into()));
     }
 
     #[test]
@@ -184,7 +175,7 @@ mod tests {
         ];
 
         for (name, script) in tests {
-            assert_eq!(test_script(script), Ok(true.into()), "{}", name);
+            assert_eq!(test_script(script, None), Ok(true.into()), "{}", name);
         }
     }
 
@@ -214,10 +205,9 @@ mod tests {
         ];
 
         for (name, script, error) in tests {
-            let program = Program::compile(script).unwrap();
             let mut ctx = Context::default();
             ctx.add_variable("foo", HashMap::from([("bar", 1)]));
-            let res = program.execute(&ctx);
+            let res = test_script(script, Some(ctx));
             assert_eq!(res, error.into(), "{}", name);
         }
     }

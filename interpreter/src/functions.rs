@@ -1,11 +1,8 @@
 use crate::context::Context;
-use crate::objects::{CelKey, CelSet, CelType};
+use crate::objects::CelType;
 use crate::ExecutionError;
 use cel_parser::Expression;
-use std::collections::HashSet;
 use std::convert::TryInto;
-use std::hash::Hash;
-use std::rc::Rc;
 
 /// Calculates the size of either the target, or the provided args depending on how
 /// the function is called. If called as a method, the target will be used. If called
@@ -17,17 +14,7 @@ use std::rc::Rc;
 /// * [`CelType::String`]
 /// * [`CelType::Bytes`]
 ///
-/// If `size` is called on an unsupported type, an [`ExecutionError::UnsupportedTargetType`]
-/// error will be returned.
-///
 /// # Examples
-///
-/// ## Method Form
-/// ```skip
-/// [1, 2, 3].size() == 3
-/// ```
-///
-/// ## Function Form
 /// ```skip
 /// size([1, 2, 3]) == 3
 /// ```
@@ -36,16 +23,27 @@ pub fn size(
     args: &[Expression],
     ctx: &Context,
 ) -> Result<CelType, ExecutionError> {
-    match (target, args.len()) {
-        // We can assume that we will have either gotten a target or an arg, but we should
-        // have only gotten one of either, and not more than one arg.
-        (Some(target), 0) => target.size().map(|v| CelType::Int(v as i32)),
-        (None, 1) => CelType::resolve(&args[0], ctx)?
-            .size()
-            .map(|v| CelType::Int(v as i32)),
-        (Some(_), _) => Err(ExecutionError::invalid_argument_count(0, args.len()))?,
-        (None, _) => Err(ExecutionError::invalid_argument_count(1, args.len()))?,
+    if target.is_some() {
+        return Err(ExecutionError::not_supported_as_method(
+            "size",
+            target.cloned().unwrap(),
+        ));
     }
+    let arg = args
+        .get(0)
+        .ok_or(ExecutionError::invalid_argument_count(1, 0))?;
+    let value = CelType::resolve(arg, ctx)?;
+    let size = match value {
+        CelType::List(l) => l.len(),
+        CelType::Map(m) => m.map.len(),
+        CelType::String(s) => s.len(),
+        CelType::Bytes(b) => b.len(),
+        _ => Err(ExecutionError::function_error(
+            "size",
+            &format!("cannot determine size of {:?}", value),
+        ))?,
+    };
+    CelType::Int(size as i32).into()
 }
 
 /// Returns true if the target contains the provided argument. The actual behavior
@@ -134,4 +132,23 @@ pub fn has(
         return ExecutionError::invalid_argument_count(1, args.len()).into();
     }
     Ok(CelType::Bool(true))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::testing::test_script;
+
+    #[test]
+    fn test_size() {
+        let tests = vec![
+            ("size of list", "size([1, 2, 3]) == 3"),
+            ("size of map", "size({'a': 1, 'b': 2, 'c': 3}) == 3"),
+            ("size of string", "size('foo') == 3"),
+            ("size of bytes", "size(b'foo') == 3"),
+        ];
+
+        for (name, script) in tests {
+            assert_eq!(test_script(script, None), Ok(true.into()), "{}", name);
+        }
+    }
 }
