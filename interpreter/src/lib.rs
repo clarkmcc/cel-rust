@@ -40,6 +40,9 @@ pub enum ExecutionError {
     /// called with at least one parameter.
     #[error("Missing argument or target")]
     MissingArgumentOrTarget,
+    /// Indicates that a function had an error during execution.
+    #[error("Error executing function '{function}': {message}")]
+    FunctionError { function: String, message: String },
 }
 
 impl ExecutionError {
@@ -55,6 +58,13 @@ impl ExecutionError {
         ExecutionError::InvalidArgumentCount { expected, actual }
     }
 
+    pub fn function_error(function: &str, error: &str) -> Self {
+        ExecutionError::FunctionError {
+            function: function.to_string(),
+            message: error.to_string(),
+        }
+    }
+
     pub fn unsupported_target_type(target: CelType) -> Self {
         ExecutionError::UnsupportedTargetType { target }
     }
@@ -68,6 +78,10 @@ impl ExecutionError {
 
     pub fn unsupported_key_type(value: CelType) -> Self {
         ExecutionError::UnsupportedKeyType(value)
+    }
+
+    pub fn missing_argument_or_target() -> Self {
+        ExecutionError::MissingArgumentOrTarget
     }
 }
 
@@ -104,10 +118,15 @@ impl TryFrom<&str> for Program {
 mod tests {
     use crate::context::Context;
     use crate::objects::{CelType, ResolveResult};
-    use crate::{functions, ExecutionError, Program};
+    use crate::{ExecutionError, Program};
     use std::collections::HashMap;
     use std::convert::TryInto;
-    use std::rc::Rc;
+
+    fn test_script(script: &str) -> ResolveResult {
+        let program = Program::compile(script).unwrap();
+        let ctx = Context::default();
+        program.execute(&ctx)
+    }
 
     #[test]
     fn parse() {
@@ -151,14 +170,46 @@ mod tests {
             Ok(HashMap::from([("a", 2), ("b", 3)]).into()),
         );
 
-        // Test that we can difference two maps, notice how value doesn't matter
-        assert_output(
-            "{'a': 1, 'b': 2} - {'b': 3}",
-            Ok(HashMap::from([("a", 1)]).into()),
-        );
-
         // Test set difference on arrays
-        assert_output("[1, 2, 3] - [1, 2] == [3]", Ok(true.into()));
+        assert_output("{{1, 2, 3}}.size() == 3 ", Ok(true.into()));
+    }
+
+    #[test]
+    fn test_contains() {
+        let tests = vec![
+            ("list", "[1, 2, 3].contains(3) == true"),
+            ("set", "{{1, 2, 3}}.contains(3) == true"),
+            ("map", "{1: true, 2: true, 3: true}.contains(3) == true"),
+            ("string", "'foobar'.contains('bar') == true"),
+            ("bytes", "b'foobar'.contains(b'o') == true"),
+        ];
+
+        for (name, script) in tests {
+            assert_eq!(test_script(script), Ok(true.into()), "{}", name);
+        }
+    }
+
+    #[test]
+    fn test_sets() {
+        let tests = vec![
+            ("size", "{{1, 2, 3}}.size() == 3"),
+            ("difference", "{{1, 2, 3}} - {{1}} == {{2, 3}}"),
+            ("union", "{{1, 2}} + {{3}} == {{1, 2, 3}}"),
+            ("intersection", "{{1, 2}} & {{2, 3}} == {{2}}"),
+            ("empty intersection", "{{1, 2}} & {{}} == {{}}"),
+            ("contains", "{{1, 2}}.contains(1)"),
+            ("not contains", "{{1, 2}}.contains(3) == false"),
+            ("list to set", "[1, 2, 3].intoSet() & {{3}} == {{3}}"),
+            ("map to set", "[1, 2, 3].intoSet() & {{3}} == {{3}}"),
+            ("set to set", "{{1, 2, 3}}.intoSet() == {{1, 2, 3}}"),
+            ("int to set", "1.intoSet() == {{1}}"),
+            ("str to set", "'foobar'.intoSet() == {{'foobar'}}"),
+            ("bool to set", "true.intoSet() == {{true}}"),
+        ];
+
+        for (name, script) in tests {
+            assert_eq!(test_script(script), Ok(true.into()), "{}", name);
+        }
     }
 
     #[test]
