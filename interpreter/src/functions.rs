@@ -121,22 +121,50 @@ pub fn contains(
     .into())
 }
 
+/// Returns true if the provided argument can be resolved. This function is
+/// useful for checking if a property exists on a type before attempting to
+/// resolve it. Resolving a property that does not exist will result in a
+/// [`ExecutionError::NoSuchKey`] error.
+///
+/// Operates similar to the `has` macro describe in the Go CEL implementation
+/// spec: https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros.
+///
+/// # Examples
+/// ```cel
+/// has(foo.bar.baz)
+/// ```
 pub fn has(
     target: Option<&CelType>,
     args: &[Expression],
-    _: &Context,
+    ctx: &Context,
 ) -> Result<CelType, ExecutionError> {
-    if let Some(target) = target {
-        return ExecutionError::not_supported_as_method("has".into(), target.clone()).into();
-    } else if args.len() != 1 {
-        return ExecutionError::invalid_argument_count(1, args.len()).into();
+    if target.is_some() {
+        return Err(ExecutionError::not_supported_as_method(
+            "has",
+            target.cloned().unwrap(),
+        ));
     }
-    Ok(CelType::Bool(true))
+    let arg = args
+        .get(0)
+        .ok_or(ExecutionError::invalid_argument_count(1, 0))?;
+
+    // We determine if a type has a property by attempting to resolve it.
+    // If we get a NoSuchKey error, then we know the property does not exist
+    match CelType::resolve(arg, ctx) {
+        Ok(_) => CelType::Bool(true),
+        Err(err) => match err {
+            ExecutionError::NoSuchKey(_) => CelType::Bool(false),
+            _ => return Err(err),
+        },
+    }
+    .into()
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::context::Context;
     use crate::testing::test_script;
+    use std::collections::HashMap;
 
     #[test]
     fn test_size() {
@@ -149,6 +177,22 @@ mod tests {
 
         for (name, script) in tests {
             assert_eq!(test_script(script, None), Ok(true.into()), "{}", name);
+        }
+    }
+
+    #[test]
+    fn test_has() {
+        let tests = vec![
+            ("map has", "has(foo.bar) == true"),
+            ("map has", "has(foo.bar) == true"),
+            ("map not has", "has(foo.baz) == false"),
+            ("map deep not has", "has(foo.baz.bar) == false"),
+        ];
+
+        for (name, script) in tests {
+            let mut ctx = Context::default();
+            ctx.add_variable("foo", HashMap::from([("bar", 1)]));
+            assert_eq!(test_script(script, Some(ctx)), Ok(true.into()), "{}", name);
         }
     }
 }
