@@ -30,17 +30,16 @@ fn main() -> Result<()> {
                 rl.add_history_entry(line.as_str());
                 let program = Program::compile(&line).unwrap();
                 let mut ctx = Context::default();
-                ctx.variables
-                    .insert("TestDouble".into(), CelType::Float(0.0f64));
-                ctx.variables.insert(
-                    "TestString".into(),
-                    CelType::String("World".to_string().into()),
-                );
-                ctx.variables.insert("TestTime".into(), CelType::UInt(0));
-                ctx.variables.insert("Now".into(), CelType::UInt(1));
-                ctx.add_function("TestFunction".into(), |target, args, ctx| match target {
-                    Some(CelType::String(v)) => CelType::String(format!("Hello{}", v).into()),
-                    _ => unreachable!(),
+                ctx.add_variable("TestDouble", CelType::Float(0.0f64));
+                ctx.add_variable("TestString", CelType::String("World".to_string().into()));
+                ctx.add_variable("TestTime", CelType::UInt(0));
+                ctx.add_variable("Now", CelType::UInt(1));
+                ctx.add_function("TestFunction", |target, args, ctx| {
+                    match target {
+                        Some(CelType::String(v)) => CelType::String(format!("Hello{}", v).into()),
+                        _ => unreachable!(),
+                    }
+                    .into()
                 });
                 println!("{:?}", program);
                 println!("{:?}", program.execute(&ctx));

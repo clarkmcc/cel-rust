@@ -139,6 +139,11 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_map_macro() {
+        println!("{:?}", parse("[1, 2, 3].map(x, x * 2)"))
+    }
+
+    #[test]
     fn nested_attributes() {
         assert_parse_eq(
             "a.b[1]",

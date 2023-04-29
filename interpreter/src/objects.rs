@@ -4,7 +4,7 @@ use crate::ExecutionError::NoSuchKey;
 use cel_parser::{ArithmeticOp, Atom, Expression, Member, RelationOp, UnaryOp};
 use core::ops;
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::convert::TryInto;
 use std::rc::Rc;
 
@@ -283,12 +283,10 @@ impl<'a> CelType {
                 CelType::Map(CelMap { map: Rc::from(map) }).into()
             }
             Expression::Ident(name) => {
-                if ctx.functions.contains_key(&**name) {
+                if ctx.has_function(&***name) {
                     CelType::Function(name.clone(), None).into()
-                } else if ctx.variables.contains_key(&***name) {
-                    ctx.variables.get(&***name).unwrap().clone().into()
                 } else {
-                    ExecutionError::UndeclaredReference(name.clone()).into()
+                    ctx.get_variable(&***name)
                 }
             }
         }
@@ -332,7 +330,7 @@ impl<'a> CelType {
                 // If the property is both an attribute and a method, then we
                 // give priority to the property. Maybe we can implement lookahead
                 // to see if the next token is a function call?
-                match (child.is_some(), ctx.functions.contains_key(&***name)) {
+                match (child.is_some(), ctx.has_function(&***name)) {
                     (false, false) => NoSuchKey(name.clone()).into(),
                     (true, true) | (true, false) => child.unwrap().into(),
                     (false, true) => CelType::Function(name.clone(), Some(self.into())).into(),
@@ -340,7 +338,7 @@ impl<'a> CelType {
             }
             Member::FunctionCall(args) => {
                 if let CelType::Function(name, target) = self {
-                    let func = ctx.functions.get(&*name).unwrap();
+                    let func = ctx.get_function(&**name).unwrap();
                     match target {
                         None => {
                             if args.is_empty() {

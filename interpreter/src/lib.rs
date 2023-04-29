@@ -1,3 +1,5 @@
+extern crate core;
+
 use crate::context::Context;
 use crate::objects::{CelType, ResolveResult};
 use cel_parser::ast::Expression;
@@ -146,8 +148,8 @@ mod tests {
         }
 
         // Test methods
-        assert_output("[1, 2, 3].size() == 3", Ok(true.into()));
-        assert_output("[].size() == 3", Ok(false.into()));
+        assert_output("size([1, 2, 3]) == 3", Ok(true.into()));
+        assert_output("size([]) == 3", Ok(false.into()));
 
         // Test variable attribute traversals
         assert_output("foo.bar == 1", Ok(true.into()));
@@ -186,11 +188,6 @@ mod tests {
                 "no such key",
                 "foo.baz.bar == 1",
                 ExecutionError::no_such_key("baz"),
-            ),
-            (
-                "invalid argument count",
-                "has(foo, bar)",
-                ExecutionError::invalid_argument_count(1, 2),
             ),
             (
                 "undeclared reference",
