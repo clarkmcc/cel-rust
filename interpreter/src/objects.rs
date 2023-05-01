@@ -125,6 +125,28 @@ pub enum CelType {
     Null,
 }
 
+impl From<&CelKey> for CelType {
+    fn from(value: &CelKey) -> Self {
+        match value {
+            CelKey::Int(v) => CelType::Int(*v),
+            CelKey::Uint(v) => CelType::UInt(*v),
+            CelKey::Bool(v) => CelType::Bool(*v),
+            CelKey::String(v) => CelType::String(v.clone()),
+        }
+    }
+}
+
+impl From<CelKey> for CelType {
+    fn from(value: CelKey) -> Self {
+        match value {
+            CelKey::Int(v) => CelType::Int(v),
+            CelKey::Uint(v) => CelType::UInt(v),
+            CelKey::Bool(v) => CelType::Bool(v),
+            CelKey::String(v) => CelType::String(v),
+        }
+    }
+}
+
 // Convert Vec<T> to CelType
 impl<T: Into<CelType>> From<Vec<T>> for CelType {
     fn from(v: Vec<T>) -> Self {

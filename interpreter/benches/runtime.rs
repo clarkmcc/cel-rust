@@ -34,6 +34,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         ("map macro", "[1, 2, 3].map(x, x * 2)"),
         ("filter macro", "[1, 2, 3].filter(x, x > 2)"),
         ("all macro", "[1, 2, 3].all(x, x > 0)"),
+        ("all map macro", "{0: 0, 1:1, 2:2}.all(x, x >= 0)"),
         // ("complex", "Account{user_id: 123}.user_id == 123"),
     ];
     // https://gist.github.com/rhnvrm/db4567fcd87b2cb8e997999e1366d406

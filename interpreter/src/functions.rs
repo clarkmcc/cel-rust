@@ -145,9 +145,7 @@ pub fn has(
             target.cloned().unwrap(),
         ));
     }
-    let arg = args
-        .get(0)
-        .ok_or(ExecutionError::invalid_argument_count(1, 0))?;
+    let arg = get_arg(0, args)?;
 
     // We determine if a type has a property by attempting to resolve it.
     // If we get a NoSuchKey error, then we know the property does not exist
@@ -197,7 +195,8 @@ pub fn filter(
 }
 
 /// Returns a boolean value indicating whether every value in the provided
-/// list met the predicate defined by the provided expression.
+/// list or map met the predicate defined by the provided expression. If
+/// called on a map, the predicate is applied to the map keys.
 ///
 /// This function is intended to be used like the CEL-go `all` macro:
 /// https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros
@@ -205,6 +204,7 @@ pub fn filter(
 /// # Example
 /// ```cel
 /// [1, 2, 3].all(x, x > 0) == true
+/// [{1:true, 2:true, 3:false}].all(x, x > 0) == true
 /// ```
 pub fn all(
     target: Option<&CelType>,
@@ -273,6 +273,16 @@ fn op_all(
             let mut ctx = ctx.clone();
             for item in items.iter() {
                 ctx.add_variable(&**ident, item.clone());
+                if let CelType::Bool(false) = CelType::resolve(expr, &ctx)? {
+                    return Ok(CelType::Bool(false));
+                }
+            }
+            return Ok(CelType::Bool(true));
+        }
+        CelType::Map(value) => {
+            let mut ctx = ctx.clone();
+            for key in value.map.keys() {
+                ctx.add_variable(&**ident, key.clone());
                 if let CelType::Bool(false) = CelType::resolve(expr, &ctx)? {
                     return Ok(CelType::Bool(false));
                 }
@@ -393,6 +403,7 @@ mod tests {
         let tests = vec![
             ("all list #1", "[0, 1, 2].all(x, x >= 0)"),
             ("all list #2", "[0, 1, 2].all(x, x > 0) == false"),
+            ("all map", "{0: 0, 1:1, 2:2}.all(x, x >= 0) == true"),
         ];
 
         for (name, script) in tests {
