@@ -128,6 +128,8 @@ impl<'a> Default for Context<'a> {
         ctx.add_function("size", functions::size);
         ctx.add_function("has", functions::has);
         ctx.add_function("map", functions::map);
+        ctx.add_function("filter", functions::filter);
+        ctx.add_function("all", functions::all);
         ctx
     }
 }

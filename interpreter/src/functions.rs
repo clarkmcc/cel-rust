@@ -165,12 +165,6 @@ pub fn has(
 /// input item. This function is intended to be used like the CEL-go `map`
 /// macro: https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros
 ///
-/// The macro allows the user to assign each item in the list to an arbitrary
-/// identifier, and then use that identifier in the expression. In order to
-/// make this work here, we clone the context which creates a [`Context::Child`]
-/// context with the new variable. The child context has it's own variable
-/// space, so you can think about this is a sort of scoping mechanism.
-///
 /// # Examples
 /// ```cel
 /// [1, 2, 3].map(x, x * 2) == [2, 4, 6]
@@ -180,40 +174,153 @@ pub fn map(
     args: &[Expression],
     ctx: &Context,
 ) -> Result<CelType, ExecutionError> {
-    let target = target.ok_or(ExecutionError::missing_argument_or_target())?;
-    if args.len() != 2 {
-        return Err(ExecutionError::invalid_argument_count(2, args.len()));
-    }
-    let ident = get_ident(&args[0])?;
-    if let CelType::List(items) = target {
-        let mut values = Vec::with_capacity(items.len());
-
-        // Initialize a new context where we'll store our intermediate identifier
-        // for each item that we're mapping over. This ensures that we don't overwrite
-        // any identifiers in the parent scope just because we use the same name in
-        // the mapping expression.
-        let mut ctx = ctx.clone();
-        for item in items.iter() {
-            ctx.add_variable(&**ident, item.clone());
-            let value = CelType::resolve(&args[1], &ctx)?;
-            values.push(value);
-        }
-
-        Ok(CelType::List(Rc::new(values)))
-    } else {
-        Err(ExecutionError::function_error(
-            "map",
-            "map can only be called on a list",
-        ))
-    }
+    macro_wrapper(ctx, target, args, op_map)
 }
 
-fn get_ident(expr: &Expression) -> Result<Rc<String>, ExecutionError> {
-    match expr {
+/// Filters the provided list by applying an expression to each input item
+/// and including the input item in the resulting list, only if the expression
+/// returned true.
+///
+/// This function is intended to be used like the CEL-go `filter` macro:
+/// https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros
+///
+/// # Example
+/// ```cel
+/// [1, 2, 3].filter(x, x > 1) == [2, 3]
+/// ```
+pub fn filter(
+    target: Option<&CelType>,
+    args: &[Expression],
+    ctx: &Context,
+) -> Result<CelType, ExecutionError> {
+    macro_wrapper(ctx, target, args, op_filter)
+}
+
+/// Returns a boolean value indicating whether every value in the provided
+/// list met the predicate defined by the provided expression.
+///
+/// This function is intended to be used like the CEL-go `all` macro:
+/// https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros
+///
+/// # Example
+/// ```cel
+/// [1, 2, 3].all(x, x > 0) == true
+/// ```
+pub fn all(
+    target: Option<&CelType>,
+    args: &[Expression],
+    ctx: &Context,
+) -> Result<CelType, ExecutionError> {
+    macro_wrapper(ctx, target, args, op_all)
+}
+
+#[inline(always)]
+fn op_map(
+    ctx: &Context,
+    target: &CelType,
+    ident: Rc<String>,
+    expr: &Expression,
+) -> Result<CelType, ExecutionError> {
+    match target {
+        CelType::List(items) => {
+            let mut values = Vec::with_capacity(items.len());
+            let mut ctx = ctx.clone();
+            for item in items.iter() {
+                ctx.add_variable(&**ident, item.clone());
+                let value = CelType::resolve(expr, &ctx)?;
+                values.push(value);
+            }
+            CelType::List(Rc::new(values))
+        }
+        _ => list_only("map")?,
+    }
+    .into()
+}
+
+#[inline(always)]
+fn op_filter(
+    ctx: &Context,
+    target: &CelType,
+    ident: Rc<String>,
+    expr: &Expression,
+) -> Result<CelType, ExecutionError> {
+    match target {
+        CelType::List(items) => {
+            let mut values = Vec::with_capacity(items.len());
+            let mut ctx = ctx.clone();
+            for item in items.iter() {
+                ctx.add_variable(&**ident, item.clone());
+                if let CelType::Bool(true) = CelType::resolve(expr, &ctx)? {
+                    values.push(item.clone());
+                }
+            }
+            CelType::List(Rc::new(values))
+        }
+        _ => list_only("filter")?,
+    }
+    .into()
+}
+
+#[inline(always)]
+fn op_all(
+    ctx: &Context,
+    target: &CelType,
+    ident: Rc<String>,
+    expr: &Expression,
+) -> Result<CelType, ExecutionError> {
+    match target {
+        CelType::List(items) => {
+            let mut ctx = ctx.clone();
+            for item in items.iter() {
+                ctx.add_variable(&**ident, item.clone());
+                if let CelType::Bool(false) = CelType::resolve(expr, &ctx)? {
+                    return Ok(CelType::Bool(false));
+                }
+            }
+            return Ok(CelType::Bool(true));
+        }
+        _ => list_only("all")?,
+    }
+    .into()
+}
+
+#[inline(always)]
+fn macro_wrapper(
+    ctx: &Context,
+    target: Option<&CelType>,
+    args: &[Expression],
+    func: fn(&Context, &CelType, Rc<String>, &Expression) -> Result<CelType, ExecutionError>,
+) -> Result<CelType, ExecutionError> {
+    let target = target.ok_or(ExecutionError::missing_argument_or_target())?;
+    let ident = get_ident_arg(0, args)?;
+    let expr = get_arg(1, args)?;
+    func(ctx, target, ident, expr)
+}
+
+#[inline(always)]
+fn list_only(name: &str) -> Result<CelType, ExecutionError> {
+    Err(ExecutionError::function_error(
+        name,
+        "can only be called on a list",
+    ))
+}
+
+#[inline(always)]
+fn get_arg(idx: usize, args: &[Expression]) -> Result<&Expression, ExecutionError> {
+    args.get(idx)
+        .ok_or(ExecutionError::invalid_argument_count(idx + 1, args.len()))
+}
+
+#[inline(always)]
+fn get_ident_arg(idx: usize, args: &[Expression]) -> Result<Rc<String>, ExecutionError> {
+    match args
+        .get(idx)
+        .ok_or(ExecutionError::invalid_argument_count(idx + 1, args.len()))?
+    {
         Expression::Ident(ident) => Ok(ident.clone()),
         _ => Err(ExecutionError::function_error(
             "map",
-            "first argument must be an identifier",
+            &format!("argument {} must be an identifier", idx),
         )),
     }
 }
@@ -259,6 +366,33 @@ mod tests {
         let tests = vec![
             ("map list", "[1, 2, 3].map(x, x * 2) == [2, 4, 6]"),
             ("map list 2", "[1, 2, 3].map(y, y + 1) == [2, 3, 4]"),
+            (
+                "nested map",
+                "[[1, 2], [2, 3]].map(x, x.map(x, x * 2)) == [[2, 4], [4, 6]]",
+            ),
+        ];
+
+        for (name, script) in tests {
+            let ctx = Context::default();
+            assert_eq!(test_script(script, Some(ctx)), Ok(true.into()), "{}", name);
+        }
+    }
+
+    #[test]
+    fn test_filter() {
+        let tests = vec![("filter list", "[1, 2, 3].filter(x, x > 2) == [3]")];
+
+        for (name, script) in tests {
+            let ctx = Context::default();
+            assert_eq!(test_script(script, Some(ctx)), Ok(true.into()), "{}", name);
+        }
+    }
+
+    #[test]
+    fn test_all() {
+        let tests = vec![
+            ("all list #1", "[0, 1, 2].all(x, x >= 0)"),
+            ("all list #2", "[0, 1, 2].all(x, x > 0) == false"),
         ];
 
         for (name, script) in tests {
