@@ -60,5 +60,21 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     }
 }
 
-criterion_group!(benches, criterion_benchmark);
+pub fn map_macro_benchmark(c: &mut Criterion) {
+    let mut group = c.benchmark_group("map list");
+    let sizes = vec![1, 10, 100, 1000, 10000, 100000];
+
+    for size in sizes {
+        group.bench_function(format!("map_{}", size).as_str(), |b| {
+            let list = (0..size).collect::<Vec<_>>();
+            let program = Program::compile("list.map(x, x * 2)").unwrap();
+            let mut ctx = Context::default();
+            ctx.add_variable("list", list);
+            b.iter(|| program.execute(&ctx).unwrap())
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(benches, criterion_benchmark, map_macro_benchmark);
 criterion_main!(benches);
