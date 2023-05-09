@@ -302,22 +302,18 @@ pub fn max(
 ) -> Result<CelType, ExecutionError> {
     match CelType::resolve_all(args, ctx)? {
         CelType::List(items) => {
-            let items = items
+            let items = items.iter().filter(is_numeric).collect::<Vec<_>>();
+            let first = items
+                .get(0)
+                .ok_or(ExecutionError::function_error("max", "missing arguments"))?;
+            if !items
                 .iter()
-                .filter(|v| matches!(**v, CelType::Int(_) | CelType::UInt(_) | CelType::Float(_)))
-                .collect::<Vec<_>>();
-            // Check to make sure all arguments are the same, comparisons across
-            // types is not supported: https://github.com/google/cel-go/blob/master/cel/decls_test.go.
-            if let Some(first) = items.get(0) {
-                let same_type = items
-                    .iter()
-                    .all(|item| mem::discriminant(*item) == mem::discriminant(*first));
-                if !same_type {
-                    return Err(ExecutionError::function_error(
-                        "max",
-                        "mixed types not supported",
-                    ));
-                }
+                .all(|item| mem::discriminant(*item) == mem::discriminant(*first))
+            {
+                return Err(ExecutionError::function_error(
+                    "max",
+                    "mixed types not supported",
+                ));
             }
             items
                 .iter()
@@ -370,6 +366,13 @@ fn get_ident_arg(idx: usize, args: &[Expression]) -> Result<Rc<String>, Executio
             &format!("argument {} must be an identifier", idx),
         )),
     }
+}
+
+fn is_numeric(target: &&CelType) -> bool {
+    matches!(
+        target,
+        CelType::Int(_) | CelType::UInt(_) | CelType::Float(_)
+    )
 }
 
 #[cfg(test)]
