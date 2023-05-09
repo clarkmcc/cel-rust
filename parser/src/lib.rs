@@ -1,5 +1,7 @@
 #![feature(error_reporter)]
 
+extern crate core;
+
 use lalrpop_util::lalrpop_mod;
 
 pub mod ast;

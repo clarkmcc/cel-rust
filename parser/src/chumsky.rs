@@ -2,7 +2,6 @@ use crate::{ArithmeticOp, Atom, Expression, Member, RelationOp};
 use ariadne::{Color, Label, Report, ReportKind, Source};
 use chumsky::prelude::*;
 use chumsky::Parser;
-use std::collections::HashMap;
 
 /// Returns a parser that parses singly and doubly quoted strings with possible escape sequences
 /// and returns them as [`Expression::Atom(Atom::String(...))`] types. The following formats are
@@ -120,19 +119,19 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::Err<Rich<'a, char
             .delimited_by(just('['), just(']'))
             .map(Expression::List);
 
-        // Member accesses on an identifier like foo.bar
-        let attr = just('.')
-            .ignored()
-            .then::<&str, _>(text::ident())
-            .map(|((), s)| Member::Attribute(s.to_string().into()))
-            .padded();
+        // // Member accesses on an identifier like foo.bar
+        // let attr = just('.')
+        //     .ignored()
+        //     .then::<&str, _>(text::ident())
+        //     .map(|((), s)| Member::Attribute(s.to_string().into()))
+        //     .padded();
 
-        // Index accesses on an identifier like foo[0]
-        let index = just('[')
-            .ignored()
-            .then(expr.clone())
-            .then(just(']').ignored())
-            .map(|(((), e), ())| Member::Index(e.into()));
+        // // Index accesses on an identifier like foo[0]
+        // let index = just('[')
+        //     .ignored()
+        //     .then(expr.clone())
+        //     .then(just(']').ignored())
+        //     .map(|(((), e), ())| Member::Index(e.into()));
 
         // Function calls on an identifier like foo(1, 2)
         let function = just('(')
@@ -143,20 +142,10 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::Err<Rich<'a, char
 
         // Combine and parse member operations
         // todo: this needs to be expr... rather than identifiers but blocks forever
-        let member = identifiers
+        let member = expr
             .clone()
-            .then(
-                choice((attr, index, function))
-                    .repeated()
-                    .at_least(1)
-                    .collect::<Vec<_>>(),
-            )
-            .map(|(ident, members)| {
-                members.into_iter().fold(ident, |expr, member| {
-                    Expression::Member(expr.into(), member.into())
-                })
-            })
-            .padded();
+            .then(function)
+            .map(|(e, m)| Expression::Member(e.into(), m.into()));
 
         let atom = choice((
             null.clone(),
@@ -167,18 +156,19 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::Err<Rich<'a, char
         ))
         .or(list.clone())
         .or(expr.clone())
-        .padded()
-        .boxed();
+        .padded();
 
         // Operations
+        let unary = atom.clone();
         let op = choice((
             just('/').to(ArithmeticOp::Divide),
             just('*').to(ArithmeticOp::Multiply),
         ));
-        let product = atom.clone().foldl(
-            op.then(atom.clone()).repeated(),
-            |lhs: Expression, (op, rhs)| Expression::Arithmetic(lhs.into(), op, rhs.into()),
-        );
+        let product = unary
+            .clone()
+            .foldl(op.then(unary).repeated(), |lhs: Expression, (op, rhs)| {
+                Expression::Arithmetic(lhs.into(), op, rhs.into())
+            });
         let op = choice((
             just('+').to(ArithmeticOp::Add),
             just('-').to(ArithmeticOp::Subtract),
@@ -224,7 +214,7 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::Err<Rich<'a, char
         //     })
         //     .map(Expression::Map);
 
-        choice((member, compare, atom)).padded()
+        member.padded().then_ignore(end())
     })
 }
 
@@ -254,19 +244,26 @@ fn test() {
     //     )),
     // );
     test_expr(
-        "foo.bar",
+        "foo()",
         Some(Expression::Member(
             Expression::Ident("foo".to_string().into()).into(),
-            Member::Attribute("bar".to_string().into()).into(),
+            Member::FunctionCall(vec![]).into(),
         )),
     );
-    test_expr(
-        "foo[0]",
-        Some(Expression::Member(
-            Expression::Ident("foo".to_string().into()).into(),
-            Member::Index(Expression::Atom(Atom::Int(0)).into()).into(),
-        )),
-    );
+    // test_expr(
+    //     "foo.bar",
+    //     Some(Expression::Member(
+    //         Expression::Ident("foo".to_string().into()).into(),
+    //         Member::Attribute("bar".to_string().into()).into(),
+    //     )),
+    // );
+    // test_expr(
+    //     "foo[0]",
+    //     Some(Expression::Member(
+    //         Expression::Ident("foo".to_string().into()).into(),
+    //         Member::Index(Expression::Atom(Atom::Int(0)).into()).into(),
+    //     )),
+    // );
     test_expr(
         "1 < 2",
         Some(Expression::Relation(
@@ -331,219 +328,4 @@ fn test_expr(script: &str, expect: Option<Expression>) {
         None => assert_eq!(errors.len(), 0),
         Some(expr) => assert_eq!(expr, out.unwrap()),
     }
-}
-
-// fn parser2<'a>() -> impl Parser<'a, &'a str, Expression, extra::Err<Rich<'a, char>>> {
-//     recursive(|expr| {
-//         // // Parsers for numbers and the like
-//         let digits = text::digits(10).slice();
-//         let frac = just('.').then(digits);
-//         let exp = just('e')
-//             .or(just('E'))
-//             .then(one_of("+-").or_not())
-//             .then(digits);
-//         let floating = just('-')
-//             .or_not()
-//             .then(text::int(10))
-//             .then(frac.or_not())
-//             .then(exp.or_not())
-//             .map_slice(|s: &str| Expression::Atom(Atom::Float(s.parse().unwrap())))
-//             .boxed();
-//         // // Strings
-//         // let escape = just('\\')
-//         //     .then(choice((
-//         //         just('\\'),
-//         //         just('/'),
-//         //         just('"'),
-//         //         just('b').to('\x08'),
-//         //         just('f').to('\x0c'),
-//         //         just('n').to('\n'),
-//         //         just('r').to('\r'),
-//         //         just('t').to('\t'),
-//         //         just('u').ignore_then(text::digits(16).exactly(4).slice().validate(
-//         //             |digits, span, emitter| {
-//         //                 char::from_u32(u32::from_str_radix(digits, 16).unwrap()).unwrap_or_else(|| {
-//         //                     emitter.emit(Rich::custom(span, "invalid unicode character"));
-//         //                     '\u{FFFD}' // unicode replacement character
-//         //                 })
-//         //             },
-//         //         )),
-//         //     )))
-//         //     .ignored()
-//         //     .boxed();
-//         //
-//         // let single_quoted_string = none_of("'")
-//         //     .ignored()
-//         //     .or(escape.clone())
-//         //     .repeated()
-//         //     .slice()
-//         //     .map(ToString::to_string)
-//         //     .delimited_by(just('\''), just('\''))
-//         //     .padded()
-//         //     .boxed();
-//         // let double_quoted_string = none_of("\\\"")
-//         //     .ignored()
-//         //     .or(escape)
-//         //     .repeated()
-//         //     .slice()
-//         //     .map(ToString::to_string)
-//         //     .delimited_by(just('"'), just('"'))
-//         //     .padded()
-//         //     .boxed();
-//         // let string = choice((single_quoted_string, double_quoted_string));
-//
-//         // Null
-//         let null = just("null").to(Expression::Atom(Atom::Null));
-//
-//         // Arrays and lists
-//         let items = expr.clone().separated_by(just(',')).collect::<Vec<_>>();
-//         let list = items
-//             .clone()
-//             .delimited_by(just('['), just(']'))
-//             .map(Expression::List);
-//
-//         // Identifiers
-//         let ident_str = text::ident();
-//         let ident = ident_str
-//             .map(|s: &str| Expression::Ident(s.to_string().into()))
-//             .padded();
-//
-//         // Member accesses on an identifier like foo.bar
-//         let attr = just('.')
-//             .ignored()
-//             .then::<&str, _>(ident_str)
-//             .map(|((), s)| Member::Attribute(s.to_string().into()))
-//             .padded();
-//
-//         // Index accesses on an identifier like foo[0]
-//         let index = just('[')
-//             .ignored()
-//             .then(expr.clone())
-//             .then(just(']').ignored())
-//             .map(|(((), e), ())| Member::Index(e.into()));
-//
-//         // Function calls on an identifier like foo(1, 2)
-//         let function = just('(')
-//             .ignored()
-//             .then(items)
-//             .then(just(')').ignored())
-//             .map(|(((), args), ())| Member::FunctionCall(args));
-//
-//         // Combine and parse member operations
-//         let member = choice((attr, index, function));
-//         let member_access = ident
-//             .then(member.repeated().at_least(1).collect::<Vec<_>>())
-//             .map(|(ident, members)| {
-//                 members.into_iter().fold(ident, |expr, member| {
-//                     Expression::Member(expr.into(), member.into())
-//                 })
-//             })
-//             .padded();
-//
-//         let atom = choice((
-//             null,
-//             ident,
-//             floating,
-//             expr.clone().delimited_by(just('('), just(')')).padded(),
-//         ));
-//
-//         // Operations
-//         let op = choice((
-//             just('/').to(ArithmeticOp::Divide),
-//             just('*').to(ArithmeticOp::Multiply),
-//         ));
-//         let product = atom.clone().foldl(
-//             op.then(atom.clone()).repeated(),
-//             |lhs: Expression, (op, rhs)| Expression::Arithmetic(lhs.into(), op, rhs.into()),
-//         );
-//         let op = choice((
-//             just('+').to(ArithmeticOp::Add),
-//             just('-').to(ArithmeticOp::Subtract),
-//         ));
-//         let sum = product
-//             .clone()
-//             .foldl(op.then(product.clone()).repeated(), |lhs, (op, rhs)| {
-//                 Expression::Arithmetic(lhs.into(), op, rhs.into())
-//             });
-//         let op = choice((
-//             just("==").to(RelationOp::Equals),
-//             just("!=").to(RelationOp::NotEquals),
-//             just("<").to(RelationOp::LessThan),
-//             just("<=").to(RelationOp::LessThanEq),
-//             just(">").to(RelationOp::GreaterThan),
-//             just(">=").to(RelationOp::GreaterThanEq),
-//             just("in").to(RelationOp::In),
-//         ));
-//         let compare = sum
-//             .clone()
-//             .foldl(op.then(sum.clone()).repeated(), |lhs, (op, rhs)| {
-//                 Expression::Relation(lhs.into(), op, rhs.into())
-//             });
-//
-//         choice((
-//             compare,
-//             atom,
-//             ident,
-//             member_access,
-//             // string.map(|s: String| Expression::Atom(Atom::String(s.into()))),
-//             // floating,
-//         ))
-//             .recover_with(skip_then_retry_until(any().ignored(), end()))
-//             .padded()
-//     })
-// }
-
-#[test]
-fn test_2() {
-    let str = "2+2";
-
-    #[derive(Debug, Clone)]
-    enum Operation {
-        Add,
-        Subtract,
-    }
-
-    #[derive(Debug, Clone)]
-    enum Expression {
-        Number(i32),
-        Operation(Box<Expression>, Operation, Box<Expression>),
-    }
-
-    let parser = recursive::<_, _, extra::Err<Rich<char>>, _, _>(|expr| {
-        let number = text::int(10)
-            .slice()
-            .map(|s: &str| Expression::Number(s.parse().unwrap()));
-
-        let atom = number.or(expr.clone().delimited_by(just('('), just(')').padded()));
-
-        let op = choice((
-            just('+').to(Operation::Add),
-            just('-').to(Operation::Subtract),
-        ));
-
-        let operation = atom
-            .clone()
-            .foldl(op.then(atom.clone()).repeated(), |lhs, (op, rhs)| {
-                Expression::Operation(Box::new(lhs), op, Box::new(rhs))
-            });
-        choice((operation, number))
-    })
-    .then_ignore(end());
-
-    let (out, errors) = parser.parse(str).into_output_errors();
-
-    errors.into_iter().for_each(|e| {
-        Report::build(ReportKind::Error, (), e.span().start)
-            .with_message(e.to_string())
-            .with_label(
-                Label::new(e.span().into_range())
-                    .with_message(e.reason().to_string())
-                    .with_color(Color::Red),
-            )
-            .finish()
-            .print(Source::from(str))
-            .unwrap()
-    });
-
-    println!("{:#?}", out);
 }
