@@ -3,6 +3,7 @@ use crate::objects::CelType;
 use crate::ExecutionError;
 use cel_parser::Expression;
 use std::convert::TryInto;
+use std::mem;
 use std::rc::Rc;
 
 /// Calculates the size of either the target, or the provided args depending on how
@@ -294,6 +295,42 @@ fn op_all(
     .into()
 }
 
+pub fn max(
+    _: Option<&CelType>,
+    args: &[Expression],
+    ctx: &Context,
+) -> Result<CelType, ExecutionError> {
+    match CelType::resolve_all(args, ctx)? {
+        CelType::List(items) => {
+            let items = items
+                .iter()
+                .filter(|v| matches!(**v, CelType::Int(_) | CelType::UInt(_) | CelType::Float(_)))
+                .collect::<Vec<_>>();
+            // Check to make sure all arguments are the same, comparisons across
+            // types is not supported: https://github.com/google/cel-go/blob/master/cel/decls_test.go.
+            if let Some(first) = items.get(0) {
+                let same_type = items
+                    .iter()
+                    .all(|item| mem::discriminant(*item) == mem::discriminant(*first));
+                if !same_type {
+                    return Err(ExecutionError::function_error(
+                        "max",
+                        "mixed types not supported",
+                    ));
+                }
+            }
+            items
+                .iter()
+                .max_by(|a, b| a.cmp(b))
+                .cloned()
+                .cloned()
+                .unwrap_or(CelType::Null)
+                .into()
+        }
+        _ => list_only("max"),
+    }
+}
+
 #[inline(always)]
 fn macro_wrapper(
     ctx: &Context,
@@ -341,18 +378,20 @@ mod tests {
     use crate::testing::test_script;
     use std::collections::HashMap;
 
+    fn assert_script(input: &(&str, &str)) {
+        assert_eq!(test_script(input.1, None), Ok(true.into()), "{}", input.0);
+    }
+
     #[test]
     fn test_size() {
-        let tests = vec![
+        vec![
             ("size of list", "size([1, 2, 3]) == 3"),
             ("size of map", "size({'a': 1, 'b': 2, 'c': 3}) == 3"),
             ("size of string", "size('foo') == 3"),
             ("size of bytes", "size(b'foo') == 3"),
-        ];
-
-        for (name, script) in tests {
-            assert_eq!(test_script(script, None), Ok(true.into()), "{}", name);
-        }
+        ]
+        .iter()
+        .for_each(assert_script);
     }
 
     #[test]
@@ -373,42 +412,45 @@ mod tests {
 
     #[test]
     fn test_map() {
-        let tests = vec![
+        vec![
             ("map list", "[1, 2, 3].map(x, x * 2) == [2, 4, 6]"),
             ("map list 2", "[1, 2, 3].map(y, y + 1) == [2, 3, 4]"),
             (
                 "nested map",
                 "[[1, 2], [2, 3]].map(x, x.map(x, x * 2)) == [[2, 4], [4, 6]]",
             ),
-        ];
-
-        for (name, script) in tests {
-            let ctx = Context::default();
-            assert_eq!(test_script(script, Some(ctx)), Ok(true.into()), "{}", name);
-        }
+        ]
+        .iter()
+        .for_each(assert_script);
     }
 
     #[test]
     fn test_filter() {
-        let tests = vec![("filter list", "[1, 2, 3].filter(x, x > 2) == [3]")];
-
-        for (name, script) in tests {
-            let ctx = Context::default();
-            assert_eq!(test_script(script, Some(ctx)), Ok(true.into()), "{}", name);
-        }
+        vec![("filter list", "[1, 2, 3].filter(x, x > 2) == [3]")]
+            .iter()
+            .for_each(assert_script);
     }
 
     #[test]
     fn test_all() {
-        let tests = vec![
+        vec![
             ("all list #1", "[0, 1, 2].all(x, x >= 0)"),
             ("all list #2", "[0, 1, 2].all(x, x > 0) == false"),
             ("all map", "{0: 0, 1:1, 2:2}.all(x, x >= 0) == true"),
-        ];
+        ]
+        .iter()
+        .for_each(assert_script);
+    }
 
-        for (name, script) in tests {
-            let ctx = Context::default();
-            assert_eq!(test_script(script, Some(ctx)), Ok(true.into()), "{}", name);
-        }
+    #[test]
+    fn test_max() {
+        vec![
+            ("max single", "max(1) == 1"),
+            ("max multiple", "max(1, 2, 3) == 3"),
+            ("max negative", "max(-1, 0) == 0"),
+            ("max float", "max(-1.0, 0.0) == 0.0"),
+        ]
+        .iter()
+        .for_each(assert_script);
     }
 }

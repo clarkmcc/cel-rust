@@ -108,7 +108,7 @@ impl<K: Into<CelKey>, V: Into<CelType>> From<HashMap<K, V>> for CelMap {
     }
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CelType {
     List(Rc<Vec<CelType>>),
     Map(CelMap),
@@ -123,6 +123,28 @@ pub enum CelType {
     Bytes(Rc<Vec<u8>>),
     Bool(bool),
     Null,
+}
+
+impl Eq for CelType {}
+
+impl PartialOrd for CelType {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for CelType {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            (CelType::Int(a), CelType::Int(b)) => a.cmp(b),
+            (CelType::UInt(a), CelType::UInt(b)) => a.cmp(b),
+            (CelType::Float(a), CelType::Float(b)) => a.partial_cmp(b).unwrap_or(Ordering::Equal),
+            (CelType::String(a), CelType::String(b)) => a.cmp(b),
+            (CelType::Bool(a), CelType::Bool(b)) => a.cmp(b),
+            (CelType::Null, CelType::Null) => Ordering::Equal,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl From<&CelKey> for CelType {
@@ -206,6 +228,14 @@ impl From<CelType> for ResolveResult {
 }
 
 impl<'a> CelType {
+    pub fn resolve_all(expr: &'a [Expression], ctx: &Context) -> ResolveResult {
+        let mut res = Vec::with_capacity(expr.len());
+        for expr in expr {
+            res.push(CelType::resolve(expr, ctx)?);
+        }
+        Ok(CelType::List(res.into()))
+    }
+
     #[inline(always)]
     pub fn resolve(expr: &'a Expression, ctx: &Context) -> ResolveResult {
         match expr {

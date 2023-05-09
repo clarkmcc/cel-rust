@@ -27,11 +27,11 @@ type ContextFunction =
 /// intermediate identifier to the child context, and then evaluate the
 /// map expression.
 ///
-///     Intermediate variable stored in child context
-///                   ↓
-///     [1, 2, 3].map(x, x * 2) == [2, 4, 6]
-///                      ↑
-///     Only in scope for the duration of the map expression
+/// Intermediate variable stored in child context
+///               ↓
+/// [1, 2, 3].map(x, x * 2) == [2, 4, 6]
+///                  ↑
+/// Only in scope for the duration of the map expression
 ///
 pub enum Context<'a> {
     Root {
@@ -130,6 +130,7 @@ impl<'a> Default for Context<'a> {
         ctx.add_function("map", functions::map);
         ctx.add_function("filter", functions::filter);
         ctx.add_function("all", functions::all);
+        ctx.add_function("max", functions::max);
         ctx
     }
 }
