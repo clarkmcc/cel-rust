@@ -125,6 +125,35 @@ pub fn contains(
     .into())
 }
 
+/// Returns true if a string starts with another string.
+///
+/// # Example
+/// ```cel
+/// "abc".startsWith("a") == true
+/// ```
+pub fn starts_with(
+    target: Option<&CelType>,
+    args: &[Expression],
+    ctx: &Context,
+) -> Result<CelType, ExecutionError> {
+    let target = target.unwrap();
+    let arg = args
+        .get(0)
+        .ok_or(ExecutionError::invalid_argument_count(1, 0))?;
+    let arg = CelType::resolve(arg, ctx)?;
+    Ok(match target {
+        CelType::String(s) => {
+            if let CelType::String(arg) = arg {
+                s.starts_with(arg.as_str())
+            } else {
+                false
+            }
+        }
+        _ => false,
+    }
+    .into())
+}
+
 /// Returns true if the provided argument can be resolved. This function is
 /// useful for checking if a property exists on a type before attempting to
 /// resolve it. Resolving a property that does not exist will result in a
@@ -508,6 +537,16 @@ mod tests {
             ("duration equal 3", "duration('1h') == duration('60m')"),
             ("duration comparison 1", "duration('1m') > duration('1s')"),
             ("duration comparison 2", "duration('1m') < duration('1h')"),
+        ]
+        .iter()
+        .for_each(assert_script);
+    }
+
+    #[test]
+    fn test_starts_with() {
+        vec![
+            ("starts with true", "'foobar'.startsWith('foo') == true"),
+            ("starts with false", "'foobar'.startsWith('bar') == false"),
         ]
         .iter()
         .for_each(assert_script);

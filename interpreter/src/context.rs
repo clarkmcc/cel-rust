@@ -132,6 +132,7 @@ impl<'a> Default for Context<'a> {
         ctx.add_function("all", functions::all);
         ctx.add_function("max", functions::max);
         ctx.add_function("duration", functions::duration);
+        ctx.add_function("startsWith", functions::starts_with);
         ctx
     }
 }
