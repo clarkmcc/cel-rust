@@ -2,7 +2,7 @@ use crate::context::Context;
 use crate::ExecutionError;
 use crate::ExecutionError::NoSuchKey;
 use cel_parser::{ArithmeticOp, Atom, Expression, Member, RelationOp, UnaryOp};
-use chrono::Duration;
+use chrono::{DateTime, Duration, FixedOffset};
 use core::ops;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -124,6 +124,7 @@ pub enum CelType {
     Bytes(Rc<Vec<u8>>),
     Bool(bool),
     Duration(Duration),
+    Timestamp(DateTime<FixedOffset>),
     Null,
 }
 
@@ -145,6 +146,7 @@ impl Ord for CelType {
             (CelType::Bool(a), CelType::Bool(b)) => a.cmp(b),
             (CelType::Null, CelType::Null) => Ordering::Equal,
             (CelType::Duration(a), CelType::Duration(b)) => a.cmp(b),
+            (CelType::Timestamp(a), CelType::Timestamp(b)) => a.cmp(b),
             _ => unreachable!(),
         }
     }
@@ -429,6 +431,7 @@ impl<'a> CelType {
             CelType::Bool(v) => *v,
             CelType::Null => false,
             CelType::Duration(v) => v.num_nanoseconds().map(|n| n != 0).unwrap_or(false),
+            CelType::Timestamp(v) => v.timestamp_nanos() > 0,
             CelType::Function(_, _) => false,
         }
     }
@@ -485,6 +488,13 @@ impl ops::Add<CelType> for CelType {
                 }
                 CelType::Map(CelMap { map: Rc::new(new) })
             }
+            (CelType::Duration(l), CelType::Duration(r)) => CelType::Duration(l + r),
+            (CelType::Timestamp(l), CelType::Duration(r)) => {
+                CelType::Timestamp(l + Duration::nanoseconds(r.num_nanoseconds().unwrap()))
+            }
+            (CelType::Duration(l), CelType::Timestamp(r)) => {
+                CelType::Timestamp(r + Duration::nanoseconds(l.num_nanoseconds().unwrap()))
+            }
             _ => unimplemented!(),
         }
     }
@@ -505,6 +515,16 @@ impl ops::Sub<CelType> for CelType {
             (CelType::Float(l), CelType::Int(r)) => CelType::Float(l - r as f64),
             (CelType::UInt(l), CelType::Float(r)) => CelType::Float(l as f64 - r),
             (CelType::Float(l), CelType::UInt(r)) => CelType::Float(l - r as f64),
+            // todo: implement checked sub for these over-flowable operations
+            (CelType::Duration(l), CelType::Duration(r)) => CelType::Duration(
+                Duration::nanoseconds(l.num_nanoseconds().unwrap() - r.num_nanoseconds().unwrap()),
+            ),
+            (CelType::Timestamp(l), CelType::Duration(r)) => {
+                CelType::Timestamp(l - Duration::nanoseconds(r.num_nanoseconds().unwrap()))
+            }
+            (CelType::Timestamp(l), CelType::Timestamp(r)) => CelType::Duration(
+                Duration::nanoseconds(l.timestamp_nanos() - r.timestamp_nanos()),
+            ),
             _ => unimplemented!(),
         }
     }

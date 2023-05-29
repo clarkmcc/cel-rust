@@ -3,7 +3,7 @@ use crate::duration::parse_duration;
 use crate::objects::CelType;
 use crate::ExecutionError;
 use cel_parser::Expression;
-use chrono::Duration;
+use chrono::{DateTime, Duration, FixedOffset};
 use std::convert::TryInto;
 use std::mem;
 use std::rc::Rc;
@@ -125,6 +125,34 @@ pub fn contains(
     .into())
 }
 
+// Performs a type conversion on the target. The following conversions are currently
+// supported:
+// * `string` - Returns a copy of the target string.
+// * `timestamp` - Returns the timestamp in RFC3339 format.
+//
+// todo: In order to be fully compatible with the CEL specification, this function should
+// also support the following conversions:
+// * `int`
+// * `uint`
+// * `double`
+// * `bytes`
+// * `duration`
+pub fn string(
+    target: Option<&CelType>,
+    _: &[Expression],
+    _: &Context,
+) -> Result<CelType, ExecutionError> {
+    let target = target.unwrap();
+    Ok(match target {
+        CelType::String(_) => target.clone(),
+        CelType::Timestamp(t) => CelType::String(t.to_rfc3339().into()),
+        _ => Err(ExecutionError::function_error(
+            "string",
+            &format!("cannot convert {:?} to string", target),
+        ))?,
+    })
+}
+
 /// Returns true if a string starts with another string.
 ///
 /// # Example
@@ -235,6 +263,25 @@ pub fn duration(
     let value = CelType::resolve(get_arg(0, args)?, ctx)?;
     match value {
         CelType::String(v) => CelType::Duration(_duration(v.as_str())?),
+        _ => return Err(ExecutionError::unsupported_target_type(value)),
+    }
+    .into()
+}
+
+pub fn timestamp(
+    target: Option<&CelType>,
+    args: &[Expression],
+    ctx: &Context,
+) -> Result<CelType, ExecutionError> {
+    if target.is_some() {
+        return Err(ExecutionError::not_supported_as_method(
+            "timestamp",
+            target.cloned().unwrap(),
+        ));
+    }
+    let value = CelType::resolve(get_arg(0, args)?, ctx)?;
+    match value {
+        CelType::String(v) => CelType::Timestamp(_timestamp(v.as_str())?),
         _ => return Err(ExecutionError::unsupported_target_type(value)),
     }
     .into()
@@ -440,6 +487,11 @@ fn _duration(i: &str) -> Result<Duration, ExecutionError> {
     Ok(duration)
 }
 
+fn _timestamp(i: &str) -> Result<DateTime<FixedOffset>, ExecutionError> {
+    DateTime::parse_from_rfc3339(i)
+        .map_err(|e| ExecutionError::function_error("timestamp", &e.to_string()))
+}
+
 fn is_numeric(target: &&CelType) -> bool {
     matches!(
         target,
@@ -537,6 +589,14 @@ mod tests {
             ("duration equal 3", "duration('1h') == duration('60m')"),
             ("duration comparison 1", "duration('1m') > duration('1s')"),
             ("duration comparison 2", "duration('1m') < duration('1h')"),
+            (
+                "duration subtraction",
+                "duration('1h') - duration('1m') == duration('59m')",
+            ),
+            (
+                "duration addition",
+                "duration('1h') + duration('1m') == duration('1h1m')",
+            ),
         ]
         .iter()
         .for_each(assert_script);
@@ -547,6 +607,38 @@ mod tests {
         vec![
             ("starts with true", "'foobar'.startsWith('foo') == true"),
             ("starts with false", "'foobar'.startsWith('bar') == false"),
+        ]
+        .iter()
+        .for_each(assert_script);
+    }
+
+    #[test]
+    fn test_timestamp() {
+        vec![
+            (
+                "comparison",
+                "timestamp('2023-05-29T00:00:00Z') > timestamp('2023-05-28T00:00:00Z')",
+            ),
+            (
+                "comparison",
+                "timestamp('2023-05-29T00:00:00Z') < timestamp('2023-05-30T00:00:00Z')",
+            ),
+            (
+                "subtracting duration",
+                "timestamp('2023-05-29T00:00:00Z') - duration('24h') == timestamp('2023-05-28T00:00:00Z')",
+            ),
+            (
+                "subtracting date",
+                "timestamp('2023-05-29T00:00:00Z') - timestamp('2023-05-28T00:00:00Z') == duration('24h')",
+            ),
+            (
+                "adding duration",
+                "timestamp('2023-05-28T00:00:00Z') + duration('24h') == timestamp('2023-05-29T00:00:00Z')",
+            ),
+            (
+                "timestamp string",
+                "timestamp('2023-05-28T00:00:00Z').string() == '2023-05-28T00:00:00+00:00'",
+            ),
         ]
         .iter()
         .for_each(assert_script);

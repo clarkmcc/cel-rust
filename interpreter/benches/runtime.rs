@@ -38,7 +38,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         ("max", "max(1, 2, 3)"),
         ("max negative", "max(-1, 0, 1)"),
         ("max float", "max(-1.0, 0.0, 1.0)"),
-        ("duration", "duration('1s')"), 
+        ("duration", "duration('1s')"),
+        ("timestamp", "timestamp('2023-05-28T00:00:00Z')")
         // ("complex", "Account{user_id: 123}.user_id == 123"),
     ];
     // https://gist.github.com/rhnvrm/db4567fcd87b2cb8e997999e1366d406
