@@ -1,5 +1,7 @@
 # Common Expression Language (Rust)
 
+[![Rust](https://github.com/clarkmcc/cel-rust/actions/workflows/rust.yml/badge.svg)](https://github.com/clarkmcc/cel-rust/actions/workflows/rust.yml)
+
 The Common Expression Language (CEL) is a non-Turing complete language designed for simplicity, speed, safety, and
 portability. CEL's C-like syntax looks nearly identical to equivalent expressions in C++, Go, Java, and TypeScript. CEL
 is ideal for lightweight expression evaluation when a fully sandboxed scripting language is too resource intensive.
@@ -20,7 +22,9 @@ auth.claims.email_verified && resources.all(r, r.startsWith(auth.claims.email))
 ```
 
 ## Getting Started
-This project includes a CEL-parser and an interpreter which means that it can be used to evaluate CEL-expressions. The library aims to be very simple to use, while still being fast, safe, and customizable.
+
+This project includes a CEL-parser and an interpreter which means that it can be used to evaluate CEL-expressions. The
+library aims to be very simple to use, while still being fast, safe, and customizable.
 
 ```rust
 fn main() {

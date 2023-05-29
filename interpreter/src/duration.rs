@@ -14,12 +14,12 @@ static NANOS_PER_MICRO: f64 = 1e3;
 /// Parses a duration string into a [`Duration`]. Duration strings support the
 /// following grammar:
 ///
-///     DurationString -> Sign? Number Unit String?
-///     Sign           -> '-'
-///     Number         -> Digit+ ('.' Digit+)?
-///     Digit          -> '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
-///     Unit           -> 'h' | 'm' | 's' | 'ms' | 'us' | 'ns'
-///     String         -> DurationString
+/// DurationString -> Sign? Number Unit String?
+/// Sign           -> '-'
+/// Number         -> Digit+ ('.' Digit+)?
+/// Digit          -> '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
+/// Unit           -> 'h' | 'm' | 's' | 'ms' | 'us' | 'ns'
+/// String         -> DurationString
 ///
 /// # Examples
 /// - `1h` parses as 1 hour
