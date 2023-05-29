@@ -1,20 +1,26 @@
-# cel-rust
+# Common Expression Language (Rust)
 
-This repository contains several modules that implement a parser, interpreter and CLI for
-the [Common Expression Language](https://github.com/google/cel-spec). This has been forked
-from [orf/cel-rust](https://github.com/orf/cel-rust).
+The Common Expression Language (CEL) is a non-Turing complete language designed for simplicity, speed, safety, and
+portability. CEL's C-like syntax looks nearly identical to equivalent expressions in C++, Go, Java, and TypeScript. CEL
+is ideal for lightweight expression evaluation when a fully sandboxed scripting language is too resource intensive.
 
-My goal is to bring the crate back up to speed with
-the [CEL spec](https://github.com/google/cel-spec/blob/master/doc/intro.md) and then implement a few handy extensions
-beyond what the spec defines.
+```java
+// Check whether a resource name starts with a group name.
+resource.name.startsWith("/groups/" + auth.claims.group)
+```
 
-Changes in this fork:
+```go
+// Determine whether the request is in the permitted time window.
+request.time - resource.age < duration("24h")
+```
 
-* The [extensions](#extensions) described below.
-* Functions are fallible and return an execution error rather than panicking.
-* Attribute accessing on maps which was not working under the original implementation.
+```typescript
+// Check whether all resource names in a list match a given filter.
+auth.claims.email_verified && resources.all(r, r.startsWith(auth.claims.email))
+```
 
-## Usage
+## Getting Started
+This project includes a CEL-parser and an interpreter which means that it can be used to evaluate CEL-expressions. The library aims to be very simple to use, while still being fast, safe, and customizable.
 
 ```rust
 fn main() {
@@ -24,48 +30,3 @@ fn main() {
     assert_eq!(value, true.into());
 }
 ```
-
-## Extensions
-
-### Sets
-
-This extension adds support for a Set datatype which is denoted by double-braces, like `{{1, 2, 3}}`. You can perform
-various set operations like difference, merge, and intersection on them.
-
-#### Difference
-
-```cel
-{{1, 2, 3}} - {{1}} == {{2, 3}}
-```
-
-#### Merge
-
-```cel
-{{1, 2}} + {{3}} == {{1, 2, 3}}
-```
-
-#### Intersection
-
-```cel
-{{1, 2, 3}} & {{2, 3, 4}} == {{2, 3}}
-```
-
-### String Indexing
-
-CEL allows you to index into arrays like
-
-```cel
-[1, 2, 3][0] == 1
-```
-
-This extension allows you to index into strings in the same way:
-
-```cel
-'hello'[0] == 'h'
-```
-
-## Crates
-
-* [parser](./parser) - Implements a LALRPOP based parser for the language
-* [interpreter](./interpreter) - Implements a simple interpreter for the language
-* [cli](./cli) - A basic terminal interface to execute CEL expressions
