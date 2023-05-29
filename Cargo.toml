@@ -1,5 +1,5 @@
 [workspace]
-members = ["cli", "parser", "interpreter"]
+members = ["cli", "parser", "interpreter", "example"]
 
 [profile.bench]
 lto = true
