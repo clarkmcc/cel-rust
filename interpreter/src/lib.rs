@@ -1,14 +1,14 @@
 extern crate core;
 
-use crate::context::Context;
-use crate::objects::{CelType, ResolveResult};
-use cel_parser::ast::Expression;
 use cel_parser::parser::ExpressionParser;
 use std::convert::TryFrom;
 use std::rc::Rc;
 use thiserror::Error;
 
 pub mod context;
+pub use cel_parser::Expression;
+pub use context::Context;
+pub use objects::{CelType, ResolveResult};
 mod duration;
 mod functions;
 pub mod objects;
