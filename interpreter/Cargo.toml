@@ -3,17 +3,19 @@ name = "cel-interpreter"
 description = "An interpreter for the Common Expression Language (CEL)"
 repository = "https://github.com/orf/cel-rust"
 version = "0.1.3-alpha.0"
-authors = ["Tom Forbes <tom@tomforb.es>"]
+authors = ["Tom Forbes <tom@tomforb.es>", "Clark McCauley <me@clarkmccauley.com>"]
 edition = "2018"
 license = "MIT"
 categories = ["interpreter", "cel"]
 
 [dependencies]
-cel-parser = {path="../parser", version="0.1.3-alpha.0"}
+cel-parser = { path = "../parser", version = "0.1.3-alpha.0" }
 thiserror = "1.0.22"
+chrono = "0.4.24"
+nom = "7.1.3"
 
 [dev-dependencies]
-criterion = "0.3.3"
+criterion = { version = "0.4.0", features = ["html_reports"] }
 
 [[bench]]
 name = "runtime"

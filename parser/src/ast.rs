@@ -93,12 +93,12 @@ mod tests {
 
     #[test]
     fn single_quote_str() {
-        assert_parse_eq("'foobar'", Atom(String("foobar".to_string().into()).into()))
+        assert_parse_eq("'foobar'", Atom(String("foobar".to_string().into())))
     }
 
     #[test]
     fn double_quote_str() {
-        assert_parse_eq(r#""foobar""#, Atom(String("foobar".to_string().into()).into()))
+        assert_parse_eq(r#""foobar""#, Atom(String("foobar".to_string().into())))
     }
 
     #[test]
@@ -125,9 +125,22 @@ mod tests {
     }
 
     #[test]
+    fn structure() {
+        println!("{:+?}", parse("{1 + a: 3}"));
+    }
+
+    #[test]
     fn simple_str() {
-        assert_parse_eq(r#"'foobar'"#, Atom(String("foobar".to_string().into()).into()));
+        assert_parse_eq(
+            r#"'foobar'"#,
+            Atom(String("foobar".to_string().into()).into()),
+        );
         println!("{:?}", parse(r#"1 == '1'"#))
+    }
+
+    #[test]
+    fn test_parse_map_macro() {
+        println!("{:?}", parse("[1, 2, 3].map(x, x * 2)"))
     }
 
     #[test]
@@ -141,8 +154,7 @@ mod tests {
                 )
                 .into(),
                 Index(Atom(Int(1)).into()).into(),
-            )
-            .into(),
+            ),
         )
     }
 }
