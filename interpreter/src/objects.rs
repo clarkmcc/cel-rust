@@ -2,6 +2,7 @@ use crate::context::Context;
 use crate::ExecutionError;
 use crate::ExecutionError::NoSuchKey;
 use cel_parser::{ArithmeticOp, Atom, Expression, Member, RelationOp, UnaryOp};
+use chrono::Duration;
 use core::ops;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -122,6 +123,7 @@ pub enum CelType {
     String(Rc<String>),
     Bytes(Rc<Vec<u8>>),
     Bool(bool),
+    Duration(Duration),
     Null,
 }
 
@@ -142,6 +144,7 @@ impl Ord for CelType {
             (CelType::String(a), CelType::String(b)) => a.cmp(b),
             (CelType::Bool(a), CelType::Bool(b)) => a.cmp(b),
             (CelType::Null, CelType::Null) => Ordering::Equal,
+            (CelType::Duration(a), CelType::Duration(b)) => a.cmp(b),
             _ => unreachable!(),
         }
     }
@@ -187,6 +190,12 @@ impl From<Vec<u8>> for CelType {
 impl From<String> for CelType {
     fn from(v: String) -> Self {
         CelType::String(v.into())
+    }
+}
+
+impl From<Duration> for CelType {
+    fn from(v: Duration) -> Self {
+        CelType::Duration(v)
     }
 }
 
@@ -419,6 +428,7 @@ impl<'a> CelType {
             CelType::Bytes(v) => !v.is_empty(),
             CelType::Bool(v) => *v,
             CelType::Null => false,
+            CelType::Duration(v) => v.num_nanoseconds().map(|n| n != 0).unwrap_or(false),
             CelType::Function(_, _) => false,
         }
     }

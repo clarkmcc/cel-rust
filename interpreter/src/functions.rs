@@ -1,7 +1,9 @@
 use crate::context::Context;
+use crate::duration::parse_duration;
 use crate::objects::CelType;
 use crate::ExecutionError;
 use cel_parser::Expression;
+use chrono::Duration;
 use std::convert::TryInto;
 use std::mem;
 use std::rc::Rc;
@@ -176,6 +178,39 @@ pub fn map(
     macro_wrapper(ctx, target, args, op_map)
 }
 
+/// Duration parses the provided argument into a [`CelType::Duration`] value.
+/// The argument must be string, and must be in the format of a duration. See
+/// the [`parse_duration`] documentation for more information on the supported
+/// formats.
+///
+/// # Examples
+/// - `1h` parses as 1 hour
+/// - `1.5h` parses as 1 hour and 30 minutes
+/// - `1h30m` parses as 1 hour and 30 minutes
+/// - `1h30m1s` parses as 1 hour, 30 minutes, and 1 second
+/// - `1ms` parses as 1 millisecond
+/// - `1.5ms` parses as 1 millisecond and 500 microseconds
+/// - `1ns` parses as 1 nanosecond
+/// - `1.5ns` parses as 1 nanosecond (sub-nanosecond durations not supported)
+pub fn duration(
+    target: Option<&CelType>,
+    args: &[Expression],
+    ctx: &Context,
+) -> Result<CelType, ExecutionError> {
+    if target.is_some() {
+        return Err(ExecutionError::not_supported_as_method(
+            "duration",
+            target.cloned().unwrap(),
+        ));
+    }
+    let value = CelType::resolve(get_arg(0, args)?, ctx)?;
+    match value {
+        CelType::String(v) => CelType::Duration(_duration(v.as_str())?),
+        _ => return Err(ExecutionError::unsupported_target_type(value)),
+    }
+    .into()
+}
+
 /// Filters the provided list by applying an expression to each input item
 /// and including the input item in the resulting list, only if the expression
 /// returned true.
@@ -302,14 +337,14 @@ pub fn max(
 ) -> Result<CelType, ExecutionError> {
     match CelType::resolve_all(args, ctx)? {
         CelType::List(items) => {
+            if items.is_empty() {
+                return Err(ExecutionError::function_error("max", "missing arguments"));
+            }
             let items = items.iter().filter(is_numeric).collect::<Vec<_>>();
-            let first = items
-                .get(0)
-                .ok_or(ExecutionError::function_error("max", "missing arguments"))?;
-            if !items
+            let same_type = items
                 .iter()
-                .all(|item| mem::discriminant(*item) == mem::discriminant(*first))
-            {
+                .all(|item| mem::discriminant(*item) == mem::discriminant(items[0]));
+            if !same_type {
                 return Err(ExecutionError::function_error(
                     "max",
                     "mixed types not supported",
@@ -366,6 +401,14 @@ fn get_ident_arg(idx: usize, args: &[Expression]) -> Result<Rc<String>, Executio
             &format!("argument {} must be an identifier", idx),
         )),
     }
+}
+
+/// A wrapper around [`parse_duration`] that converts errors into [`ExecutionError`].
+/// and only returns the duration, rather than returning the remaining input.
+fn _duration(i: &str) -> Result<Duration, ExecutionError> {
+    let (_, duration) = parse_duration(i)
+        .map_err(|e| ExecutionError::function_error("duration", &e.to_string()))?;
+    Ok(duration)
 }
 
 fn is_numeric(target: &&CelType) -> bool {
@@ -452,6 +495,19 @@ mod tests {
             ("max multiple", "max(1, 2, 3) == 3"),
             ("max negative", "max(-1, 0) == 0"),
             ("max float", "max(-1.0, 0.0) == 0.0"),
+        ]
+        .iter()
+        .for_each(assert_script);
+    }
+
+    #[test]
+    fn test_duration() {
+        vec![
+            ("duration equal 1", "duration('1s') == duration('1000ms')"),
+            ("duration equal 2", "duration('1m') == duration('60s')"),
+            ("duration equal 3", "duration('1h') == duration('60m')"),
+            ("duration comparison 1", "duration('1m') > duration('1s')"),
+            ("duration comparison 2", "duration('1m') < duration('1h')"),
         ]
         .iter()
         .for_each(assert_script);

@@ -131,6 +131,7 @@ impl<'a> Default for Context<'a> {
         ctx.add_function("filter", functions::filter);
         ctx.add_function("all", functions::all);
         ctx.add_function("max", functions::max);
+        ctx.add_function("duration", functions::duration);
         ctx
     }
 }
