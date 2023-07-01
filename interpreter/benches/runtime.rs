@@ -6,8 +6,6 @@ use std::collections::HashMap;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     let expressions = vec![
-        ("benchmark", "((TestDouble >= 1.0 || TestString.TestFunction() == 'HelloWorld') && (TestDouble + 1.0 >= 0.0)) || Now > TestTime"),
-
         ("ternary_1", "(1 || 2) ? 1 : 2"),
         ("ternary_2", "(1 ? 2 : 3) ? 1 : 2"),
         ("or_1", "1 || 2"),
@@ -39,8 +37,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         ("max negative", "max(-1, 0, 1)"),
         ("max float", "max(-1.0, 0.0, 1.0)"),
         ("duration", "duration('1s')"),
-        ("timestamp", "timestamp('2023-05-28T00:00:00Z')")
-        // ("complex", "Account{user_id: 123}.user_id == 123"),
+        ("timestamp", "timestamp('2023-05-28T00:00:00Z')"), // ("complex", "Account{user_id: 123}.user_id == 123"),
     ];
     // https://gist.github.com/rhnvrm/db4567fcd87b2cb8e997999e1366d406
 
@@ -48,20 +45,9 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         c.bench_function(name, |b| {
             let program = Program::compile(expr).expect("Parsing failed");
             let mut ctx = Context::default();
-            ctx.add_variable("TestDouble", CelType::Float(0.0f64));
-            ctx.add_variable("TestString", CelType::String("World".to_string().into()));
-            ctx.add_variable("TestTime", CelType::UInt(0));
-            ctx.add_variable("Now", CelType::UInt(1));
             ctx.add_variable("foo", HashMap::from([("bar", 1)]));
-            ctx.add_function("TestFunction", |target, _, _| match target {
-                Some(CelType::String(v)) => Ok(CelType::String(format!("Hello{}", v).into())),
-                _ => unreachable!(),
-            });
             b.iter(|| program.execute(&ctx))
         });
-        // c.bench_function(format!("{}-parsing", name).as_str(), |b| {
-        //     b.iter(|| Program::compile(expr).expect("Parsing failed"))
-        // });
     }
 }
 
