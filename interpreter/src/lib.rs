@@ -8,6 +8,7 @@ use thiserror::Error;
 pub mod context;
 pub use cel_parser::Expression;
 pub use context::Context;
+pub use functions::FunctionCtx;
 pub use objects::{CelType, ResolveResult};
 mod duration;
 mod functions;
