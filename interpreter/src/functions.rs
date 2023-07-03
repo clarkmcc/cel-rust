@@ -8,6 +8,10 @@ use std::convert::TryInto;
 use std::mem;
 use std::rc::Rc;
 
+/// FunctionCtx is a context object passed to functions when they are called.
+/// It contains references ot the target object (if the function is called as
+/// a method), the program context ([`Context`]) which gives functions access
+/// to variables, and the arguments to the function call.
 pub struct FunctionCtx<'t, 'c, 'e> {
     pub name: Rc<String>,
     pub target: Option<&'t CelType>,
@@ -16,11 +20,16 @@ pub struct FunctionCtx<'t, 'c, 'e> {
 }
 
 impl<'t, 'c, 'e> FunctionCtx<'t, 'c, 'e> {
+    /// Returns a reference to the target object if the function is being called
+    /// as a method, or it returns an error if the function is not being called
+    /// as a method.
     pub fn target(&self) -> Result<&'t CelType, ExecutionError> {
         self.target
             .ok_or(ExecutionError::missing_argument_or_target())
     }
 
+    /// Checks that the function is not being called as a method, and returns
+    /// an error if it is.
     pub fn check_no_method(&self) -> Result<(), ExecutionError> {
         if self.target.is_some() {
             return Err(ExecutionError::not_supported_as_method(
@@ -31,25 +40,25 @@ impl<'t, 'c, 'e> FunctionCtx<'t, 'c, 'e> {
         Ok(())
     }
 
+    /// Resolves the given expression using the program's [`Context`].
     pub fn resolve(&self, expr: &'e Expression) -> Result<CelType, ExecutionError> {
         self.ptx.resolve(expr)
     }
 
+    /// Resolves all of the given expressions using the program's [`Context`].
+    /// The resolved values are returned as a [`CelType::List`].
     pub fn resolve_all(&self, exprs: &[Expression]) -> ResolveResult {
         self.ptx.resolve_all(exprs)
     }
 
+    /// Resolves the argument at the given index. An error is returned if the
+    /// argument does not exist.
     pub fn resolve_arg(&self, index: usize) -> Result<CelType, ExecutionError> {
         self.ptx.resolve(self.arg(index)?)
     }
 
-    pub fn expect_num_args(&self, n: usize) -> Result<(), ExecutionError> {
-        if self.args.len() != n {
-            return Err(ExecutionError::invalid_argument_count(n, self.args.len()));
-        }
-        Ok(())
-    }
-
+    /// Returns the argument at the given index. An error is returned if the
+    /// argument does not exist.
     pub fn arg(&self, index: usize) -> Result<&'e Expression, ExecutionError> {
         self.args
             .get(index)
@@ -59,6 +68,9 @@ impl<'t, 'c, 'e> FunctionCtx<'t, 'c, 'e> {
             ))
     }
 
+    /// Returns the argument at the given index as a identifier. An error
+    /// is returned if the argument does not exist, or if it is not an
+    /// identifier.
     pub fn arg_ident(&self, index: usize) -> Result<Rc<String>, ExecutionError> {
         let arg = self.arg(index)?;
         match arg {
@@ -70,6 +82,7 @@ impl<'t, 'c, 'e> FunctionCtx<'t, 'c, 'e> {
         }
     }
 
+    /// Returns an execution error for the currently execution function.
     pub fn error(&self, message: &str) -> Result<CelType, ExecutionError> {
         Err(ExecutionError::function_error(self.name.as_str(), message))
     }
@@ -262,7 +275,7 @@ pub fn map(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
             }
             CelType::List(Rc::new(values))
         }
-        _ => list_only("map")?,
+        _ => ftx.error("only lists are supported")?,
     }
     .into()
 }
@@ -293,7 +306,7 @@ pub fn filter(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
             }
             CelType::List(Rc::new(values))
         }
-        _ => list_only("filter")?,
+        _ => ftx.error("only lists are supported")?,
     }
     .into()
 }
@@ -334,7 +347,7 @@ pub fn all(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
             }
             return Ok(CelType::Bool(true));
         }
-        _ => list_only("all")?,
+        _ => ftx.error("only lists are supported")?,
     }
     .into()
 }
@@ -397,16 +410,8 @@ pub fn max(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
                 .unwrap_or(CelType::Null)
                 .into()
         }
-        _ => list_only("max"),
+        _ => ftx.error("only lists are supported"),
     }
-}
-
-#[inline(always)]
-fn list_only(name: &str) -> Result<CelType, ExecutionError> {
-    Err(ExecutionError::function_error(
-        name,
-        "can only be called on a list",
-    ))
 }
 
 /// A wrapper around [`parse_duration`] that converts errors into [`ExecutionError`].
