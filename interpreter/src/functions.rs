@@ -134,8 +134,7 @@ pub fn size(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
 /// ```
 pub fn contains(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
     let target = ftx.target()?;
-    let arg = ftx.arg(0)?;
-    let arg = ftx.resolve(arg)?;
+    let arg = ftx.resolve_arg(0)?;
     Ok(match target {
         CelType::List(v) => v.contains(&arg),
         CelType::Map(v) => v
