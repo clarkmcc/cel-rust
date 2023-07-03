@@ -1,4 +1,5 @@
 use crate::context::Context;
+use crate::functions::FunctionCtx;
 use crate::ExecutionError;
 use crate::ExecutionError::NoSuchKey;
 use cel_parser::{ArithmeticOp, Atom, Expression, Member, RelationOp, UnaryOp};
@@ -147,7 +148,7 @@ impl Ord for CelType {
             (CelType::Null, CelType::Null) => Ordering::Equal,
             (CelType::Duration(a), CelType::Duration(b)) => a.cmp(b),
             (CelType::Timestamp(a), CelType::Timestamp(b)) => a.cmp(b),
-            _ => unreachable!(),
+            (a, b) => panic!("unable to compare {:?} with {:?}", a, b),
         }
     }
 }
@@ -407,9 +408,19 @@ impl<'a> CelType {
                             if args.is_empty() {
                                 return Err(ExecutionError::MissingArgumentOrTarget);
                             }
-                            func(None, args, ctx)
+                            func(FunctionCtx {
+                                name,
+                                target: None,
+                                ptx: ctx,
+                                args,
+                            })
                         }
-                        Some(t) => func(Some(t.as_ref()), args, ctx),
+                        Some(t) => func(FunctionCtx {
+                            name,
+                            target: Some(&*t),
+                            ptx: ctx,
+                            args,
+                        }),
                     }
                 } else {
                     unreachable!("FunctionCall without CelType::Function - {:?}", self)

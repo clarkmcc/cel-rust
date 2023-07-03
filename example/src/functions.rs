@@ -1,4 +1,4 @@
-use cel_interpreter::{CelType, Context, Expression, Program, ResolveResult};
+use cel_interpreter::{Context, FunctionCtx, Program, ResolveResult};
 
 fn main() {
     let program = Program::compile("add(2, 3)").unwrap();
@@ -12,8 +12,8 @@ fn main() {
 /// The add function takes two arguments and returns their sum. We discard the first
 /// parameter because the add function is not a method, it is always called with two
 /// arguments.
-fn add(_: Option<&CelType>, args: &[Expression], ctx: &Context) -> ResolveResult {
-    let a = CelType::resolve(args.get(0).unwrap(), ctx)?;
-    let b = CelType::resolve(args.get(1).unwrap(), ctx)?;
+fn add(ftx: FunctionCtx) -> ResolveResult {
+    let a = ftx.resolve_arg(0)?;
+    let b = ftx.resolve_arg(1)?;
     Ok(a + b)
 }

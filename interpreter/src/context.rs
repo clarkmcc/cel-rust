@@ -1,3 +1,4 @@
+use crate::functions::FunctionCtx;
 use crate::objects::CelType;
 use crate::{functions, ExecutionError};
 use cel_parser::Expression;
@@ -6,8 +7,7 @@ use std::collections::HashMap;
 /// A function that can be loaded into the [`ParentContext`] and then called from a Common Expression
 /// Language program. If the function is a method, the first parameter will be the target object.
 /// If the function accepts arguments, they will be provided as expressions.
-type ContextFunction =
-    dyn Fn(Option<&CelType>, &[Expression], &Context) -> Result<CelType, ExecutionError>;
+type ContextFunction = dyn Fn(FunctionCtx) -> Result<CelType, ExecutionError>;
 
 /// Context is a collection of variables and functions that can be used
 /// by the interpreter to resolve expressions. The context can be either
@@ -102,12 +102,20 @@ impl<'a> Context<'a> {
 
     pub fn add_function<S, F: 'static>(&mut self, name: S, value: F)
     where
-        F: Fn(Option<&CelType>, &[Expression], &Context) -> Result<CelType, ExecutionError>,
+        F: Fn(FunctionCtx) -> Result<CelType, ExecutionError>,
         S: Into<String>,
     {
         if let Context::Root { functions, .. } = self {
             functions.insert(name.into(), Box::new(value));
         };
+    }
+
+    pub fn resolve(&self, expr: &Expression) -> Result<CelType, ExecutionError> {
+        CelType::resolve(expr, self)
+    }
+
+    pub fn resolve_all(&self, exprs: &[Expression]) -> Result<CelType, ExecutionError> {
+        CelType::resolve_all(exprs, self)
     }
 
     pub(crate) fn clone(&self) -> Context {

@@ -1,12 +1,92 @@
 use crate::context::Context;
 use crate::duration::parse_duration;
 use crate::objects::CelType;
-use crate::ExecutionError;
+use crate::{ExecutionError, ResolveResult};
 use cel_parser::Expression;
 use chrono::{DateTime, Duration, FixedOffset};
 use std::convert::TryInto;
 use std::mem;
 use std::rc::Rc;
+
+/// FunctionCtx is a context object passed to functions when they are called.
+/// It contains references ot the target object (if the function is called as
+/// a method), the program context ([`Context`]) which gives functions access
+/// to variables, and the arguments to the function call.
+pub struct FunctionCtx<'t, 'c, 'e> {
+    pub name: Rc<String>,
+    pub target: Option<&'t CelType>,
+    pub ptx: &'c Context<'c>,
+    pub args: &'e [Expression],
+}
+
+impl<'t, 'c, 'e> FunctionCtx<'t, 'c, 'e> {
+    /// Returns a reference to the target object if the function is being called
+    /// as a method, or it returns an error if the function is not being called
+    /// as a method.
+    pub fn target(&self) -> Result<&'t CelType, ExecutionError> {
+        self.target
+            .ok_or(ExecutionError::missing_argument_or_target())
+    }
+
+    /// Checks that the function is not being called as a method, and returns
+    /// an error if it is.
+    pub fn check_no_method(&self) -> Result<(), ExecutionError> {
+        if self.target.is_some() {
+            return Err(ExecutionError::not_supported_as_method(
+                self.name.as_str(),
+                self.target.cloned().unwrap(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Resolves the given expression using the program's [`Context`].
+    pub fn resolve(&self, expr: &'e Expression) -> Result<CelType, ExecutionError> {
+        self.ptx.resolve(expr)
+    }
+
+    /// Resolves all of the given expressions using the program's [`Context`].
+    /// The resolved values are returned as a [`CelType::List`].
+    pub fn resolve_all(&self, exprs: &[Expression]) -> ResolveResult {
+        self.ptx.resolve_all(exprs)
+    }
+
+    /// Resolves the argument at the given index. An error is returned if the
+    /// argument does not exist.
+    pub fn resolve_arg(&self, index: usize) -> Result<CelType, ExecutionError> {
+        self.ptx.resolve(self.arg(index)?)
+    }
+
+    /// Returns the argument at the given index. An error is returned if the
+    /// argument does not exist.
+    pub fn arg(&self, index: usize) -> Result<&'e Expression, ExecutionError> {
+        self.args
+            .get(index)
+            .ok_or(ExecutionError::invalid_argument_count(
+                index + 1,
+                self.args.len(),
+            ))
+    }
+
+    /// Returns the argument at the given index as a identifier. An error
+    /// is returned if the argument does not exist, or if it is not an
+    /// identifier.
+    pub fn arg_ident(&self, index: usize) -> Result<Rc<String>, ExecutionError> {
+        let arg = self.arg(index)?;
+        match arg {
+            Expression::Ident(ident) => Ok(ident.clone()),
+            _ => Err(ExecutionError::function_error(
+                "map",
+                &format!("argument {} must be an identifier", index),
+            )),
+        }
+    }
+
+    /// Returns an execution error for the currently execution function.
+    pub fn error(&self, message: &str) -> Result<CelType, ExecutionError> {
+        Err(ExecutionError::function_error(self.name.as_str(), message))
+    }
+}
 
 /// Calculates the size of either the target, or the provided args depending on how
 /// the function is called. If called as a method, the target will be used. If called
@@ -22,30 +102,15 @@ use std::rc::Rc;
 /// ```skip
 /// size([1, 2, 3]) == 3
 /// ```
-pub fn size(
-    target: Option<&CelType>,
-    args: &[Expression],
-    ctx: &Context,
-) -> Result<CelType, ExecutionError> {
-    if target.is_some() {
-        return Err(ExecutionError::not_supported_as_method(
-            "size",
-            target.cloned().unwrap(),
-        ));
-    }
-    let arg = args
-        .get(0)
-        .ok_or(ExecutionError::invalid_argument_count(1, 0))?;
-    let value = CelType::resolve(arg, ctx)?;
-    let size = match value {
+pub fn size(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
+    ftx.check_no_method()?;
+    let arg = ftx.arg(0)?;
+    let size = match ftx.resolve(arg)? {
         CelType::List(l) => l.len(),
         CelType::Map(m) => m.map.len(),
         CelType::String(s) => s.len(),
         CelType::Bytes(b) => b.len(),
-        _ => Err(ExecutionError::function_error(
-            "size",
-            &format!("cannot determine size of {:?}", value),
-        ))?,
+        value => return ftx.error(&format!("cannot determine size of {:?}", value)),
     };
     CelType::Int(size as i32).into()
 }
@@ -80,16 +145,9 @@ pub fn size(
 /// ```cel
 /// b"abc".contains(b"c") == true
 /// ```
-pub fn contains(
-    target: Option<&CelType>,
-    args: &[Expression],
-    ctx: &Context,
-) -> Result<CelType, ExecutionError> {
-    let target = target.unwrap();
-    let arg = args
-        .get(0)
-        .ok_or(ExecutionError::invalid_argument_count(1, 0))?;
-    let arg = CelType::resolve(arg, ctx)?;
+pub fn contains(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
+    let target = ftx.target()?;
+    let arg = ftx.resolve_arg(0)?;
     Ok(match target {
         CelType::List(v) => v.contains(&arg),
         CelType::Map(v) => v
@@ -137,18 +195,13 @@ pub fn contains(
 // * `double`
 // * `bytes`
 // * `duration`
-pub fn string(
-    target: Option<&CelType>,
-    _: &[Expression],
-    _: &Context,
-) -> Result<CelType, ExecutionError> {
-    let target = target.unwrap();
-    Ok(match target {
-        CelType::String(_) => target.clone(),
+pub fn string(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
+    Ok(match ftx.target()? {
+        CelType::String(v) => CelType::String(v.clone()),
         CelType::Timestamp(t) => CelType::String(t.to_rfc3339().into()),
-        _ => Err(ExecutionError::function_error(
+        v => Err(ExecutionError::function_error(
             "string",
-            &format!("cannot convert {:?} to string", target),
+            &format!("cannot convert {:?} to string", v),
         ))?,
     })
 }
@@ -159,19 +212,11 @@ pub fn string(
 /// ```cel
 /// "abc".startsWith("a") == true
 /// ```
-pub fn starts_with(
-    target: Option<&CelType>,
-    args: &[Expression],
-    ctx: &Context,
-) -> Result<CelType, ExecutionError> {
-    let target = target.unwrap();
-    let arg = args
-        .get(0)
-        .ok_or(ExecutionError::invalid_argument_count(1, 0))?;
-    let arg = CelType::resolve(arg, ctx)?;
+pub fn starts_with(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
+    let target = ftx.target()?;
     Ok(match target {
         CelType::String(s) => {
-            if let CelType::String(arg) = arg {
+            if let CelType::String(arg) = ftx.resolve_arg(0)? {
                 s.starts_with(arg.as_str())
             } else {
                 false
@@ -194,22 +239,11 @@ pub fn starts_with(
 /// ```cel
 /// has(foo.bar.baz)
 /// ```
-pub fn has(
-    target: Option<&CelType>,
-    args: &[Expression],
-    ctx: &Context,
-) -> Result<CelType, ExecutionError> {
-    if target.is_some() {
-        return Err(ExecutionError::not_supported_as_method(
-            "has",
-            target.cloned().unwrap(),
-        ));
-    }
-    let arg = get_arg(0, args)?;
-
+pub fn has(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
+    ftx.check_no_method()?;
     // We determine if a type has a property by attempting to resolve it.
     // If we get a NoSuchKey error, then we know the property does not exist
-    match CelType::resolve(arg, ctx) {
+    match ftx.resolve_arg(0) {
         Ok(_) => CelType::Bool(true),
         Err(err) => match err {
             ExecutionError::NoSuchKey(_) => CelType::Bool(false),
@@ -227,12 +261,95 @@ pub fn has(
 /// ```cel
 /// [1, 2, 3].map(x, x * 2) == [2, 4, 6]
 /// ```
-pub fn map(
-    target: Option<&CelType>,
-    args: &[Expression],
-    ctx: &Context,
-) -> Result<CelType, ExecutionError> {
-    macro_wrapper(ctx, target, args, op_map)
+pub fn map(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
+    let ident = ftx.arg_ident(0)?;
+    let expr = ftx.arg(1)?;
+    match ftx.target()? {
+        CelType::List(items) => {
+            let mut values = Vec::with_capacity(items.len());
+            let mut ptx = ftx.ptx.clone();
+            for item in items.iter() {
+                ptx.add_variable(&**ident, item.clone());
+                let value = ptx.resolve(expr)?;
+                values.push(value);
+            }
+            CelType::List(Rc::new(values))
+        }
+        _ => ftx.error("only lists are supported")?,
+    }
+    .into()
+}
+
+/// Filters the provided list by applying an expression to each input item
+/// and including the input item in the resulting list, only if the expression
+/// returned true.
+///
+/// This function is intended to be used like the CEL-go `filter` macro:
+/// https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros
+///
+/// # Example
+/// ```cel
+/// [1, 2, 3].filter(x, x > 1) == [2, 3]
+/// ```
+pub fn filter(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
+    let ident = ftx.arg_ident(0)?;
+    let expr = ftx.arg(1)?;
+    match ftx.target()? {
+        CelType::List(items) => {
+            let mut values = Vec::with_capacity(items.len());
+            let mut ptx = ftx.ptx.clone();
+            for item in items.iter() {
+                ptx.add_variable(&**ident, item.clone());
+                if let CelType::Bool(true) = ptx.resolve(expr)? {
+                    values.push(item.clone());
+                }
+            }
+            CelType::List(Rc::new(values))
+        }
+        _ => ftx.error("only lists are supported")?,
+    }
+    .into()
+}
+
+/// Returns a boolean value indicating whether every value in the provided
+/// list or map met the predicate defined by the provided expression. If
+/// called on a map, the predicate is applied to the map keys.
+///
+/// This function is intended to be used like the CEL-go `all` macro:
+/// https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros
+///
+/// # Example
+/// ```cel
+/// [1, 2, 3].all(x, x > 0) == true
+/// [{1:true, 2:true, 3:false}].all(x, x > 0) == true
+/// ```
+pub fn all(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
+    let ident = ftx.arg_ident(0)?;
+    let expr = ftx.arg(1)?;
+    match ftx.target()? {
+        CelType::List(items) => {
+            let mut ptx = ftx.ptx.clone();
+            for item in items.iter() {
+                ptx.add_variable(&**ident, item.clone());
+                if let CelType::Bool(false) = ptx.resolve(expr)? {
+                    return Ok(CelType::Bool(false));
+                }
+            }
+            return Ok(CelType::Bool(true));
+        }
+        CelType::Map(value) => {
+            let mut ptx = ftx.ptx.clone();
+            for key in value.map.keys() {
+                ptx.add_variable(&**ident, key.clone());
+                if let CelType::Bool(false) = ptx.resolve(expr)? {
+                    return Ok(CelType::Bool(false));
+                }
+            }
+            return Ok(CelType::Bool(true));
+        }
+        _ => ftx.error("only lists are supported")?,
+    }
+    .into()
 }
 
 /// Duration parses the provided argument into a [`CelType::Duration`] value.
@@ -249,18 +366,9 @@ pub fn map(
 /// - `1.5ms` parses as 1 millisecond and 500 microseconds
 /// - `1ns` parses as 1 nanosecond
 /// - `1.5ns` parses as 1 nanosecond (sub-nanosecond durations not supported)
-pub fn duration(
-    target: Option<&CelType>,
-    args: &[Expression],
-    ctx: &Context,
-) -> Result<CelType, ExecutionError> {
-    if target.is_some() {
-        return Err(ExecutionError::not_supported_as_method(
-            "duration",
-            target.cloned().unwrap(),
-        ));
-    }
-    let value = CelType::resolve(get_arg(0, args)?, ctx)?;
+pub fn duration(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
+    ftx.check_no_method()?;
+    let value = ftx.resolve_arg(0)?;
     match value {
         CelType::String(v) => CelType::Duration(_duration(v.as_str())?),
         _ => return Err(ExecutionError::unsupported_target_type(value)),
@@ -268,18 +376,9 @@ pub fn duration(
     .into()
 }
 
-pub fn timestamp(
-    target: Option<&CelType>,
-    args: &[Expression],
-    ctx: &Context,
-) -> Result<CelType, ExecutionError> {
-    if target.is_some() {
-        return Err(ExecutionError::not_supported_as_method(
-            "timestamp",
-            target.cloned().unwrap(),
-        ));
-    }
-    let value = CelType::resolve(get_arg(0, args)?, ctx)?;
+pub fn timestamp(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
+    ftx.check_no_method()?;
+    let value = ftx.resolve(ftx.arg(0)?)?;
     match value {
         CelType::String(v) => CelType::Timestamp(_timestamp(v.as_str())?),
         _ => return Err(ExecutionError::unsupported_target_type(value)),
@@ -287,131 +386,8 @@ pub fn timestamp(
     .into()
 }
 
-/// Filters the provided list by applying an expression to each input item
-/// and including the input item in the resulting list, only if the expression
-/// returned true.
-///
-/// This function is intended to be used like the CEL-go `filter` macro:
-/// https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros
-///
-/// # Example
-/// ```cel
-/// [1, 2, 3].filter(x, x > 1) == [2, 3]
-/// ```
-pub fn filter(
-    target: Option<&CelType>,
-    args: &[Expression],
-    ctx: &Context,
-) -> Result<CelType, ExecutionError> {
-    macro_wrapper(ctx, target, args, op_filter)
-}
-
-/// Returns a boolean value indicating whether every value in the provided
-/// list or map met the predicate defined by the provided expression. If
-/// called on a map, the predicate is applied to the map keys.
-///
-/// This function is intended to be used like the CEL-go `all` macro:
-/// https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros
-///
-/// # Example
-/// ```cel
-/// [1, 2, 3].all(x, x > 0) == true
-/// [{1:true, 2:true, 3:false}].all(x, x > 0) == true
-/// ```
-pub fn all(
-    target: Option<&CelType>,
-    args: &[Expression],
-    ctx: &Context,
-) -> Result<CelType, ExecutionError> {
-    macro_wrapper(ctx, target, args, op_all)
-}
-
-#[inline(always)]
-fn op_map(
-    ctx: &Context,
-    target: &CelType,
-    ident: Rc<String>,
-    expr: &Expression,
-) -> Result<CelType, ExecutionError> {
-    match target {
-        CelType::List(items) => {
-            let mut values = Vec::with_capacity(items.len());
-            let mut ctx = ctx.clone();
-            for item in items.iter() {
-                ctx.add_variable(&**ident, item.clone());
-                let value = CelType::resolve(expr, &ctx)?;
-                values.push(value);
-            }
-            CelType::List(Rc::new(values))
-        }
-        _ => list_only("map")?,
-    }
-    .into()
-}
-
-#[inline(always)]
-fn op_filter(
-    ctx: &Context,
-    target: &CelType,
-    ident: Rc<String>,
-    expr: &Expression,
-) -> Result<CelType, ExecutionError> {
-    match target {
-        CelType::List(items) => {
-            let mut values = Vec::with_capacity(items.len());
-            let mut ctx = ctx.clone();
-            for item in items.iter() {
-                ctx.add_variable(&**ident, item.clone());
-                if let CelType::Bool(true) = CelType::resolve(expr, &ctx)? {
-                    values.push(item.clone());
-                }
-            }
-            CelType::List(Rc::new(values))
-        }
-        _ => list_only("filter")?,
-    }
-    .into()
-}
-
-#[inline(always)]
-fn op_all(
-    ctx: &Context,
-    target: &CelType,
-    ident: Rc<String>,
-    expr: &Expression,
-) -> Result<CelType, ExecutionError> {
-    match target {
-        CelType::List(items) => {
-            let mut ctx = ctx.clone();
-            for item in items.iter() {
-                ctx.add_variable(&**ident, item.clone());
-                if let CelType::Bool(false) = CelType::resolve(expr, &ctx)? {
-                    return Ok(CelType::Bool(false));
-                }
-            }
-            return Ok(CelType::Bool(true));
-        }
-        CelType::Map(value) => {
-            let mut ctx = ctx.clone();
-            for key in value.map.keys() {
-                ctx.add_variable(&**ident, key.clone());
-                if let CelType::Bool(false) = CelType::resolve(expr, &ctx)? {
-                    return Ok(CelType::Bool(false));
-                }
-            }
-            return Ok(CelType::Bool(true));
-        }
-        _ => list_only("all")?,
-    }
-    .into()
-}
-
-pub fn max(
-    _: Option<&CelType>,
-    args: &[Expression],
-    ctx: &Context,
-) -> Result<CelType, ExecutionError> {
-    match CelType::resolve_all(args, ctx)? {
+pub fn max(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
+    match ftx.resolve_all(ftx.args)? {
         CelType::List(items) => {
             if items.is_empty() {
                 return Err(ExecutionError::function_error("max", "missing arguments"));
@@ -434,48 +410,7 @@ pub fn max(
                 .unwrap_or(CelType::Null)
                 .into()
         }
-        _ => list_only("max"),
-    }
-}
-
-#[inline(always)]
-fn macro_wrapper(
-    ctx: &Context,
-    target: Option<&CelType>,
-    args: &[Expression],
-    func: fn(&Context, &CelType, Rc<String>, &Expression) -> Result<CelType, ExecutionError>,
-) -> Result<CelType, ExecutionError> {
-    let target = target.ok_or(ExecutionError::missing_argument_or_target())?;
-    let ident = get_ident_arg(0, args)?;
-    let expr = get_arg(1, args)?;
-    func(ctx, target, ident, expr)
-}
-
-#[inline(always)]
-fn list_only(name: &str) -> Result<CelType, ExecutionError> {
-    Err(ExecutionError::function_error(
-        name,
-        "can only be called on a list",
-    ))
-}
-
-#[inline(always)]
-fn get_arg(idx: usize, args: &[Expression]) -> Result<&Expression, ExecutionError> {
-    args.get(idx)
-        .ok_or(ExecutionError::invalid_argument_count(idx + 1, args.len()))
-}
-
-#[inline(always)]
-fn get_ident_arg(idx: usize, args: &[Expression]) -> Result<Rc<String>, ExecutionError> {
-    match args
-        .get(idx)
-        .ok_or(ExecutionError::invalid_argument_count(idx + 1, args.len()))?
-    {
-        Expression::Ident(ident) => Ok(ident.clone()),
-        _ => Err(ExecutionError::function_error(
-            "map",
-            &format!("argument {} must be an identifier", idx),
-        )),
+        _ => ftx.error("only lists are supported"),
     }
 }
 
