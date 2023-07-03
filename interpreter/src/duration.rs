@@ -7,10 +7,6 @@ use nom::multi::many1;
 use nom::number::complete::double;
 use nom::IResult;
 
-static NANOS_PER_SEC: f64 = 1e9;
-static NANOS_PER_MILLI: f64 = 1e6;
-static NANOS_PER_MICRO: f64 = 1e3;
-
 /// Parses a duration string into a [`Duration`]. Duration strings support the
 /// following grammar:
 ///
@@ -31,35 +27,41 @@ static NANOS_PER_MICRO: f64 = 1e3;
 /// - `1ns` parses as 1 nanosecond
 /// - `1.5ns` parses as 1 nanosecond (sub-nanosecond durations not supported)
 pub fn parse_duration(i: &str) -> IResult<&str, Duration> {
-    if i == "0" {
-        return Ok(("", Duration::zero()));
-    }
     let (i, neg) = opt(parse_negative)(i)?;
-    let (_, duration): (&str, Duration) = many1(parse_number_unit)(i)
+    if i == "0" {
+        return Ok((i, Duration::zero()));
+    }
+    let (i, duration) = many1(parse_number_unit)(i)
         .map(|(i, d)| (i, d.iter().fold(Duration::zero(), |acc, next| acc + *next)))?;
-    Ok(("", duration * if neg.is_some() { -1 } else { 1 }))
+    Ok((i, duration * if neg.is_some() { -1 } else { 1 }))
 }
 
 enum Unit {
-    Hour,
-    Minute,
-    Second,
-    Millisecond,
-    Microsecond,
     Nanosecond,
+    Microsecond,
+    Millisecond,
+    Second,
+    Minute,
+    Hour,
+}
+
+impl Unit {
+    fn nanos(&self) -> i64 {
+        match self {
+            Unit::Nanosecond => 1,
+            Unit::Microsecond => 1_000,
+            Unit::Millisecond => 1_000_000,
+            Unit::Second => 1_000_000_000,
+            Unit::Minute => 60 * 1_000_000_000,
+            Unit::Hour => 60 * 60 * 1_000_000_000,
+        }
+    }
 }
 
 fn parse_number_unit(i: &str) -> IResult<&str, Duration> {
     let (i, num) = double(i)?;
     let (i, unit) = parse_unit(i)?;
-    let duration = match unit {
-        Unit::Hour => to_duration(num, 3600.0 * NANOS_PER_SEC),
-        Unit::Minute => to_duration(num, 60.0 * NANOS_PER_SEC),
-        Unit::Second => to_duration(num, 1.0 * NANOS_PER_SEC),
-        Unit::Millisecond => to_duration(num, NANOS_PER_MILLI),
-        Unit::Microsecond => to_duration(num, NANOS_PER_MICRO),
-        Unit::Nanosecond => Duration::nanoseconds(num.round() as i64),
-    };
+    let duration = to_duration(num, unit);
     Ok((i, duration))
 }
 
@@ -79,29 +81,8 @@ fn parse_unit(i: &str) -> IResult<&str, Unit> {
     ))(i)
 }
 
-/// Converts a number and a unit into a Duration.
-///
-/// This function is used to convert a floating-point number and a unit into a Duration.
-/// The number represents the quantity of the unit, and the unit is given in nanoseconds.
-///
-/// # Arguments
-///
-/// * `num` - The number of units as a floating-point number. This can include a fractional part.
-/// * `unit_in_ns` - The duration of one unit in nanoseconds. This is used to convert the number into a Duration.
-///
-/// # Returns
-///
-/// This function returns a Duration that represents the given number of units.
-///
-/// # Examples
-///
-/// ```skip
-/// let duration = to_duration(1.5, 1e9); // Returns a Duration of 1.5 seconds
-/// ```
-fn to_duration(num: f64, unit_in_ns: f64) -> Duration {
-    let whole = (num.trunc() * unit_in_ns) as i64;
-    let fractional = (num.fract() * unit_in_ns) as i64; // Now directly multiply the fractional part with unit_in_ns
-    Duration::nanoseconds(whole + fractional)
+fn to_duration(num: f64, unit: Unit) -> Duration {
+    Duration::nanoseconds((num * unit.nanos() as f64).trunc() as i64)
 }
 
 #[cfg(test)]
@@ -141,5 +122,6 @@ mod tests {
         "0h0m0s" => Duration::zero(),
         "0h0m1s" => Duration::seconds(1),
         "0" => Duration::zero(),
+        "-0" => Duration::zero(),
     }
 }
