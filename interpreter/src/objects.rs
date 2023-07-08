@@ -500,12 +500,8 @@ impl ops::Add<CelType> for CelType {
                 CelType::Map(CelMap { map: Rc::new(new) })
             }
             (CelType::Duration(l), CelType::Duration(r)) => CelType::Duration(l + r),
-            (CelType::Timestamp(l), CelType::Duration(r)) => {
-                CelType::Timestamp(l + Duration::nanoseconds(r.num_nanoseconds().unwrap()))
-            }
-            (CelType::Duration(l), CelType::Timestamp(r)) => {
-                CelType::Timestamp(r + Duration::nanoseconds(l.num_nanoseconds().unwrap()))
-            }
+            (CelType::Timestamp(l), CelType::Duration(r)) => CelType::Timestamp(l + r),
+            (CelType::Duration(l), CelType::Timestamp(r)) => CelType::Timestamp(r + l),
             _ => unimplemented!(),
         }
     }
@@ -527,15 +523,9 @@ impl ops::Sub<CelType> for CelType {
             (CelType::UInt(l), CelType::Float(r)) => CelType::Float(l as f64 - r),
             (CelType::Float(l), CelType::UInt(r)) => CelType::Float(l - r as f64),
             // todo: implement checked sub for these over-flowable operations
-            (CelType::Duration(l), CelType::Duration(r)) => CelType::Duration(
-                Duration::nanoseconds(l.num_nanoseconds().unwrap() - r.num_nanoseconds().unwrap()),
-            ),
-            (CelType::Timestamp(l), CelType::Duration(r)) => {
-                CelType::Timestamp(l - Duration::nanoseconds(r.num_nanoseconds().unwrap()))
-            }
-            (CelType::Timestamp(l), CelType::Timestamp(r)) => CelType::Duration(
-                Duration::nanoseconds(l.timestamp_nanos() - r.timestamp_nanos()),
-            ),
+            (CelType::Duration(l), CelType::Duration(r)) => CelType::Duration(l - r),
+            (CelType::Timestamp(l), CelType::Duration(r)) => CelType::Timestamp(l - r),
+            (CelType::Timestamp(l), CelType::Timestamp(r)) => CelType::Duration(l - r),
             _ => unimplemented!(),
         }
     }
