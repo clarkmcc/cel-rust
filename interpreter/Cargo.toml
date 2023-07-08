@@ -2,7 +2,7 @@
 name = "cel-interpreter"
 description = "An interpreter for the Common Expression Language (CEL)"
 repository = "https://github.com/orf/cel-rust"
-version = "0.1.3-alpha.0"
+version = "0.3.0"
 authors = ["Tom Forbes <tom@tomforb.es>", "Clark McCauley <me@clarkmccauley.com>"]
 edition = "2018"
 license = "MIT"
