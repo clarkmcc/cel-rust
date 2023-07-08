@@ -10,12 +10,12 @@ categories = ["interpreter", "cel"]
 
 [dependencies]
 cel-parser = { path = "../parser", version = "0.1.3-alpha.0" }
-thiserror = "1.0.22"
-chrono = "0.4.24"
+thiserror = "1.0.40"
+chrono = "0.4.26"
 nom = "7.1.3"
 
 [dev-dependencies]
-criterion = { version = "0.4.0", features = ["html_reports"] }
+criterion = { version = "0.5.1", features = ["html_reports"] }
 
 [[bench]]
 name = "runtime"
