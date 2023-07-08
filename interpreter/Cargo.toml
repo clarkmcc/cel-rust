@@ -1,7 +1,7 @@
 [package]
 name = "cel-interpreter"
 description = "An interpreter for the Common Expression Language (CEL)"
-repository = "https://github.com/orf/cel-rust"
+repository = "https://github.com/clarkmcc/cel-rust"
 version = "0.3.0"
 authors = ["Tom Forbes <tom@tomforb.es>", "Clark McCauley <me@clarkmccauley.com>"]
 edition = "2018"
