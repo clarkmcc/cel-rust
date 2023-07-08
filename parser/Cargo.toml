@@ -9,7 +9,7 @@ license = "MIT"
 categories = ["parsing", "cel"]
 
 [dependencies]
-lalrpop-util = "0.19.1"
+lalrpop-util = { version = "0.19.1", features = ["lexer"] }
 regex = "1.4.2"
 
 [build-dependencies]
