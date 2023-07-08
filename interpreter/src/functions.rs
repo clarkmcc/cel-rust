@@ -1,5 +1,5 @@
 use crate::context::Context;
-use crate::duration::parse_duration;
+use crate::duration::{format_duration, parse_duration};
 use crate::objects::CelType;
 use crate::{ExecutionError, ResolveResult};
 use cel_parser::Expression;
@@ -187,18 +187,20 @@ pub fn contains(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
 // supported:
 // * `string` - Returns a copy of the target string.
 // * `timestamp` - Returns the timestamp in RFC3339 format.
-//
-// todo: In order to be fully compatible with the CEL specification, this function should
-// also support the following conversions:
-// * `int`
-// * `uint`
-// * `double`
-// * `bytes`
-// * `duration`
+// * `duration` - Returns the duration in a string formatted like "72h3m0.5s".
+// * `int` - Returns the integer value of the target.
+// * `uint` - Returns the unsigned integer value of the target.
+// * `float` - Returns the float value of the target.
+// * `bytes` - Converts bytes to string using from_utf8_lossy.
 pub fn string(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
     Ok(match ftx.target()? {
         CelType::String(v) => CelType::String(v.clone()),
         CelType::Timestamp(t) => CelType::String(t.to_rfc3339().into()),
+        CelType::Duration(v) => CelType::String(format_duration(v).into()),
+        CelType::Int(v) => CelType::String(v.to_string().into()),
+        CelType::UInt(v) => CelType::String(v.to_string().into()),
+        CelType::Float(v) => CelType::String(v.to_string().into()),
+        CelType::Bytes(v) => CelType::String(Rc::new(String::from_utf8_lossy(v.as_slice()).into())),
         v => Err(ExecutionError::function_error(
             "string",
             &format!("cannot convert {:?} to string", v),
@@ -574,6 +576,23 @@ mod tests {
                 "timestamp string",
                 "timestamp('2023-05-28T00:00:00Z').string() == '2023-05-28T00:00:00+00:00'",
             ),
+        ]
+        .iter()
+        .for_each(assert_script);
+    }
+
+    #[test]
+    fn test_string() {
+        vec![
+            ("duration", "duration('1h30m').string() == '1h30m0s'"),
+            (
+                "timestamp",
+                "timestamp('2023-05-29T00:00:00Z').string() == '2023-05-29T00:00:00+00:00'",
+            ),
+            ("string", "'foo'.string() == 'foo'"),
+            ("int", "10.string() == '10'"),
+            ("float", "10.5.string() == '10.5'"),
+            ("bytes", "b'foo'.string() == 'foo'"),
         ]
         .iter()
         .for_each(assert_script);
