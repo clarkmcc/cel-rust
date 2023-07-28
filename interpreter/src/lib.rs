@@ -8,8 +8,8 @@ use thiserror::Error;
 pub mod context;
 pub use cel_parser::Expression;
 pub use context::Context;
-pub use functions::FunctionCtx;
-pub use objects::{CelType, ResolveResult};
+pub use functions::FunctionContext;
+pub use objects::{ResolveResult, Value};
 mod duration;
 mod functions;
 pub mod objects;
@@ -26,13 +26,13 @@ pub enum ExecutionError {
     #[error("Invalid argument count: expected {expected}, got {actual}")]
     InvalidArgumentCount { expected: usize, actual: usize },
     #[error("Invalid argument type: {:?}", .target)]
-    UnsupportedTargetType { target: CelType },
+    UnsupportedTargetType { target: Value },
     #[error("Method '{method}' not supported on type '{target:?}'")]
-    NotSupportedAsMethod { method: String, target: CelType },
+    NotSupportedAsMethod { method: String, target: Value },
     /// Indicates that the script attempted to use a value as a key in a map,
     /// but the type of the value was not supported as a key.
     #[error("Unable to use value '{0:?}' as a key")]
-    UnsupportedKeyType(CelType),
+    UnsupportedKeyType(Value),
     /// Indicates that the script attempted to reference a key on a type that
     /// was missing the requested key.
     #[error("No such key: {0}")]
@@ -70,18 +70,18 @@ impl ExecutionError {
         }
     }
 
-    pub fn unsupported_target_type(target: CelType) -> Self {
+    pub fn unsupported_target_type(target: Value) -> Self {
         ExecutionError::UnsupportedTargetType { target }
     }
 
-    pub fn not_supported_as_method(method: &str, target: CelType) -> Self {
+    pub fn not_supported_as_method(method: &str, target: Value) -> Self {
         ExecutionError::NotSupportedAsMethod {
             method: method.to_string(),
             target,
         }
     }
 
-    pub fn unsupported_key_type(value: CelType) -> Self {
+    pub fn unsupported_key_type(value: Value) -> Self {
         ExecutionError::UnsupportedKeyType(value)
     }
 
@@ -107,7 +107,7 @@ impl Program {
     }
 
     pub fn execute(&self, context: &Context) -> ResolveResult {
-        CelType::resolve(&self.expression, context)
+        Value::resolve(&self.expression, context)
     }
 }
 
@@ -122,7 +122,7 @@ impl TryFrom<&str> for Program {
 #[cfg(test)]
 mod tests {
     use crate::context::Context;
-    use crate::objects::{CelType, ResolveResult};
+    use crate::objects::{ResolveResult, Value};
     use crate::testing::test_script;
     use crate::{ExecutionError, Program};
     use std::collections::HashMap;
@@ -199,7 +199,7 @@ mod tests {
             (
                 "unsupported key type",
                 "{null: true}",
-                ExecutionError::unsupported_key_type(CelType::Null),
+                ExecutionError::unsupported_key_type(Value::Null),
             ),
         ];
 

@@ -1,5 +1,5 @@
 use crate::context::Context;
-use crate::functions::FunctionCtx;
+use crate::functions::FunctionContext;
 use crate::ExecutionError;
 use crate::ExecutionError::NoSuchKey;
 use cel_parser::{ArithmeticOp, Atom, Expression, Member, RelationOp, UnaryOp};
@@ -10,11 +10,11 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::rc::Rc;
 
-// Easily create conversions from primitive types to CelType
+// Easily create conversions from primitive types to Value
 macro_rules! impl_from {
     ($($t:ty => $v:expr),*) => {
         $(
-            impl From<$t> for CelType {
+            impl From<$t> for Value {
                 fn from(v: $t) -> Self {
                     $v(v)
                 }
@@ -24,98 +24,98 @@ macro_rules! impl_from {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct CelMap {
-    pub map: Rc<HashMap<CelKey, CelType>>,
+pub struct Map {
+    pub map: Rc<HashMap<Key, Value>>,
 }
 
-impl PartialOrd for CelMap {
+impl PartialOrd for Map {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         None
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Hash, Ord, Clone, PartialOrd)]
-pub enum CelKey {
+pub enum Key {
     Int(i32),
     Uint(u32),
     Bool(bool),
     String(Rc<String>),
 }
 
-/// Implement conversions from primitive types to [`CelKey`]
+/// Implement conversions from primitive types to [`Key`]
 
-impl From<String> for CelKey {
+impl From<String> for Key {
     fn from(v: String) -> Self {
-        CelKey::String(v.into())
+        Key::String(v.into())
     }
 }
 
-impl From<Rc<String>> for CelKey {
+impl From<Rc<String>> for Key {
     fn from(v: Rc<String>) -> Self {
-        CelKey::String(v.clone())
+        Key::String(v.clone())
     }
 }
 
-impl<'a> From<&'a str> for CelKey {
+impl<'a> From<&'a str> for Key {
     fn from(v: &'a str) -> Self {
-        CelKey::String(Rc::new(v.into()))
+        Key::String(Rc::new(v.into()))
     }
 }
 
-impl From<bool> for CelKey {
+impl From<bool> for Key {
     fn from(v: bool) -> Self {
-        CelKey::Bool(v)
+        Key::Bool(v)
     }
 }
 
-impl From<i32> for CelKey {
+impl From<i32> for Key {
     fn from(v: i32) -> Self {
-        CelKey::Int(v)
+        Key::Int(v)
     }
 }
 
-impl From<u32> for CelKey {
+impl From<u32> for Key {
     fn from(v: u32) -> Self {
-        CelKey::Uint(v)
+        Key::Uint(v)
     }
 }
 
-/// Implement conversions from [`CelKey`] into [`CelType`]
+/// Implement conversions from [`Key`] into [`Value`]
 
-impl TryInto<CelKey> for CelType {
-    type Error = CelType;
+impl TryInto<Key> for Value {
+    type Error = Value;
 
     #[inline(always)]
-    fn try_into(self) -> Result<CelKey, Self::Error> {
+    fn try_into(self) -> Result<Key, Self::Error> {
         match self {
-            CelType::Int(v) => Ok(CelKey::Int(v)),
-            CelType::UInt(v) => Ok(CelKey::Uint(v)),
-            CelType::String(v) => Ok(CelKey::String(v)),
-            CelType::Bool(v) => Ok(CelKey::Bool(v)),
+            Value::Int(v) => Ok(Key::Int(v)),
+            Value::UInt(v) => Ok(Key::Uint(v)),
+            Value::String(v) => Ok(Key::String(v)),
+            Value::Bool(v) => Ok(Key::Bool(v)),
             _ => Err(self),
         }
     }
 }
 
 // Implement conversion from HashMap<K, V> into CelMap
-impl<K: Into<CelKey>, V: Into<CelType>> From<HashMap<K, V>> for CelMap {
+impl<K: Into<Key>, V: Into<Value>> From<HashMap<K, V>> for Map {
     fn from(map: HashMap<K, V>) -> Self {
         let mut new_map = HashMap::new();
         for (k, v) in map {
             new_map.insert(k.into(), v.into());
         }
-        CelMap {
+        Map {
             map: Rc::new(new_map),
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum CelType {
-    List(Rc<Vec<CelType>>),
-    Map(CelMap),
+pub enum Value {
+    List(Rc<Vec<Value>>),
+    Map(Map),
 
-    Function(Rc<String>, Option<Box<CelType>>),
+    Function(Rc<String>, Option<Box<Value>>),
 
     // Atoms
     Int(i32),
@@ -129,100 +129,100 @@ pub enum CelType {
     Null,
 }
 
-impl Eq for CelType {}
+impl Eq for Value {}
 
-impl PartialOrd for CelType {
+impl PartialOrd for Value {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for CelType {
+impl Ord for Value {
     fn cmp(&self, other: &Self) -> Ordering {
         match (self, other) {
-            (CelType::Int(a), CelType::Int(b)) => a.cmp(b),
-            (CelType::UInt(a), CelType::UInt(b)) => a.cmp(b),
-            (CelType::Float(a), CelType::Float(b)) => a.partial_cmp(b).unwrap_or(Ordering::Equal),
-            (CelType::String(a), CelType::String(b)) => a.cmp(b),
-            (CelType::Bool(a), CelType::Bool(b)) => a.cmp(b),
-            (CelType::Null, CelType::Null) => Ordering::Equal,
-            (CelType::Duration(a), CelType::Duration(b)) => a.cmp(b),
-            (CelType::Timestamp(a), CelType::Timestamp(b)) => a.cmp(b),
+            (Value::Int(a), Value::Int(b)) => a.cmp(b),
+            (Value::UInt(a), Value::UInt(b)) => a.cmp(b),
+            (Value::Float(a), Value::Float(b)) => a.partial_cmp(b).unwrap_or(Ordering::Equal),
+            (Value::String(a), Value::String(b)) => a.cmp(b),
+            (Value::Bool(a), Value::Bool(b)) => a.cmp(b),
+            (Value::Null, Value::Null) => Ordering::Equal,
+            (Value::Duration(a), Value::Duration(b)) => a.cmp(b),
+            (Value::Timestamp(a), Value::Timestamp(b)) => a.cmp(b),
             (a, b) => panic!("unable to compare {:?} with {:?}", a, b),
         }
     }
 }
 
-impl From<&CelKey> for CelType {
-    fn from(value: &CelKey) -> Self {
+impl From<&Key> for Value {
+    fn from(value: &Key) -> Self {
         match value {
-            CelKey::Int(v) => CelType::Int(*v),
-            CelKey::Uint(v) => CelType::UInt(*v),
-            CelKey::Bool(v) => CelType::Bool(*v),
-            CelKey::String(v) => CelType::String(v.clone()),
+            Key::Int(v) => Value::Int(*v),
+            Key::Uint(v) => Value::UInt(*v),
+            Key::Bool(v) => Value::Bool(*v),
+            Key::String(v) => Value::String(v.clone()),
         }
     }
 }
 
-impl From<CelKey> for CelType {
-    fn from(value: CelKey) -> Self {
+impl From<Key> for Value {
+    fn from(value: Key) -> Self {
         match value {
-            CelKey::Int(v) => CelType::Int(v),
-            CelKey::Uint(v) => CelType::UInt(v),
-            CelKey::Bool(v) => CelType::Bool(v),
-            CelKey::String(v) => CelType::String(v),
+            Key::Int(v) => Value::Int(v),
+            Key::Uint(v) => Value::UInt(v),
+            Key::Bool(v) => Value::Bool(v),
+            Key::String(v) => Value::String(v),
         }
     }
 }
 
-// Convert Vec<T> to CelType
-impl<T: Into<CelType>> From<Vec<T>> for CelType {
+// Convert Vec<T> to Value
+impl<T: Into<Value>> From<Vec<T>> for Value {
     fn from(v: Vec<T>) -> Self {
-        CelType::List(v.into_iter().map(|v| v.into()).collect::<Vec<_>>().into())
+        Value::List(v.into_iter().map(|v| v.into()).collect::<Vec<_>>().into())
     }
 }
 
-// Convert Vec<u8> to CelType
-impl From<Vec<u8>> for CelType {
+// Convert Vec<u8> to Value
+impl From<Vec<u8>> for Value {
     fn from(v: Vec<u8>) -> Self {
-        CelType::Bytes(v.into())
+        Value::Bytes(v.into())
     }
 }
 
-// Convert String to CelType
-impl From<String> for CelType {
+// Convert String to Value
+impl From<String> for Value {
     fn from(v: String) -> Self {
-        CelType::String(v.into())
+        Value::String(v.into())
     }
 }
 
-impl From<Duration> for CelType {
+impl From<Duration> for Value {
     fn from(v: Duration) -> Self {
-        CelType::Duration(v)
+        Value::Duration(v)
     }
 }
 
-// Convert Option<T> to CelType
-impl<T: Into<CelType>> From<Option<T>> for CelType {
+// Convert Option<T> to Value
+impl<T: Into<Value>> From<Option<T>> for Value {
     fn from(v: Option<T>) -> Self {
         match v {
             Some(v) => v.into(),
-            None => CelType::Null,
+            None => Value::Null,
         }
     }
 }
 
-// Convert HashMap<K, V> to CelType
-impl<K: Into<CelKey>, V: Into<CelType>> From<HashMap<K, V>> for CelType {
+// Convert HashMap<K, V> to Value
+impl<K: Into<Key>, V: Into<Value>> From<HashMap<K, V>> for Value {
     fn from(v: HashMap<K, V>) -> Self {
-        CelType::Map(v.into())
+        Value::Map(v.into())
     }
 }
 
 impl_from!(
-    i32 => CelType::Int,
-    f64 => CelType::Float,
-    bool => CelType::Bool
+    i32 => Value::Int,
+    f64 => Value::Float,
+    bool => Value::Bool
 );
 
 impl From<ExecutionError> for ResolveResult {
@@ -231,21 +231,21 @@ impl From<ExecutionError> for ResolveResult {
     }
 }
 
-pub type ResolveResult = Result<CelType, ExecutionError>;
+pub type ResolveResult = Result<Value, ExecutionError>;
 
-impl From<CelType> for ResolveResult {
-    fn from(value: CelType) -> Self {
+impl From<Value> for ResolveResult {
+    fn from(value: Value) -> Self {
         Ok(value)
     }
 }
 
-impl<'a> CelType {
+impl<'a> Value {
     pub fn resolve_all(expr: &'a [Expression], ctx: &Context) -> ResolveResult {
         let mut res = Vec::with_capacity(expr.len());
         for expr in expr {
-            res.push(CelType::resolve(expr, ctx)?);
+            res.push(Value::resolve(expr, ctx)?);
         }
-        Ok(CelType::List(res.into()))
+        Ok(Value::List(res.into()))
     }
 
     #[inline(always)]
@@ -253,8 +253,8 @@ impl<'a> CelType {
         match expr {
             Expression::Atom(atom) => Ok(atom.into()),
             Expression::Arithmetic(left, op, right) => {
-                let left = CelType::resolve(left, ctx)?;
-                let right = CelType::resolve(right, ctx)?;
+                let left = Value::resolve(left, ctx)?;
+                let right = Value::resolve(right, ctx)?;
 
                 match op {
                     ArithmeticOp::Add => left + right,
@@ -266,8 +266,8 @@ impl<'a> CelType {
                 .into()
             }
             Expression::Relation(left, op, right) => {
-                let left = CelType::resolve(left, ctx)?;
-                let right = CelType::resolve(right, ctx)?;
+                let left = Value::resolve(left, ctx)?;
+                let right = Value::resolve(right, ctx)?;
                 let res = match op {
                     RelationOp::LessThan => left < right,
                     RelationOp::LessThanEq => left <= right,
@@ -276,79 +276,79 @@ impl<'a> CelType {
                     RelationOp::Equals => right.eq(&left),
                     RelationOp::NotEquals => right.ne(&left),
                     RelationOp::In => match (left, right) {
-                        (CelType::String(l), CelType::String(r)) => r.contains(&*l),
-                        (any, CelType::List(v)) => v.contains(&any),
-                        (any, CelType::Map(m)) => m.map.contains_key(&any.try_into().unwrap()),
+                        (Value::String(l), Value::String(r)) => r.contains(&*l),
+                        (any, Value::List(v)) => v.contains(&any),
+                        (any, Value::Map(m)) => m.map.contains_key(&any.try_into().unwrap()),
                         _ => unimplemented!(),
                     },
                 };
-                CelType::Bool(res).into()
+                Value::Bool(res).into()
             }
             Expression::Ternary(cond, left, right) => {
-                let cond = CelType::resolve(cond, ctx)?;
+                let cond = Value::resolve(cond, ctx)?;
                 if cond.to_bool() {
-                    CelType::resolve(left, ctx)
+                    Value::resolve(left, ctx)
                 } else {
-                    CelType::resolve(right, ctx)
+                    Value::resolve(right, ctx)
                 }
             }
             Expression::Or(left, right) => {
-                let left = CelType::resolve(left, ctx)?;
+                let left = Value::resolve(left, ctx)?;
                 if left.to_bool() {
                     left.into()
                 } else {
-                    CelType::resolve(right, ctx)
+                    Value::resolve(right, ctx)
                 }
             }
             Expression::And(left, right) => {
-                let left = CelType::resolve(left, ctx)?;
-                let right = CelType::resolve(right, ctx)?;
-                CelType::Bool(left.to_bool() && right.to_bool()).into()
+                let left = Value::resolve(left, ctx)?;
+                let right = Value::resolve(right, ctx)?;
+                Value::Bool(left.to_bool() && right.to_bool()).into()
             }
             Expression::Unary(op, expr) => {
-                let expr = CelType::resolve(expr, ctx)?;
+                let expr = Value::resolve(expr, ctx)?;
                 match op {
-                    UnaryOp::Not => CelType::Bool(!expr.to_bool()),
-                    UnaryOp::DoubleNot => CelType::Bool(expr.to_bool()),
+                    UnaryOp::Not => Value::Bool(!expr.to_bool()),
+                    UnaryOp::DoubleNot => Value::Bool(expr.to_bool()),
                     UnaryOp::Minus => match expr {
-                        CelType::Int(i) => CelType::Int(-i),
-                        CelType::Float(i) => CelType::Float(-i),
+                        Value::Int(i) => Value::Int(-i),
+                        Value::Float(i) => Value::Float(-i),
                         _ => unimplemented!(),
                     },
                     UnaryOp::DoubleMinus => match expr {
-                        CelType::Int(_) => expr,
-                        CelType::UInt(_) => expr,
-                        CelType::Float(_) => expr,
+                        Value::Int(_) => expr,
+                        Value::UInt(_) => expr,
+                        Value::Float(_) => expr,
                         _ => unimplemented!(),
                     },
                 }
                 .into()
             }
             Expression::Member(left, right) => {
-                let left = CelType::resolve(left, ctx)?;
+                let left = Value::resolve(left, ctx)?;
                 left.member(right, ctx)
             }
             Expression::List(items) => {
                 let list = items
                     .iter()
-                    .map(|i| CelType::resolve(i, ctx))
+                    .map(|i| Value::resolve(i, ctx))
                     .collect::<Result<Vec<_>, _>>()?;
-                CelType::List(list.into()).into()
+                Value::List(list.into()).into()
             }
             Expression::Map(items) => {
                 let mut map = HashMap::default();
                 for (k, v) in items.iter() {
-                    let key = CelType::resolve(k, ctx)?
+                    let key = Value::resolve(k, ctx)?
                         .try_into()
                         .map_err(ExecutionError::UnsupportedKeyType)?;
-                    let value = CelType::resolve(v, ctx)?;
+                    let value = Value::resolve(v, ctx)?;
                     map.insert(key, value);
                 }
-                CelType::Map(CelMap { map: Rc::from(map) }).into()
+                Value::Map(Map { map: Rc::from(map) }).into()
             }
             Expression::Ident(name) => {
                 if ctx.has_function(&***name) {
-                    CelType::Function(name.clone(), None).into()
+                    Value::Function(name.clone(), None).into()
                 } else {
                     ctx.get_variable(&***name)
                 }
@@ -367,15 +367,15 @@ impl<'a> CelType {
     fn member(self, member: &Member, ctx: &Context) -> ResolveResult {
         match member {
             Member::Index(idx) => {
-                let idx = CelType::resolve(idx, ctx)?;
+                let idx = Value::resolve(idx, ctx)?;
                 match (self, idx) {
-                    (CelType::List(items), CelType::Int(idx)) => {
+                    (Value::List(items), Value::Int(idx)) => {
                         items.get(idx as usize).unwrap().clone().into()
                     }
-                    (CelType::String(str), CelType::Int(idx)) => {
+                    (Value::String(str), Value::Int(idx)) => {
                         match str.get(idx as usize..(idx + 1) as usize) {
-                            None => CelType::Null,
-                            Some(str) => CelType::String(str.to_string().into()),
+                            None => Value::Null,
+                            Some(str) => Value::String(str.to_string().into()),
                         }
                         .into()
                     }
@@ -387,7 +387,7 @@ impl<'a> CelType {
                 // This will always either be because we're trying to access
                 // a property on self, or a method on self.
                 let child = match self {
-                    CelType::Map(ref m) => m.map.get(&name.clone().into()).cloned(),
+                    Value::Map(ref m) => m.map.get(&name.clone().into()).cloned(),
                     _ => None,
                 };
 
@@ -397,25 +397,25 @@ impl<'a> CelType {
                 match (child.is_some(), ctx.has_function(&***name)) {
                     (false, false) => NoSuchKey(name.clone()).into(),
                     (true, true) | (true, false) => child.unwrap().into(),
-                    (false, true) => CelType::Function(name.clone(), Some(self.into())).into(),
+                    (false, true) => Value::Function(name.clone(), Some(self.into())).into(),
                 }
             }
             Member::FunctionCall(args) => {
-                if let CelType::Function(name, target) = self {
+                if let Value::Function(name, target) = self {
                     let func = ctx.get_function(&**name).unwrap();
                     match target {
                         None => {
                             if args.is_empty() {
                                 return Err(ExecutionError::MissingArgumentOrTarget);
                             }
-                            func(FunctionCtx {
+                            func(FunctionContext {
                                 name,
                                 target: None,
                                 ptx: ctx,
                                 args,
                             })
                         }
-                        Some(t) => func(FunctionCtx {
+                        Some(t) => func(FunctionContext {
                             name,
                             target: Some(&*t),
                             ptx: ctx,
@@ -423,7 +423,7 @@ impl<'a> CelType {
                         }),
                     }
                 } else {
-                    unreachable!("FunctionCall without CelType::Function - {:?}", self)
+                    unreachable!("FunctionCall without Value::Function - {:?}", self)
                 }
             }
         }
@@ -432,64 +432,64 @@ impl<'a> CelType {
     #[inline(always)]
     fn to_bool(&self) -> bool {
         match self {
-            CelType::List(v) => !v.is_empty(),
-            CelType::Map(v) => !v.map.is_empty(),
-            CelType::Int(v) => *v != 0,
-            CelType::UInt(v) => *v != 0,
-            CelType::Float(v) => *v != 0.0,
-            CelType::String(v) => !v.is_empty(),
-            CelType::Bytes(v) => !v.is_empty(),
-            CelType::Bool(v) => *v,
-            CelType::Null => false,
-            CelType::Duration(v) => v.num_nanoseconds().map(|n| n != 0).unwrap_or(false),
-            CelType::Timestamp(v) => v.timestamp_nanos() > 0,
-            CelType::Function(_, _) => false,
+            Value::List(v) => !v.is_empty(),
+            Value::Map(v) => !v.map.is_empty(),
+            Value::Int(v) => *v != 0,
+            Value::UInt(v) => *v != 0,
+            Value::Float(v) => *v != 0.0,
+            Value::String(v) => !v.is_empty(),
+            Value::Bytes(v) => !v.is_empty(),
+            Value::Bool(v) => *v,
+            Value::Null => false,
+            Value::Duration(v) => v.num_nanoseconds().map(|n| n != 0).unwrap_or(false),
+            Value::Timestamp(v) => v.timestamp_nanos() > 0,
+            Value::Function(_, _) => false,
         }
     }
 }
 
-impl From<&Atom> for CelType {
+impl From<&Atom> for Value {
     #[inline(always)]
     fn from(atom: &Atom) -> Self {
         match atom {
-            Atom::Int(v) => CelType::Int(*v),
-            Atom::UInt(v) => CelType::UInt(*v),
-            Atom::Float(v) => CelType::Float(*v),
-            Atom::String(v) => CelType::String(v.clone()),
-            Atom::Bytes(v) => CelType::Bytes(v.clone()),
-            Atom::Bool(v) => CelType::Bool(*v),
-            Atom::Null => CelType::Null,
+            Atom::Int(v) => Value::Int(*v),
+            Atom::UInt(v) => Value::UInt(*v),
+            Atom::Float(v) => Value::Float(*v),
+            Atom::String(v) => Value::String(v.clone()),
+            Atom::Bytes(v) => Value::Bytes(v.clone()),
+            Atom::Bool(v) => Value::Bool(*v),
+            Atom::Null => Value::Null,
         }
     }
 }
 
-impl ops::Add<CelType> for CelType {
-    type Output = CelType;
+impl ops::Add<Value> for Value {
+    type Output = Value;
 
     #[inline(always)]
-    fn add(self, rhs: CelType) -> Self::Output {
+    fn add(self, rhs: Value) -> Self::Output {
         match (self, rhs) {
-            (CelType::Int(l), CelType::Int(r)) => CelType::Int(l + r),
-            (CelType::UInt(l), CelType::UInt(r)) => CelType::UInt(l + r),
+            (Value::Int(l), Value::Int(r)) => Value::Int(l + r),
+            (Value::UInt(l), Value::UInt(r)) => Value::UInt(l + r),
 
             // Float matrix
-            (CelType::Float(l), CelType::Float(r)) => CelType::Float(l + r),
-            (CelType::Int(l), CelType::Float(r)) => CelType::Float(l as f64 + r),
-            (CelType::Float(l), CelType::Int(r)) => CelType::Float(l + r as f64),
-            (CelType::UInt(l), CelType::Float(r)) => CelType::Float(l as f64 + r),
-            (CelType::Float(l), CelType::UInt(r)) => CelType::Float(l + r as f64),
+            (Value::Float(l), Value::Float(r)) => Value::Float(l + r),
+            (Value::Int(l), Value::Float(r)) => Value::Float(l as f64 + r),
+            (Value::Float(l), Value::Int(r)) => Value::Float(l + r as f64),
+            (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 + r),
+            (Value::Float(l), Value::UInt(r)) => Value::Float(l + r as f64),
 
-            (CelType::List(l), CelType::List(r)) => {
-                CelType::List(l.iter().chain(r.iter()).cloned().collect::<Vec<_>>().into())
+            (Value::List(l), Value::List(r)) => {
+                Value::List(l.iter().chain(r.iter()).cloned().collect::<Vec<_>>().into())
             }
-            (CelType::String(l), CelType::String(r)) => {
+            (Value::String(l), Value::String(r)) => {
                 let mut new = String::with_capacity(l.len() + r.len());
                 new.push_str(&l);
                 new.push_str(&r);
-                CelType::String(new.into())
+                Value::String(new.into())
             }
             // Merge two maps should overwrite keys in the left map with the right map
-            (CelType::Map(l), CelType::Map(r)) => {
+            (Value::Map(l), Value::Map(r)) => {
                 let mut new = HashMap::default();
                 for (k, v) in l.map.iter() {
                     new.insert(k.clone(), v.clone());
@@ -497,97 +497,97 @@ impl ops::Add<CelType> for CelType {
                 for (k, v) in r.map.iter() {
                     new.insert(k.clone(), v.clone());
                 }
-                CelType::Map(CelMap { map: Rc::new(new) })
+                Value::Map(Map { map: Rc::new(new) })
             }
-            (CelType::Duration(l), CelType::Duration(r)) => CelType::Duration(l + r),
-            (CelType::Timestamp(l), CelType::Duration(r)) => CelType::Timestamp(l + r),
-            (CelType::Duration(l), CelType::Timestamp(r)) => CelType::Timestamp(r + l),
+            (Value::Duration(l), Value::Duration(r)) => Value::Duration(l + r),
+            (Value::Timestamp(l), Value::Duration(r)) => Value::Timestamp(l + r),
+            (Value::Duration(l), Value::Timestamp(r)) => Value::Timestamp(r + l),
             _ => unimplemented!(),
         }
     }
 }
 
-impl ops::Sub<CelType> for CelType {
-    type Output = CelType;
+impl ops::Sub<Value> for Value {
+    type Output = Value;
 
     #[inline(always)]
-    fn sub(self, rhs: CelType) -> Self::Output {
+    fn sub(self, rhs: Value) -> Self::Output {
         match (self, rhs) {
-            (CelType::Int(l), CelType::Int(r)) => CelType::Int(l - r),
-            (CelType::UInt(l), CelType::UInt(r)) => CelType::UInt(l - r),
+            (Value::Int(l), Value::Int(r)) => Value::Int(l - r),
+            (Value::UInt(l), Value::UInt(r)) => Value::UInt(l - r),
 
             // Float matrix
-            (CelType::Float(l), CelType::Float(r)) => CelType::Float(l - r),
-            (CelType::Int(l), CelType::Float(r)) => CelType::Float(l as f64 - r),
-            (CelType::Float(l), CelType::Int(r)) => CelType::Float(l - r as f64),
-            (CelType::UInt(l), CelType::Float(r)) => CelType::Float(l as f64 - r),
-            (CelType::Float(l), CelType::UInt(r)) => CelType::Float(l - r as f64),
+            (Value::Float(l), Value::Float(r)) => Value::Float(l - r),
+            (Value::Int(l), Value::Float(r)) => Value::Float(l as f64 - r),
+            (Value::Float(l), Value::Int(r)) => Value::Float(l - r as f64),
+            (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 - r),
+            (Value::Float(l), Value::UInt(r)) => Value::Float(l - r as f64),
             // todo: implement checked sub for these over-flowable operations
-            (CelType::Duration(l), CelType::Duration(r)) => CelType::Duration(l - r),
-            (CelType::Timestamp(l), CelType::Duration(r)) => CelType::Timestamp(l - r),
-            (CelType::Timestamp(l), CelType::Timestamp(r)) => CelType::Duration(l - r),
+            (Value::Duration(l), Value::Duration(r)) => Value::Duration(l - r),
+            (Value::Timestamp(l), Value::Duration(r)) => Value::Timestamp(l - r),
+            (Value::Timestamp(l), Value::Timestamp(r)) => Value::Duration(l - r),
             _ => unimplemented!(),
         }
     }
 }
 
-impl ops::Div<CelType> for CelType {
-    type Output = CelType;
+impl ops::Div<Value> for Value {
+    type Output = Value;
 
     #[inline(always)]
-    fn div(self, rhs: CelType) -> Self::Output {
+    fn div(self, rhs: Value) -> Self::Output {
         match (self, rhs) {
-            (CelType::Int(l), CelType::Int(r)) => CelType::Int(l / r),
-            (CelType::UInt(l), CelType::UInt(r)) => CelType::UInt(l / r),
+            (Value::Int(l), Value::Int(r)) => Value::Int(l / r),
+            (Value::UInt(l), Value::UInt(r)) => Value::UInt(l / r),
 
             // Float matrix
-            (CelType::Float(l), CelType::Float(r)) => CelType::Float(l / r),
-            (CelType::Int(l), CelType::Float(r)) => CelType::Float(l as f64 / r),
-            (CelType::Float(l), CelType::Int(r)) => CelType::Float(l / r as f64),
-            (CelType::UInt(l), CelType::Float(r)) => CelType::Float(l as f64 / r),
-            (CelType::Float(l), CelType::UInt(r)) => CelType::Float(l / r as f64),
-
-            _ => unimplemented!(),
-        }
-    }
-}
-
-impl ops::Mul<CelType> for CelType {
-    type Output = CelType;
-
-    #[inline(always)]
-    fn mul(self, rhs: CelType) -> Self::Output {
-        match (self, rhs) {
-            (CelType::Int(l), CelType::Int(r)) => CelType::Int(l * r),
-            (CelType::UInt(l), CelType::UInt(r)) => CelType::UInt(l * r),
-
-            // Float matrix
-            (CelType::Float(l), CelType::Float(r)) => CelType::Float(l * r),
-            (CelType::Int(l), CelType::Float(r)) => CelType::Float(l as f64 * r),
-            (CelType::Float(l), CelType::Int(r)) => CelType::Float(l * r as f64),
-            (CelType::UInt(l), CelType::Float(r)) => CelType::Float(l as f64 * r),
-            (CelType::Float(l), CelType::UInt(r)) => CelType::Float(l * r as f64),
+            (Value::Float(l), Value::Float(r)) => Value::Float(l / r),
+            (Value::Int(l), Value::Float(r)) => Value::Float(l as f64 / r),
+            (Value::Float(l), Value::Int(r)) => Value::Float(l / r as f64),
+            (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 / r),
+            (Value::Float(l), Value::UInt(r)) => Value::Float(l / r as f64),
 
             _ => unimplemented!(),
         }
     }
 }
 
-impl ops::Rem<CelType> for CelType {
-    type Output = CelType;
+impl ops::Mul<Value> for Value {
+    type Output = Value;
 
     #[inline(always)]
-    fn rem(self, rhs: CelType) -> Self::Output {
+    fn mul(self, rhs: Value) -> Self::Output {
         match (self, rhs) {
-            (CelType::Int(l), CelType::Int(r)) => CelType::Int(l % r),
-            (CelType::UInt(l), CelType::UInt(r)) => CelType::UInt(l % r),
+            (Value::Int(l), Value::Int(r)) => Value::Int(l * r),
+            (Value::UInt(l), Value::UInt(r)) => Value::UInt(l * r),
 
             // Float matrix
-            (CelType::Float(l), CelType::Float(r)) => CelType::Float(l % r),
-            (CelType::Int(l), CelType::Float(r)) => CelType::Float(l as f64 % r),
-            (CelType::Float(l), CelType::Int(r)) => CelType::Float(l % r as f64),
-            (CelType::UInt(l), CelType::Float(r)) => CelType::Float(l as f64 % r),
-            (CelType::Float(l), CelType::UInt(r)) => CelType::Float(l % r as f64),
+            (Value::Float(l), Value::Float(r)) => Value::Float(l * r),
+            (Value::Int(l), Value::Float(r)) => Value::Float(l as f64 * r),
+            (Value::Float(l), Value::Int(r)) => Value::Float(l * r as f64),
+            (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 * r),
+            (Value::Float(l), Value::UInt(r)) => Value::Float(l * r as f64),
+
+            _ => unimplemented!(),
+        }
+    }
+}
+
+impl ops::Rem<Value> for Value {
+    type Output = Value;
+
+    #[inline(always)]
+    fn rem(self, rhs: Value) -> Self::Output {
+        match (self, rhs) {
+            (Value::Int(l), Value::Int(r)) => Value::Int(l % r),
+            (Value::UInt(l), Value::UInt(r)) => Value::UInt(l % r),
+
+            // Float matrix
+            (Value::Float(l), Value::Float(r)) => Value::Float(l % r),
+            (Value::Int(l), Value::Float(r)) => Value::Float(l as f64 % r),
+            (Value::Float(l), Value::Int(r)) => Value::Float(l % r as f64),
+            (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 % r),
+            (Value::Float(l), Value::UInt(r)) => Value::Float(l % r as f64),
 
             _ => unimplemented!(),
         }
@@ -596,11 +596,11 @@ impl ops::Rem<CelType> for CelType {
 
 #[cfg(test)]
 mod tests {
-    use crate::objects::CelType;
+    use crate::objects::Value;
 
     #[test]
     fn test_from_primitives() {
-        let value: CelType = 1i32.into();
-        assert_eq!(value, CelType::Int(1));
+        let value: Value = 1i32.into();
+        assert_eq!(value, Value::Int(1));
     }
 }

@@ -1,6 +1,6 @@
 use crate::context::Context;
 use crate::duration::{format_duration, parse_duration};
-use crate::objects::CelType;
+use crate::objects::Value;
 use crate::{ExecutionError, ResolveResult};
 use cel_parser::Expression;
 use chrono::{DateTime, Duration, FixedOffset};
@@ -8,29 +8,31 @@ use std::convert::TryInto;
 use std::mem;
 use std::rc::Rc;
 
+type Result<T> = std::result::Result<T, ExecutionError>;
+
 /// FunctionCtx is a context object passed to functions when they are called.
 /// It contains references ot the target object (if the function is called as
 /// a method), the program context ([`Context`]) which gives functions access
 /// to variables, and the arguments to the function call.
-pub struct FunctionCtx<'t, 'c, 'e> {
+pub struct FunctionContext<'t, 'c, 'e> {
     pub name: Rc<String>,
-    pub target: Option<&'t CelType>,
+    pub target: Option<&'t Value>,
     pub ptx: &'c Context<'c>,
     pub args: &'e [Expression],
 }
 
-impl<'t, 'c, 'e> FunctionCtx<'t, 'c, 'e> {
+impl<'t, 'c, 'e> FunctionContext<'t, 'c, 'e> {
     /// Returns a reference to the target object if the function is being called
     /// as a method, or it returns an error if the function is not being called
     /// as a method.
-    pub fn target(&self) -> Result<&'t CelType, ExecutionError> {
+    pub fn target(&self) -> Result<&'t Value> {
         self.target
             .ok_or(ExecutionError::missing_argument_or_target())
     }
 
     /// Checks that the function is not being called as a method, and returns
     /// an error if it is.
-    pub fn check_no_method(&self) -> Result<(), ExecutionError> {
+    pub fn check_no_method(&self) -> Result<()> {
         if self.target.is_some() {
             return Err(ExecutionError::not_supported_as_method(
                 self.name.as_str(),
@@ -41,25 +43,25 @@ impl<'t, 'c, 'e> FunctionCtx<'t, 'c, 'e> {
     }
 
     /// Resolves the given expression using the program's [`Context`].
-    pub fn resolve(&self, expr: &'e Expression) -> Result<CelType, ExecutionError> {
+    pub fn resolve(&self, expr: &'e Expression) -> Result<Value> {
         self.ptx.resolve(expr)
     }
 
     /// Resolves all of the given expressions using the program's [`Context`].
-    /// The resolved values are returned as a [`CelType::List`].
+    /// The resolved values are returned as a [`Value::List`].
     pub fn resolve_all(&self, exprs: &[Expression]) -> ResolveResult {
         self.ptx.resolve_all(exprs)
     }
 
     /// Resolves the argument at the given index. An error is returned if the
     /// argument does not exist.
-    pub fn resolve_arg(&self, index: usize) -> Result<CelType, ExecutionError> {
+    pub fn resolve_arg(&self, index: usize) -> Result<Value> {
         self.ptx.resolve(self.arg(index)?)
     }
 
     /// Returns the argument at the given index. An error is returned if the
     /// argument does not exist.
-    pub fn arg(&self, index: usize) -> Result<&'e Expression, ExecutionError> {
+    pub fn arg(&self, index: usize) -> Result<&'e Expression> {
         self.args
             .get(index)
             .ok_or(ExecutionError::invalid_argument_count(
@@ -71,7 +73,7 @@ impl<'t, 'c, 'e> FunctionCtx<'t, 'c, 'e> {
     /// Returns the argument at the given index as a identifier. An error
     /// is returned if the argument does not exist, or if it is not an
     /// identifier.
-    pub fn arg_ident(&self, index: usize) -> Result<Rc<String>, ExecutionError> {
+    pub fn arg_ident(&self, index: usize) -> Result<Rc<String>> {
         let arg = self.arg(index)?;
         match arg {
             Expression::Ident(ident) => Ok(ident.clone()),
@@ -83,7 +85,7 @@ impl<'t, 'c, 'e> FunctionCtx<'t, 'c, 'e> {
     }
 
     /// Returns an execution error for the currently execution function.
-    pub fn error(&self, message: &str) -> Result<CelType, ExecutionError> {
+    pub fn error(&self, message: &str) -> Result<Value> {
         Err(ExecutionError::function_error(self.name.as_str(), message))
     }
 }
@@ -92,37 +94,37 @@ impl<'t, 'c, 'e> FunctionCtx<'t, 'c, 'e> {
 /// the function is called. If called as a method, the target will be used. If called
 /// as a function, the first argument will be used.
 ///
-/// The following [`CelType`] variants are supported:
-/// * [`CelType::List`]
-/// * [`CelType::Map`]
-/// * [`CelType::String`]
-/// * [`CelType::Bytes`]
+/// The following [`Value`] variants are supported:
+/// * [`Value::List`]
+/// * [`Value::Map`]
+/// * [`Value::String`]
+/// * [`Value::Bytes`]
 ///
 /// # Examples
 /// ```skip
 /// size([1, 2, 3]) == 3
 /// ```
-pub fn size(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
+pub fn size(ftx: FunctionContext) -> Result<Value> {
     ftx.check_no_method()?;
     let arg = ftx.arg(0)?;
     let size = match ftx.resolve(arg)? {
-        CelType::List(l) => l.len(),
-        CelType::Map(m) => m.map.len(),
-        CelType::String(s) => s.len(),
-        CelType::Bytes(b) => b.len(),
+        Value::List(l) => l.len(),
+        Value::Map(m) => m.map.len(),
+        Value::String(s) => s.len(),
+        Value::Bytes(b) => b.len(),
         value => return ftx.error(&format!("cannot determine size of {:?}", value)),
     };
-    CelType::Int(size as i32).into()
+    Value::Int(size as i32).into()
 }
 
 /// Returns true if the target contains the provided argument. The actual behavior
 /// depends mainly on the type of the target.
 ///
-/// The following [`CelType`] variants are supported:
-/// * [`CelType::List`] - Returns true if the list contains the provided value.
-/// * [`CelType::Map`] - Returns true if the map contains the provided key.
-/// * [`CelType::String`] - Returns true if the string contains the provided substring.
-/// * [`CelType::Bytes`] - Returns true if the bytes contain the provided byte.
+/// The following [`Value`] variants are supported:
+/// * [`Value::List`] - Returns true if the list contains the provided value.
+/// * [`Value::Map`] - Returns true if the map contains the provided key.
+/// * [`Value::String`] - Returns true if the string contains the provided substring.
+/// * [`Value::Bytes`] - Returns true if the bytes contain the provided byte.
 ///
 /// # Example
 ///
@@ -145,30 +147,27 @@ pub fn size(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
 /// ```cel
 /// b"abc".contains(b"c") == true
 /// ```
-pub fn contains(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
+pub fn contains(ftx: FunctionContext) -> Result<Value> {
     let target = ftx.target()?;
     let arg = ftx.resolve_arg(0)?;
     Ok(match target {
-        CelType::List(v) => v.contains(&arg),
-        CelType::Map(v) => v
+        Value::List(v) => v.contains(&arg),
+        Value::Map(v) => v
             .map
             .contains_key(&arg.try_into().map_err(ExecutionError::UnsupportedKeyType)?),
-        CelType::String(s) => {
-            if let CelType::String(arg) = arg {
+        Value::String(s) => {
+            if let Value::String(arg) = arg {
                 s.contains(arg.as_str())
             } else {
                 false
             }
         }
-        CelType::Bytes(b) => {
-            if let CelType::Bytes(arg) = arg {
+        Value::Bytes(b) => {
+            if let Value::Bytes(arg) = arg {
                 // When search raw bytes, we can only search for a single byte right now.
                 let length = arg.len();
                 if length > 1 {
-                    return Err(ExecutionError::function_error(
-                        "contains",
-                        &format!("expected 1 byte, found {}", length),
-                    ))?;
+                    return ftx.error(&format!("expected 1 byte, found {}", length));
                 }
                 arg.as_slice()
                     .first()
@@ -192,19 +191,27 @@ pub fn contains(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
 // * `uint` - Returns the unsigned integer value of the target.
 // * `float` - Returns the float value of the target.
 // * `bytes` - Converts bytes to string using from_utf8_lossy.
-pub fn string(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
+pub fn string(ftx: FunctionContext) -> Result<Value> {
     Ok(match ftx.target()? {
-        CelType::String(v) => CelType::String(v.clone()),
-        CelType::Timestamp(t) => CelType::String(t.to_rfc3339().into()),
-        CelType::Duration(v) => CelType::String(format_duration(v).into()),
-        CelType::Int(v) => CelType::String(v.to_string().into()),
-        CelType::UInt(v) => CelType::String(v.to_string().into()),
-        CelType::Float(v) => CelType::String(v.to_string().into()),
-        CelType::Bytes(v) => CelType::String(Rc::new(String::from_utf8_lossy(v.as_slice()).into())),
-        v => Err(ExecutionError::function_error(
-            "string",
-            &format!("cannot convert {:?} to string", v),
-        ))?,
+        Value::String(v) => Value::String(v.clone()),
+        Value::Timestamp(t) => Value::String(t.to_rfc3339().into()),
+        Value::Duration(v) => Value::String(format_duration(v).into()),
+        Value::Int(v) => Value::String(v.to_string().into()),
+        Value::UInt(v) => Value::String(v.to_string().into()),
+        Value::Float(v) => Value::String(v.to_string().into()),
+        Value::Bytes(v) => Value::String(Rc::new(String::from_utf8_lossy(v.as_slice()).into())),
+        v => ftx.error(&format!("cannot convert {:?} to string", v))?,
+    })
+}
+
+// Performs a type conversion on the target.
+pub fn double(ftx: FunctionContext) -> Result<Value> {
+    Ok(match ftx.target()? {
+        Value::String(v) => v.parse::<f64>().map(Value::Float).unwrap(),
+        Value::Float(v) => Value::Float(*v),
+        Value::Int(v) => Value::Float(*v as f64),
+        Value::UInt(v) => Value::Float(*v as f64),
+        v => ftx.error(&format!("cannot convert {:?} to double", v))?,
     })
 }
 
@@ -214,11 +221,11 @@ pub fn string(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
 /// ```cel
 /// "abc".startsWith("a") == true
 /// ```
-pub fn starts_with(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
+pub fn starts_with(ftx: FunctionContext) -> Result<Value> {
     let target = ftx.target()?;
     Ok(match target {
-        CelType::String(s) => {
-            if let CelType::String(arg) = ftx.resolve_arg(0)? {
+        Value::String(s) => {
+            if let Value::String(arg) = ftx.resolve_arg(0)? {
                 s.starts_with(arg.as_str())
             } else {
                 false
@@ -241,14 +248,14 @@ pub fn starts_with(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
 /// ```cel
 /// has(foo.bar.baz)
 /// ```
-pub fn has(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
+pub fn has(ftx: FunctionContext) -> Result<Value> {
     ftx.check_no_method()?;
     // We determine if a type has a property by attempting to resolve it.
     // If we get a NoSuchKey error, then we know the property does not exist
     match ftx.resolve_arg(0) {
-        Ok(_) => CelType::Bool(true),
+        Ok(_) => Value::Bool(true),
         Err(err) => match err {
-            ExecutionError::NoSuchKey(_) => CelType::Bool(false),
+            ExecutionError::NoSuchKey(_) => Value::Bool(false),
             _ => return Err(err),
         },
     }
@@ -263,11 +270,11 @@ pub fn has(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
 /// ```cel
 /// [1, 2, 3].map(x, x * 2) == [2, 4, 6]
 /// ```
-pub fn map(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
+pub fn map(ftx: FunctionContext) -> Result<Value> {
     let ident = ftx.arg_ident(0)?;
     let expr = ftx.arg(1)?;
     match ftx.target()? {
-        CelType::List(items) => {
+        Value::List(items) => {
             let mut values = Vec::with_capacity(items.len());
             let mut ptx = ftx.ptx.clone();
             for item in items.iter() {
@@ -275,7 +282,7 @@ pub fn map(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
                 let value = ptx.resolve(expr)?;
                 values.push(value);
             }
-            CelType::List(Rc::new(values))
+            Value::List(Rc::new(values))
         }
         _ => ftx.error("only lists are supported")?,
     }
@@ -293,20 +300,20 @@ pub fn map(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
 /// ```cel
 /// [1, 2, 3].filter(x, x > 1) == [2, 3]
 /// ```
-pub fn filter(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
+pub fn filter(ftx: FunctionContext) -> Result<Value> {
     let ident = ftx.arg_ident(0)?;
     let expr = ftx.arg(1)?;
     match ftx.target()? {
-        CelType::List(items) => {
+        Value::List(items) => {
             let mut values = Vec::with_capacity(items.len());
             let mut ptx = ftx.ptx.clone();
             for item in items.iter() {
                 ptx.add_variable(&**ident, item.clone());
-                if let CelType::Bool(true) = ptx.resolve(expr)? {
+                if let Value::Bool(true) = ptx.resolve(expr)? {
                     values.push(item.clone());
                 }
             }
-            CelType::List(Rc::new(values))
+            Value::List(Rc::new(values))
         }
         _ => ftx.error("only lists are supported")?,
     }
@@ -325,36 +332,36 @@ pub fn filter(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
 /// [1, 2, 3].all(x, x > 0) == true
 /// [{1:true, 2:true, 3:false}].all(x, x > 0) == true
 /// ```
-pub fn all(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
+pub fn all(ftx: FunctionContext) -> Result<Value> {
     let ident = ftx.arg_ident(0)?;
     let expr = ftx.arg(1)?;
     match ftx.target()? {
-        CelType::List(items) => {
+        Value::List(items) => {
             let mut ptx = ftx.ptx.clone();
             for item in items.iter() {
                 ptx.add_variable(&**ident, item.clone());
-                if let CelType::Bool(false) = ptx.resolve(expr)? {
-                    return Ok(CelType::Bool(false));
+                if let Value::Bool(false) = ptx.resolve(expr)? {
+                    return Ok(Value::Bool(false));
                 }
             }
-            return Ok(CelType::Bool(true));
+            return Ok(Value::Bool(true));
         }
-        CelType::Map(value) => {
+        Value::Map(value) => {
             let mut ptx = ftx.ptx.clone();
             for key in value.map.keys() {
                 ptx.add_variable(&**ident, key.clone());
-                if let CelType::Bool(false) = ptx.resolve(expr)? {
-                    return Ok(CelType::Bool(false));
+                if let Value::Bool(false) = ptx.resolve(expr)? {
+                    return Ok(Value::Bool(false));
                 }
             }
-            return Ok(CelType::Bool(true));
+            return Ok(Value::Bool(true));
         }
         _ => ftx.error("only lists are supported")?,
     }
     .into()
 }
 
-/// Duration parses the provided argument into a [`CelType::Duration`] value.
+/// Duration parses the provided argument into a [`Value::Duration`] value.
 /// The argument must be string, and must be in the format of a duration. See
 /// the [`parse_duration`] documentation for more information on the supported
 /// formats.
@@ -368,29 +375,32 @@ pub fn all(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
 /// - `1.5ms` parses as 1 millisecond and 500 microseconds
 /// - `1ns` parses as 1 nanosecond
 /// - `1.5ns` parses as 1 nanosecond (sub-nanosecond durations not supported)
-pub fn duration(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
+pub fn duration(ftx: FunctionContext) -> Result<Value> {
     ftx.check_no_method()?;
     let value = ftx.resolve_arg(0)?;
     match value {
-        CelType::String(v) => CelType::Duration(_duration(v.as_str())?),
+        Value::String(v) => Value::Duration(_duration(v.as_str())?),
         _ => return Err(ExecutionError::unsupported_target_type(value)),
     }
     .into()
 }
 
-pub fn timestamp(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
+pub fn timestamp(ftx: FunctionContext) -> Result<Value> {
     ftx.check_no_method()?;
     let value = ftx.resolve(ftx.arg(0)?)?;
     match value {
-        CelType::String(v) => CelType::Timestamp(_timestamp(v.as_str())?),
+        Value::String(v) => Value::Timestamp(
+            DateTime::parse_from_rfc3339(v.as_str())
+                .map_err(|e| ftx.error(e.to_string().as_str()))?,
+        ),
         _ => return Err(ExecutionError::unsupported_target_type(value)),
     }
     .into()
 }
 
-pub fn max(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
+pub fn max(ftx: FunctionContext) -> Result<Value> {
     match ftx.resolve_all(ftx.args)? {
-        CelType::List(items) => {
+        Value::List(items) => {
             if items.is_empty() {
                 return Err(ExecutionError::function_error("max", "missing arguments"));
             }
@@ -409,7 +419,7 @@ pub fn max(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
                 .max_by(|a, b| a.cmp(b))
                 .cloned()
                 .cloned()
-                .unwrap_or(CelType::Null)
+                .unwrap_or(Value::Null)
                 .into()
         }
         _ => ftx.error("only lists are supported"),
@@ -418,22 +428,19 @@ pub fn max(ftx: FunctionCtx) -> Result<CelType, ExecutionError> {
 
 /// A wrapper around [`parse_duration`] that converts errors into [`ExecutionError`].
 /// and only returns the duration, rather than returning the remaining input.
-fn _duration(i: &str) -> Result<Duration, ExecutionError> {
+fn _duration(i: &str) -> Result<Duration> {
     let (_, duration) = parse_duration(i)
         .map_err(|e| ExecutionError::function_error("duration", &e.to_string()))?;
     Ok(duration)
 }
 
-fn _timestamp(i: &str) -> Result<DateTime<FixedOffset>, ExecutionError> {
+fn _timestamp(i: &str) -> Result<DateTime<FixedOffset>> {
     DateTime::parse_from_rfc3339(i)
         .map_err(|e| ExecutionError::function_error("timestamp", &e.to_string()))
 }
 
-fn is_numeric(target: &&CelType) -> bool {
-    matches!(
-        target,
-        CelType::Int(_) | CelType::UInt(_) | CelType::Float(_)
-    )
+fn is_numeric(target: &&Value) -> bool {
+    matches!(target, Value::Int(_) | Value::UInt(_) | Value::Float(_))
 }
 
 #[cfg(test)]
@@ -448,7 +455,7 @@ mod tests {
 
     #[test]
     fn test_size() {
-        vec![
+        [
             ("size of list", "size([1, 2, 3]) == 3"),
             ("size of map", "size({'a': 1, 'b': 2, 'c': 3}) == 3"),
             ("size of string", "size('foo') == 3"),
@@ -476,7 +483,7 @@ mod tests {
 
     #[test]
     fn test_map() {
-        vec![
+        [
             ("map list", "[1, 2, 3].map(x, x * 2) == [2, 4, 6]"),
             ("map list 2", "[1, 2, 3].map(y, y + 1) == [2, 3, 4]"),
             (
@@ -490,14 +497,14 @@ mod tests {
 
     #[test]
     fn test_filter() {
-        vec![("filter list", "[1, 2, 3].filter(x, x > 2) == [3]")]
+        [("filter list", "[1, 2, 3].filter(x, x > 2) == [3]")]
             .iter()
             .for_each(assert_script);
     }
 
     #[test]
     fn test_all() {
-        vec![
+        [
             ("all list #1", "[0, 1, 2].all(x, x >= 0)"),
             ("all list #2", "[0, 1, 2].all(x, x > 0) == false"),
             ("all map", "{0: 0, 1:1, 2:2}.all(x, x >= 0) == true"),
@@ -508,7 +515,7 @@ mod tests {
 
     #[test]
     fn test_max() {
-        vec![
+        [
             ("max single", "max(1) == 1"),
             ("max multiple", "max(1, 2, 3) == 3"),
             ("max negative", "max(-1, 0) == 0"),
@@ -520,7 +527,7 @@ mod tests {
 
     #[test]
     fn test_duration() {
-        vec![
+        [
             ("duration equal 1", "duration('1s') == duration('1000ms')"),
             ("duration equal 2", "duration('1m') == duration('60s')"),
             ("duration equal 3", "duration('1h') == duration('60m')"),
@@ -541,7 +548,7 @@ mod tests {
 
     #[test]
     fn test_starts_with() {
-        vec![
+        [
             ("starts with true", "'foobar'.startsWith('foo') == true"),
             ("starts with false", "'foobar'.startsWith('bar') == false"),
         ]
@@ -551,8 +558,7 @@ mod tests {
 
     #[test]
     fn test_timestamp() {
-        vec![
-            (
+        [(
                 "comparison",
                 "timestamp('2023-05-29T00:00:00Z') > timestamp('2023-05-28T00:00:00Z')",
             ),
@@ -575,15 +581,14 @@ mod tests {
             (
                 "timestamp string",
                 "timestamp('2023-05-28T00:00:00Z').string() == '2023-05-28T00:00:00+00:00'",
-            ),
-        ]
+            )]
         .iter()
         .for_each(assert_script);
     }
 
     #[test]
     fn test_string() {
-        vec![
+        [
             ("duration", "duration('1h30m').string() == '1h30m0s'"),
             (
                 "timestamp",
@@ -593,6 +598,17 @@ mod tests {
             ("int", "10.string() == '10'"),
             ("float", "10.5.string() == '10.5'"),
             ("bytes", "b'foo'.string() == 'foo'"),
+        ]
+        .iter()
+        .for_each(assert_script);
+    }
+
+    #[test]
+    fn test_double() {
+        [
+            ("string", "'10'.double() == 10.0"),
+            ("int", "10.double() == 10.0"),
+            ("double", "10.0.double() == 10.0"),
         ]
         .iter()
         .for_each(assert_script);
