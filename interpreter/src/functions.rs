@@ -391,7 +391,7 @@ pub fn timestamp(ftx: FunctionContext) -> Result<Value> {
     match value {
         Value::String(v) => Value::Timestamp(
             DateTime::parse_from_rfc3339(v.as_str())
-                .map_err(|e| ftx.error(e.to_string().as_str()))?,
+                .map_err(|e| ftx.error(e.to_string().as_str()).err().unwrap())?,
         ),
         _ => return Err(ExecutionError::unsupported_target_type(value)),
     }
