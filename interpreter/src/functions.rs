@@ -1,7 +1,7 @@
 use crate::context::Context;
 use crate::duration::{format_duration, parse_duration};
 use crate::objects::Value;
-use crate::{ExecutionError, ResolveResult};
+use crate::{Argument, Arguments, ExecutionError, Resolver};
 use cel_parser::Expression;
 use chrono::{DateTime, Duration, FixedOffset};
 use std::convert::TryInto;
@@ -25,9 +25,14 @@ impl<'t, 'c, 'e> FunctionContext<'t, 'c, 'e> {
     /// Returns a reference to the target object if the function is being called
     /// as a method, or it returns an error if the function is not being called
     /// as a method.
-    pub fn target(&self) -> Result<&'t Value> {
-        self.target
-            .ok_or(ExecutionError::missing_argument_or_target())
+    pub fn target<T>(&self) -> Result<&'t T>
+    where
+        T: FromTarget,
+    {
+        let target = self
+            .target
+            .ok_or(ExecutionError::missing_argument_or_target())?;
+        T::from_target(target)
     }
 
     /// Checks that the function is not being called as a method, and returns
@@ -43,20 +48,11 @@ impl<'t, 'c, 'e> FunctionContext<'t, 'c, 'e> {
     }
 
     /// Resolves the given expression using the program's [`Context`].
-    pub fn resolve(&self, expr: &'e Expression) -> Result<Value> {
-        self.ptx.resolve(expr)
-    }
-
-    /// Resolves all of the given expressions using the program's [`Context`].
-    /// The resolved values are returned as a [`Value::List`].
-    pub fn resolve_all(&self, exprs: &[Expression]) -> ResolveResult {
-        self.ptx.resolve_all(exprs)
-    }
-
-    /// Resolves the argument at the given index. An error is returned if the
-    /// argument does not exist.
-    pub fn resolve_arg(&self, index: usize) -> Result<Value> {
-        self.ptx.resolve(self.arg(index)?)
+    pub fn resolve<R>(&self, resolver: R) -> Result<Value>
+    where
+        R: Resolver,
+    {
+        resolver.resolve(self)
     }
 
     /// Returns the argument at the given index. An error is returned if the
@@ -106,8 +102,7 @@ impl<'t, 'c, 'e> FunctionContext<'t, 'c, 'e> {
 /// ```
 pub fn size(ftx: FunctionContext) -> Result<Value> {
     ftx.check_no_method()?;
-    let arg = ftx.arg(0)?;
-    let size = match ftx.resolve(arg)? {
+    let size = match ftx.resolve(Argument(0))? {
         Value::List(l) => l.len(),
         Value::Map(m) => m.map.len(),
         Value::String(s) => s.len(),
@@ -148,8 +143,8 @@ pub fn size(ftx: FunctionContext) -> Result<Value> {
 /// b"abc".contains(b"c") == true
 /// ```
 pub fn contains(ftx: FunctionContext) -> Result<Value> {
-    let target = ftx.target()?;
-    let arg = ftx.resolve_arg(0)?;
+    let target = ftx.target::<Value>()?;
+    let arg = ftx.resolve(Argument(0))?;
     Ok(match target {
         Value::List(v) => v.contains(&arg),
         Value::Map(v) => v
@@ -192,7 +187,7 @@ pub fn contains(ftx: FunctionContext) -> Result<Value> {
 // * `float` - Returns the float value of the target.
 // * `bytes` - Converts bytes to string using from_utf8_lossy.
 pub fn string(ftx: FunctionContext) -> Result<Value> {
-    Ok(match ftx.target()? {
+    Ok(match ftx.target::<Value>()? {
         Value::String(v) => Value::String(v.clone()),
         Value::Timestamp(t) => Value::String(t.to_rfc3339().into()),
         Value::Duration(v) => Value::String(format_duration(v).into()),
@@ -206,7 +201,7 @@ pub fn string(ftx: FunctionContext) -> Result<Value> {
 
 // Performs a type conversion on the target.
 pub fn double(ftx: FunctionContext) -> Result<Value> {
-    Ok(match ftx.target()? {
+    Ok(match ftx.target::<Value>()? {
         Value::String(v) => v.parse::<f64>().map(Value::Float).unwrap(),
         Value::Float(v) => Value::Float(*v),
         Value::Int(v) => Value::Float(*v as f64),
@@ -222,16 +217,11 @@ pub fn double(ftx: FunctionContext) -> Result<Value> {
 /// "abc".startsWith("a") == true
 /// ```
 pub fn starts_with(ftx: FunctionContext) -> Result<Value> {
-    let target = ftx.target()?;
-    Ok(match target {
-        Value::String(s) => {
-            if let Value::String(arg) = ftx.resolve_arg(0)? {
-                s.starts_with(arg.as_str())
-            } else {
-                false
-            }
-        }
-        _ => false,
+    let target = ftx.target::<Rc<String>>()?;
+    Ok(if let Value::String(arg) = ftx.resolve(Argument(0))? {
+        target.starts_with(arg.as_str())
+    } else {
+        false
     }
     .into())
 }
@@ -252,7 +242,7 @@ pub fn has(ftx: FunctionContext) -> Result<Value> {
     ftx.check_no_method()?;
     // We determine if a type has a property by attempting to resolve it.
     // If we get a NoSuchKey error, then we know the property does not exist
-    match ftx.resolve_arg(0) {
+    match ftx.resolve(Argument(0)) {
         Ok(_) => Value::Bool(true),
         Err(err) => match err {
             ExecutionError::NoSuchKey(_) => Value::Bool(false),
@@ -273,7 +263,7 @@ pub fn has(ftx: FunctionContext) -> Result<Value> {
 pub fn map(ftx: FunctionContext) -> Result<Value> {
     let ident = ftx.arg_ident(0)?;
     let expr = ftx.arg(1)?;
-    match ftx.target()? {
+    match ftx.target::<Value>()? {
         Value::List(items) => {
             let mut values = Vec::with_capacity(items.len());
             let mut ptx = ftx.ptx.clone();
@@ -303,7 +293,7 @@ pub fn map(ftx: FunctionContext) -> Result<Value> {
 pub fn filter(ftx: FunctionContext) -> Result<Value> {
     let ident = ftx.arg_ident(0)?;
     let expr = ftx.arg(1)?;
-    match ftx.target()? {
+    match ftx.target::<Value>()? {
         Value::List(items) => {
             let mut values = Vec::with_capacity(items.len());
             let mut ptx = ftx.ptx.clone();
@@ -335,7 +325,7 @@ pub fn filter(ftx: FunctionContext) -> Result<Value> {
 pub fn all(ftx: FunctionContext) -> Result<Value> {
     let ident = ftx.arg_ident(0)?;
     let expr = ftx.arg(1)?;
-    match ftx.target()? {
+    match ftx.target::<Value>()? {
         Value::List(items) => {
             let mut ptx = ftx.ptx.clone();
             for item in items.iter() {
@@ -377,7 +367,7 @@ pub fn all(ftx: FunctionContext) -> Result<Value> {
 /// - `1.5ns` parses as 1 nanosecond (sub-nanosecond durations not supported)
 pub fn duration(ftx: FunctionContext) -> Result<Value> {
     ftx.check_no_method()?;
-    let value = ftx.resolve_arg(0)?;
+    let value = ftx.resolve(Argument(0))?;
     match value {
         Value::String(v) => Value::Duration(_duration(v.as_str())?),
         _ => return Err(ExecutionError::unsupported_target_type(value)),
@@ -387,7 +377,7 @@ pub fn duration(ftx: FunctionContext) -> Result<Value> {
 
 pub fn timestamp(ftx: FunctionContext) -> Result<Value> {
     ftx.check_no_method()?;
-    let value = ftx.resolve(ftx.arg(0)?)?;
+    let value = ftx.resolve(Argument(0))?;
     match value {
         Value::String(v) => Value::Timestamp(
             DateTime::parse_from_rfc3339(v.as_str())
@@ -399,7 +389,7 @@ pub fn timestamp(ftx: FunctionContext) -> Result<Value> {
 }
 
 pub fn max(ftx: FunctionContext) -> Result<Value> {
-    match ftx.resolve_all(ftx.args)? {
+    match ftx.resolve(Arguments)? {
         Value::List(items) => {
             if items.is_empty() {
                 return Err(ExecutionError::function_error("max", "missing arguments"));
@@ -423,6 +413,39 @@ pub fn max(ftx: FunctionContext) -> Result<Value> {
                 .into()
         }
         _ => ftx.error("only lists are supported"),
+    }
+}
+
+pub trait FromTarget {
+    fn from_target(target: &Value) -> Result<&Self>
+    where
+        Self: Sized;
+}
+
+impl FromTarget for Value {
+    fn from_target(target: &Value) -> Result<&Self> {
+        Ok(target)
+    }
+}
+
+impl FromTarget for Rc<String> {
+    fn from_target(target: &Value) -> Result<&Self> {
+        match target {
+            Value::String(v) => Ok(v),
+            _ => Err(ExecutionError::unsupported_target_type(target.clone())),
+        }
+    }
+}
+
+pub trait FromExpression {
+    fn from_expression(expr: &Expression) -> Result<&Self>
+    where
+        Self: Sized;
+}
+
+impl FromExpression for Expression {
+    fn from_expression(expr: &Expression) -> Result<&Self> {
+        Ok(expr)
     }
 }
 

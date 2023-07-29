@@ -13,7 +13,9 @@ pub use objects::{ResolveResult, Value};
 mod duration;
 mod functions;
 pub mod objects;
+mod resolvers;
 mod testing;
+pub use resolvers::{Argument, Arguments, Resolver};
 
 #[derive(Error, Debug)]
 #[error("Error parsing {msg}")]

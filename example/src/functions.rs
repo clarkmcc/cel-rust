@@ -1,4 +1,4 @@
-use cel_interpreter::{Context, FunctionContext, Program, ResolveResult};
+use cel_interpreter::{Argument, Context, FunctionContext, Program, ResolveResult};
 
 fn main() {
     let program = Program::compile("add(2, 3)").unwrap();
@@ -13,7 +13,7 @@ fn main() {
 /// parameter because the add function is not a method, it is always called with two
 /// arguments.
 fn add(ftx: FunctionContext) -> ResolveResult {
-    let a = ftx.resolve_arg(0)?;
-    let b = ftx.resolve_arg(1)?;
+    let a = ftx.resolve(Argument(0))?;
+    let b = ftx.resolve(Argument(1))?;
     Ok(a + b)
 }
