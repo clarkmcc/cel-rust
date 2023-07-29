@@ -437,18 +437,6 @@ impl FromTarget for Rc<String> {
     }
 }
 
-pub trait FromExpression {
-    fn from_expression(expr: &Expression) -> Result<&Self>
-    where
-        Self: Sized;
-}
-
-impl FromExpression for Expression {
-    fn from_expression(expr: &Expression) -> Result<&Self> {
-        Ok(expr)
-    }
-}
-
 /// A wrapper around [`parse_duration`] that converts errors into [`ExecutionError`].
 /// and only returns the duration, rather than returning the remaining input.
 fn _duration(i: &str) -> Result<Duration> {

@@ -195,12 +195,12 @@ impl From<String> for Value {
         Value::String(v.into())
     }
 }
-
-impl From<Duration> for Value {
-    fn from(v: Duration) -> Self {
-        Value::Duration(v)
-    }
-}
+//
+// impl From<Duration> for Value {
+//     fn from(v: Duration) -> Self {
+//         Value::Duration(v)
+//     }
+// }
 
 // Convert Option<T> to Value
 impl<T: Into<Value>> From<Option<T>> for Value {
@@ -219,11 +219,11 @@ impl<K: Into<Key>, V: Into<Value>> From<HashMap<K, V>> for Value {
     }
 }
 
-impl_from!(
-    i32 => Value::Int,
-    f64 => Value::Float,
-    bool => Value::Bool
-);
+// impl_from!(
+//     i32 => Value::Int,
+//     f64 => Value::Float,
+//     bool => Value::Bool
+// );
 
 impl From<ExecutionError> for ResolveResult {
     fn from(value: ExecutionError) -> Self {

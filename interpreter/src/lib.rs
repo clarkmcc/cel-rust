@@ -12,9 +12,11 @@ pub use functions::FunctionContext;
 pub use objects::{ResolveResult, Value};
 mod duration;
 mod functions;
+mod magic;
 pub mod objects;
 mod resolvers;
 mod testing;
+
 pub use resolvers::{Argument, Arguments, Resolver};
 
 #[derive(Error, Debug)]
@@ -35,6 +37,8 @@ pub enum ExecutionError {
     /// but the type of the value was not supported as a key.
     #[error("Unable to use value '{0:?}' as a key")]
     UnsupportedKeyType(Value),
+    #[error("Unexpected type: got '{got}', want '{want}'")]
+    UnexpectedType { got: String, want: String },
     /// Indicates that the script attempted to reference a key on a type that
     /// was missing the requested key.
     #[error("No such key: {0}")]
