@@ -1,13 +1,13 @@
-use crate::functions::FunctionCtx;
-use crate::objects::CelType;
-use crate::{functions, ExecutionError};
+use crate::functions::FunctionContext;
+use crate::objects::Value;
+use crate::{functions, ExecutionError, ResolveResult};
 use cel_parser::Expression;
 use std::collections::HashMap;
 
 /// A function that can be loaded into the [`ParentContext`] and then called from a Common Expression
 /// Language program. If the function is a method, the first parameter will be the target object.
 /// If the function accepts arguments, they will be provided as expressions.
-type ContextFunction = dyn Fn(FunctionCtx) -> Result<CelType, ExecutionError>;
+type ContextFunction = dyn Fn(FunctionContext) -> ResolveResult;
 
 /// Context is a collection of variables and functions that can be used
 /// by the interpreter to resolve expressions. The context can be either
@@ -36,11 +36,11 @@ type ContextFunction = dyn Fn(FunctionCtx) -> Result<CelType, ExecutionError>;
 pub enum Context<'a> {
     Root {
         functions: HashMap<String, Box<ContextFunction>>,
-        variables: HashMap<String, CelType>,
+        variables: HashMap<String, Value>,
     },
     Child {
         parent: &'a Context<'a>,
-        variables: HashMap<String, CelType>,
+        variables: HashMap<String, Value>,
     },
 }
 
@@ -48,7 +48,7 @@ impl<'a> Context<'a> {
     pub fn add_variable<S, V>(&mut self, name: S, value: V)
     where
         S: Into<String>,
-        V: Into<CelType>,
+        V: Into<Value>,
     {
         match self {
             Context::Root { variables, .. } => {
@@ -60,7 +60,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    pub fn get_variable<S>(&self, name: S) -> Result<CelType, ExecutionError>
+    pub fn get_variable<S>(&self, name: S) -> Result<Value, ExecutionError>
     where
         S: Into<String>,
     {
@@ -102,7 +102,7 @@ impl<'a> Context<'a> {
 
     pub fn add_function<S, F: 'static>(&mut self, name: S, value: F)
     where
-        F: Fn(FunctionCtx) -> Result<CelType, ExecutionError>,
+        F: Fn(FunctionContext) -> Result<Value, ExecutionError>,
         S: Into<String>,
     {
         if let Context::Root { functions, .. } = self {
@@ -110,12 +110,12 @@ impl<'a> Context<'a> {
         };
     }
 
-    pub fn resolve(&self, expr: &Expression) -> Result<CelType, ExecutionError> {
-        CelType::resolve(expr, self)
+    pub fn resolve(&self, expr: &Expression) -> Result<Value, ExecutionError> {
+        Value::resolve(expr, self)
     }
 
-    pub fn resolve_all(&self, exprs: &[Expression]) -> Result<CelType, ExecutionError> {
-        CelType::resolve_all(exprs, self)
+    pub fn resolve_all(&self, exprs: &[Expression]) -> Result<Value, ExecutionError> {
+        Value::resolve_all(exprs, self)
     }
 
     pub(crate) fn clone(&self) -> Context {
@@ -139,10 +139,11 @@ impl<'a> Default for Context<'a> {
         ctx.add_function("filter", functions::filter);
         ctx.add_function("all", functions::all);
         ctx.add_function("max", functions::max);
+        ctx.add_function("startsWith", functions::starts_with);
         ctx.add_function("duration", functions::duration);
         ctx.add_function("timestamp", functions::timestamp);
-        ctx.add_function("startsWith", functions::starts_with);
         ctx.add_function("string", functions::string);
+        ctx.add_function("double", functions::double);
         ctx
     }
 }
