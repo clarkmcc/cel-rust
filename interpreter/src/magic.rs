@@ -48,23 +48,23 @@ macro_rules! impl_from_value {
     };
 }
 
-pub struct WithTarget;
-pub struct NoTarget;
+pub struct WithThis;
+pub struct NoThis;
 
 macro_rules! impl_handler {
-    // Base case: no more types, with a target
-    (@go_with_target $idx: expr, $call: expr, $ftx: ident, $target: ident, [], [$($args:tt)*]) => {
-        $call($target, $($args)*).into_resolve_result()
+    // Base case: no more types, with a this
+    (@go_with_this $idx: expr, $call: expr, $ftx: ident, $this: ident, [], [$($args:tt)*]) => {
+        $call($this, $($args)*).into_resolve_result()
     };
 
-    // Base case: no more types, without a target
-    (@go_without_target $idx: expr, $call: expr, $ftx: ident, [], [$($args:tt)*]) => {
+    // Base case: no more types, without a this
+    (@go_without_this $idx: expr, $call: expr, $ftx: ident, [], [$($args:tt)*]) => {
         $call($($args)*).into_resolve_result()
     };
 
-    // Recurse for each ident, incrementing the index each time, with a target
-    (@go_with_target $idx: expr, $call: expr, $ftx: ident, $target: ident, [$head: ident, $($tail: ident,)*], [$($args:tt)*]) => {
-        impl_handler!(@go_with_target $idx + 1, $call, $ftx, $target, [$($tail,)*], [
+    // Recurse for each ident, incrementing the index each time, with a this
+    (@go_with_this $idx: expr, $call: expr, $ftx: ident, $this: ident, [$head: ident, $($tail: ident,)*], [$($args:tt)*]) => {
+        impl_handler!(@go_with_this $idx + 1, $call, $ftx, $this, [$($tail,)*], [
             $($args)*
             {
                 let temp = $head::from(&$ftx.resolve(Argument($idx))?)?;
@@ -73,9 +73,9 @@ macro_rules! impl_handler {
         ])
     };
 
-    // Recurse for each ident, incrementing the index each time, without a target
-    (@go_without_target $idx: expr, $call: expr, $ftx: ident, [$head: ident, $($tail: ident,)*], [$($args:tt)*]) => {
-        impl_handler!(@go_without_target $idx + 1, $call, $ftx, [$($tail,)*], [
+    // Recurse for each ident, incrementing the index each time, without a this
+    (@go_without_this $idx: expr, $call: expr, $ftx: ident, [$head: ident, $($tail: ident,)*], [$($args:tt)*]) => {
+        impl_handler!(@go_without_this $idx + 1, $call, $ftx, [$($tail,)*], [
             $($args)*
             {
                 let temp = $head::from(&$ftx.resolve(Argument($idx))?)?;
@@ -86,27 +86,27 @@ macro_rules! impl_handler {
 
     // Main entry point.
     ($($ty: ident),+ $(,)?) => {
-        impl<F, Target, $($ty,)* R> Handler<(WithTarget, Target, $($ty,)*)> for F
+        impl<F, This, $($ty,)* R> Handler<(WithThis, This, $($ty,)*)> for F
         where
-            F: Fn(Target, $($ty,)*) -> R + Clone + 'static,
-            Target: FromContext,
+            F: Fn(This, $($ty,)*) -> R + Clone + 'static,
+            This: FromContext,
             $( $ty: FromValue, )*
             R: IntoResolveResult,
         {
             fn call(self, ftx: FunctionContext) -> ResolveResult {
-                let target = Target::from_context(&ftx)?;
-                impl_handler!(@go_with_target 0, self, ftx, target, [$($ty,)*], [])
+                let this = This::from_context(&ftx)?;
+                impl_handler!(@go_with_this 0, self, ftx, this, [$($ty,)*], [])
             }
         }
 
-        impl<F, $($ty,)* R> Handler<(NoTarget, $($ty,)*)> for F
+        impl<F, $($ty,)* R> Handler<(NoThis, $($ty,)*)> for F
         where
             F: Fn($($ty,)*) -> R + Clone + 'static,
             $( $ty: FromValue, )*
             R: IntoResolveResult,
         {
             fn call(self, ftx: FunctionContext) -> ResolveResult {
-                impl_handler!(@go_without_target 0, self, ftx, [$($ty,)*], [])
+                impl_handler!(@go_without_this 0, self, ftx, [$($ty,)*], [])
             }
         }
     }
@@ -133,9 +133,9 @@ trait FromContext {
         Self: Sized;
 }
 
-pub struct Target<T>(pub T);
+pub struct This<T>(pub T);
 
-impl<T> FromContext for Target<T>
+impl<T> FromContext for This<T>
 where
     T: FromValue,
 {
@@ -144,7 +144,7 @@ where
         Self: Sized,
     {
         let value = ctx.target::<Value>()?;
-        Ok(Target(T::from(value)?))
+        Ok(This(T::from(value)?))
     }
 }
 
@@ -361,8 +361,8 @@ fn add(a: i32, b: i32) -> i32 {
     a + b
 }
 
-fn starts_with(Target(target): Target<Rc<String>>, name: Rc<String>) -> bool {
-    target.starts_with(name.as_str())
+fn starts_with(This(this): This<Rc<String>>, name: Rc<String>) -> bool {
+    this.starts_with(name.as_str())
 }
 
 #[test]

@@ -1,6 +1,6 @@
 use crate::context::Context;
 use crate::duration::{format_duration, parse_duration};
-use crate::magic::Target;
+use crate::magic::This;
 use crate::objects::Value;
 use crate::{Argument, Arguments, ExecutionError, Resolver};
 use cel_parser::Expression;
@@ -223,8 +223,8 @@ pub fn double(value: Value) -> Result<Value> {
 /// ```cel
 /// "abc".startsWith("a") == true
 /// ```
-pub fn starts_with(Target(target): Target<Rc<String>>, prefix: Rc<String>) -> bool {
-    target.starts_with(prefix.as_str())
+pub fn starts_with(This(this): This<Rc<String>>, prefix: Rc<String>) -> bool {
+    this.starts_with(prefix.as_str())
 }
 
 /// Returns true if the provided argument can be resolved. This function is
