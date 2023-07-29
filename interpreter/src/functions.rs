@@ -1,5 +1,6 @@
 use crate::context::Context;
 use crate::duration::{format_duration, parse_duration};
+use crate::magic::Target;
 use crate::objects::Value;
 use crate::{Argument, Arguments, ExecutionError, Resolver};
 use cel_parser::Expression;
@@ -14,6 +15,7 @@ type Result<T> = std::result::Result<T, ExecutionError>;
 /// It contains references ot the target object (if the function is called as
 /// a method), the program context ([`Context`]) which gives functions access
 /// to variables, and the arguments to the function call.
+#[derive(Clone)]
 pub struct FunctionContext<'t, 'c, 'e> {
     pub name: Rc<String>,
     pub target: Option<&'t Value>,
@@ -200,13 +202,18 @@ pub fn string(ftx: FunctionContext) -> Result<Value> {
 }
 
 // Performs a type conversion on the target.
-pub fn double(ftx: FunctionContext) -> Result<Value> {
-    Ok(match ftx.target::<Value>()? {
+pub fn double(value: Value) -> Result<Value> {
+    Ok(match value {
         Value::String(v) => v.parse::<f64>().map(Value::Float).unwrap(),
-        Value::Float(v) => Value::Float(*v),
-        Value::Int(v) => Value::Float(*v as f64),
-        Value::UInt(v) => Value::Float(*v as f64),
-        v => ftx.error(&format!("cannot convert {:?} to double", v))?,
+        Value::Float(v) => Value::Float(v),
+        Value::Int(v) => Value::Float(v as f64),
+        Value::UInt(v) => Value::Float(v as f64),
+        v => {
+            return Err(ExecutionError::function_error(
+                "double",
+                &format!("cannot convert {:?} to double", v),
+            ))
+        }
     })
 }
 
@@ -216,14 +223,8 @@ pub fn double(ftx: FunctionContext) -> Result<Value> {
 /// ```cel
 /// "abc".startsWith("a") == true
 /// ```
-pub fn starts_with(ftx: FunctionContext) -> Result<Value> {
-    let target = ftx.target::<Rc<String>>()?;
-    Ok(if let Value::String(arg) = ftx.resolve(Argument(0))? {
-        target.starts_with(arg.as_str())
-    } else {
-        false
-    }
-    .into())
+pub fn starts_with(Target(target): Target<Rc<String>>, prefix: Rc<String>) -> bool {
+    target.starts_with(prefix.as_str())
 }
 
 /// Returns true if the provided argument can be resolved. This function is

@@ -408,19 +408,23 @@ impl<'a> Value {
                             if args.is_empty() {
                                 return Err(ExecutionError::MissingArgumentOrTarget);
                             }
-                            func(FunctionContext {
+                            let ctx = FunctionContext {
                                 name,
                                 target: None,
                                 ptx: ctx,
                                 args,
-                            })
+                            };
+                            func.call_with_context(&ctx)
                         }
-                        Some(t) => func(FunctionContext {
-                            name,
-                            target: Some(&*t),
-                            ptx: ctx,
-                            args,
-                        }),
+                        Some(target) => {
+                            let ctx = FunctionContext {
+                                name,
+                                target: Some(&*target),
+                                ptx: ctx,
+                                args,
+                            };
+                            func.call_with_context(&ctx)
+                        }
                     }
                 } else {
                     unreachable!("FunctionCall without Value::Function - {:?}", self)

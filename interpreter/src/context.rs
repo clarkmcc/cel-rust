@@ -1,4 +1,5 @@
 use crate::functions::FunctionContext;
+use crate::magic::{Function, FunctionRegistry, Handler};
 use crate::objects::Value;
 use crate::{functions, ExecutionError, ResolveResult};
 use cel_parser::Expression;
@@ -35,7 +36,7 @@ type ContextFunction = dyn Fn(FunctionContext) -> ResolveResult;
 ///
 pub enum Context<'a> {
     Root {
-        functions: HashMap<String, Box<ContextFunction>>,
+        functions: FunctionRegistry,
         variables: HashMap<String, Value>,
     },
     Child {
@@ -84,29 +85,28 @@ impl<'a> Context<'a> {
     {
         let name = name.into();
         match self {
-            Context::Root { functions, .. } => functions.contains_key(&name),
+            Context::Root { functions, .. } => functions.has(&name),
             Context::Child { parent, .. } => parent.has_function(name),
         }
     }
 
-    pub(crate) fn get_function<S>(&self, name: S) -> Option<&ContextFunction>
+    pub(crate) fn get_function<S>(&self, name: S) -> Option<Box<dyn Function>>
     where
         S: Into<String>,
     {
         let name = name.into();
         match self {
-            Context::Root { functions, .. } => functions.get(&name).map(|v| v.as_ref()),
+            Context::Root { functions, .. } => functions.get(&name),
             Context::Child { parent, .. } => parent.get_function(name),
         }
     }
 
-    pub fn add_function<S, F: 'static>(&mut self, name: S, value: F)
+    pub fn add_function<T: 'static, F: 'static>(&mut self, name: &str, value: F)
     where
-        F: Fn(FunctionContext) -> Result<Value, ExecutionError>,
-        S: Into<String>,
+        F: Handler<T> + 'static,
     {
         if let Context::Root { functions, .. } = self {
-            functions.insert(name.into(), Box::new(value));
+            functions.add(name, value);
         };
     }
 
@@ -132,17 +132,17 @@ impl<'a> Default for Context<'a> {
             variables: Default::default(),
             functions: Default::default(),
         };
-        ctx.add_function("contains", functions::contains);
-        ctx.add_function("size", functions::size);
-        ctx.add_function("has", functions::has);
-        ctx.add_function("map", functions::map);
-        ctx.add_function("filter", functions::filter);
-        ctx.add_function("all", functions::all);
-        ctx.add_function("max", functions::max);
+        // ctx.add_function("contains", functions::contains);
+        // ctx.add_function("size", functions::size);
+        // ctx.add_function("has", functions::has);
+        // ctx.add_function("map", functions::map);
+        // ctx.add_function("filter", functions::filter);
+        // ctx.add_function("all", functions::all);
+        // ctx.add_function("max", functions::max);
         ctx.add_function("startsWith", functions::starts_with);
-        ctx.add_function("duration", functions::duration);
-        ctx.add_function("timestamp", functions::timestamp);
-        ctx.add_function("string", functions::string);
+        // ctx.add_function("duration", functions::duration);
+        // ctx.add_function("timestamp", functions::timestamp);
+        // ctx.add_function("string", functions::string);
         ctx.add_function("double", functions::double);
         ctx
     }
