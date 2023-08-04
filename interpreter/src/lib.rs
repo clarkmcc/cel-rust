@@ -1,6 +1,6 @@
 extern crate core;
 
-use cel_parser::parser::ExpressionParser;
+use cel_parser::parse;
 use std::convert::TryFrom;
 use std::rc::Rc;
 use thiserror::Error;
@@ -97,7 +97,7 @@ pub struct Program {
 
 impl Program {
     pub fn compile(source: &str) -> Result<Program, ParseError> {
-        match ExpressionParser::new().parse(source) {
+        match parse(source) {
             Ok(expression) => Ok(Program { expression }),
             // To-Do: Better error handling
             Err(e) => Err(ParseError {
