@@ -132,17 +132,17 @@ impl<'a> Default for Context<'a> {
             variables: Default::default(),
             functions: Default::default(),
         };
-        // ctx.add_function("contains", functions::contains);
-        // ctx.add_function("size", functions::size);
-        // ctx.add_function("has", functions::has);
-        // ctx.add_function("map", functions::map);
-        // ctx.add_function("filter", functions::filter);
-        // ctx.add_function("all", functions::all);
-        // ctx.add_function("max", functions::max);
+        ctx.add_function("contains", functions::contains);
+        ctx.add_function("size", functions::size);
+        ctx.add_function("has", functions::has);
+        ctx.add_function("map", functions::map);
+        ctx.add_function("filter", functions::filter);
+        ctx.add_function("all", functions::all);
+        ctx.add_function("max", functions::max);
         ctx.add_function("startsWith", functions::starts_with);
-        // ctx.add_function("duration", functions::duration);
-        // ctx.add_function("timestamp", functions::timestamp);
-        // ctx.add_function("string", functions::string);
+        ctx.add_function("duration", functions::duration);
+        ctx.add_function("timestamp", functions::timestamp);
+        ctx.add_function("string", functions::string);
         ctx.add_function("double", functions::double);
         ctx
     }

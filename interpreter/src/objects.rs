@@ -240,7 +240,7 @@ impl From<Value> for ResolveResult {
 }
 
 impl<'a> Value {
-    pub fn resolve_all(expr: &'a [Expression], ctx: &Context) -> ResolveResult {
+    pub fn resolve_all(expr: &[Expression], ctx: &Context) -> ResolveResult {
         let mut res = Vec::with_capacity(expr.len());
         for expr in expr {
             res.push(Value::resolve(expr, ctx)?);
@@ -408,22 +408,18 @@ impl<'a> Value {
                             if args.is_empty() {
                                 return Err(ExecutionError::MissingArgumentOrTarget);
                             }
-                            let ctx = FunctionContext {
-                                name,
-                                target: None,
-                                ptx: ctx,
-                                args,
-                            };
-                            func.call_with_context(&ctx)
+                            let mut ctx =
+                                FunctionContext::new(name.clone(), None, ctx, args.clone());
+                            func.call_with_context(&mut ctx)
                         }
                         Some(target) => {
-                            let ctx = FunctionContext {
-                                name,
-                                target: Some(&*target),
-                                ptx: ctx,
-                                args,
-                            };
-                            func.call_with_context(&ctx)
+                            let mut ctx = FunctionContext::new(
+                                name.clone(),
+                                Some(*target),
+                                ctx,
+                                args.clone(),
+                            );
+                            func.call_with_context(&mut ctx)
                         }
                     }
                 } else {

@@ -17,7 +17,7 @@ pub mod objects;
 mod resolvers;
 mod testing;
 
-pub use resolvers::{Argument, Arguments, Resolver};
+pub use resolvers::{AllArguments, Argument, Resolver};
 
 #[derive(Error, Debug)]
 #[error("Error parsing {msg}")]

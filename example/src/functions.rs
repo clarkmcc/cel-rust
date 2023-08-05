@@ -9,11 +9,7 @@ fn main() {
     assert_eq!(value, 5.into());
 }
 
-/// The add function takes two arguments and returns their sum. We discard the first
-/// parameter because the add function is not a method, it is always called with two
-/// arguments.
-fn add(ftx: FunctionContext) -> ResolveResult {
-    let a = ftx.resolve(Argument(0))?;
-    let b = ftx.resolve(Argument(1))?;
-    Ok(a + b)
+/// The add function takes two arguments and returns their sum.
+fn add(a: i32, b: i32) -> i32 {
+    a + b
 }
