@@ -5,6 +5,8 @@ use std::convert::TryFrom;
 use std::rc::Rc;
 use thiserror::Error;
 
+mod macros;
+
 pub mod context;
 pub use cel_parser::Expression;
 pub use context::Context;
@@ -16,7 +18,9 @@ mod magic;
 pub mod objects;
 mod resolvers;
 mod testing;
+use magic::FromContext;
 
+pub use magic::{Arguments, Identifier, This};
 pub use resolvers::{AllArguments, Argument, Resolver};
 
 #[derive(Error, Debug)]

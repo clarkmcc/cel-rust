@@ -1,116 +1,29 @@
-use crate::functions::FromThis;
-use crate::{
-    AllArguments, Argument, Context, ExecutionError, FunctionContext, ResolveResult, Value,
-};
-use cel_parser::{Atom, Expression};
+use crate::macros::{impl_arg_value_from_context, impl_from_value, impl_handler};
+use crate::{AllArguments, Argument, ExecutionError, FunctionContext, ResolveResult, Value};
+use cel_parser::Expression;
 use chrono::{DateTime, Duration, FixedOffset};
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
-macro_rules! impl_from_value {
-    ($target_type:ty, $value_variant:path) => {
-        impl FromValue for $target_type {
-            fn from_value(expr: &Value) -> Result<Self, ExecutionError> {
-                if let $value_variant(v) = expr {
-                    Ok(v.clone())
-                } else {
-                    Err(ExecutionError::UnexpectedType {
-                        got: format!("{:?}", expr),
-                        want: stringify!($target_type).to_string(),
-                    })
-                }
-            }
-        }
-
-        impl FromValue for Option<$target_type> {
-            fn from_value(expr: &Value) -> Result<Self, ExecutionError> {
-                match expr {
-                    Value::Null => Ok(None),
-                    $value_variant(v) => Ok(Some(v.clone())),
-                    _ => Err(ExecutionError::UnexpectedType {
-                        got: format!("{:?}", expr),
-                        want: stringify!($target_type).to_string(),
-                    }),
-                }
-            }
-        }
-
-        impl From<$target_type> for Value {
-            fn from(value: $target_type) -> Self {
-                $value_variant(value)
-            }
-        }
-
-        impl IntoResolveResult for $target_type {
-            fn into_resolve_result(self) -> ResolveResult {
-                Ok($value_variant(self))
-            }
-        }
-
-        impl IntoResolveResult for Result<$target_type, ExecutionError> {
-            fn into_resolve_result(self) -> ResolveResult {
-                self.map($value_variant)
-            }
-        }
-    };
-}
-
-macro_rules! impl_arg_value_from_context {
-    ($($type:ty),*) => {
-        $(
-            impl<'a, 'context> FromContext<'a, 'context> for $type {
-                fn from_context(ctx: &'a mut FunctionContext<'context>) -> Result<Self, ExecutionError>
-                where
-                    Self: Sized,
-                {
-                    arg_value_from_context(ctx).and_then(|v| FromValue::from_value(&v))
-                }
-            }
-        )*
-    };
-}
-
-#[macro_export]
-macro_rules! impl_handler {
-    ($($t:ty),*) => {
-        paste::paste! {
-            impl<F, $($t,)* R> Handler<($($t,)*)> for F
-            where
-                F: Fn($($t,)*) -> R + Clone,
-                $($t: for<'a, 'context> FromContext<'a, 'context>,)*
-                R: IntoResolveResult,
-            {
-                fn call(self, ftx: &mut FunctionContext) -> ResolveResult {
-                    $(
-                        let [<arg_ $t>] = $t::from_context(ftx)?;
-                    )*
-                    self($([<arg_ $t>],)*).into_resolve_result()
-                }
-            }
-
-            impl<F, $($t,)* R> Handler<(WithFunctionContext, $($t,)*)> for F
-            where
-                F: Fn(&FunctionContext, $($t,)*) -> R + Clone,
-                $($t: for<'a, 'context> FromContext<'a, 'context>,)*
-                R: IntoResolveResult,
-            {
-                fn call(self, ftx: &mut FunctionContext) -> ResolveResult {
-                    $(
-                        let [<arg_ $t>] = $t::from_context(ftx)?;
-                    )*
-                    self(ftx, $([<arg_ $t>],)*).into_resolve_result()
-                }
-            }
-        }
-    };
-}
-
+/// Describes any type that can be converted from a [`Value`] into itself.
+/// This is commonly used to convert from [`Value`] into primitive types,
+/// e.g. from `Value::Bool(true) -> true`. This trait is auto-implemented
+/// for many CEL-primitive types.
 trait FromValue {
     fn from_value(value: &Value) -> Result<Self, ExecutionError>
     where
         Self: Sized;
 }
+
+impl_from_value!(i32, Value::Int);
+impl_from_value!(u32, Value::UInt);
+impl_from_value!(f64, Value::Float);
+impl_from_value!(Rc<String>, Value::String);
+impl_from_value!(Rc<Vec<u8>>, Value::Bytes);
+impl_from_value!(bool, Value::Bool);
+impl_from_value!(Duration, Value::Duration);
+impl_from_value!(DateTime<FixedOffset>, Value::Timestamp);
 
 impl FromValue for Value {
     fn from_value(value: &Value) -> Result<Self, ExecutionError>
@@ -121,12 +34,64 @@ impl FromValue for Value {
     }
 }
 
-trait FromContext<'a, 'context> {
+/// Describes any type that can be converted from a [`FunctionContext`] into
+/// itself, for example CEL primitives implement this trait to allow them to
+/// be used as arguments to functions. This trait is core to the 'magic function
+/// parameter' system. Every argument to a function that can be registered to
+/// the CEL context must implement this type.
+pub(crate) trait FromContext<'a, 'context> {
     fn from_context(ctx: &'a mut FunctionContext<'context>) -> Result<Self, ExecutionError>
     where
         Self: Sized;
 }
 
+/// A function argument abstraction enabling dynamic method invocation on a
+/// target instance or on the first argument if the function is not called
+/// as a method. This is similar to how methods can be called as functions
+/// using the [fully-qualified syntax](https://doc.rust-lang.org/book/ch19-03-advanced-traits.html#fully-qualified-syntax-for-disambiguation-calling-methods-with-the-same-name).
+///
+/// # Using `This`
+/// ```
+/// # use std::rc::Rc;
+/// # use cel_interpreter::{This, Program, Context};
+/// # let mut context = Context::default();
+/// # context.add_function("startsWith", starts_with);
+///
+/// /// Notice how `This` refers to the target value when called as a method,
+/// /// but the first argument when called as a function.
+/// let program1 = "'foobar'.startsWith('foo') == true";
+/// let program2 = "startsWith('foobar', 'foo') == true";
+/// # let program1 = Program::compile(program1).unwrap();
+/// # let program2 = Program::compile(program2).unwrap();
+/// # let value = program1.execute(&context).unwrap();
+/// # assert_eq!(value, true.into());
+/// # let value = program2.execute(&context).unwrap();
+/// # assert_eq!(value, true.into());
+///
+/// fn starts_with(This(this): This<Rc<String>>, prefix: Rc<String>) -> bool {
+///     this.starts_with(prefix.as_str())
+/// }
+/// ```
+///
+/// # Type of `This`
+/// This also accepts a type `T` which determines the specific type
+/// that's extracted. Any type that supports [`FromValue`] can be used.
+/// In the previous example, the method `startsWith` is only ever called
+/// on a string, so we can use `This<Rc<String>>` to extract the string
+/// automatically prior to our method actually being called.
+///
+/// In some cases, you may want access to the raw [`Value`] instead, for
+/// example, the `contains` method works for several different types. In these
+/// cases, you can use `This<Value>` to extract the raw value.
+///
+/// ```skip
+/// pub fn contains(This(this): This<Value>, arg: Value) -> Result<Value> {
+///     Ok(match this {
+///         Value::List(v) => v.contains(&arg),
+///         ...
+///     }
+/// }
+/// ```
 pub struct This<T>(pub T);
 
 impl<'a, 'context, T> FromContext<'a, 'context> for This<T>
@@ -145,6 +110,32 @@ where
     }
 }
 
+/// Identifier is an argument extractor that attempts to extract an identifier
+/// from an argument's expression. It fails if the argument is not available,
+/// or if the argument cannot be converted into an expression.
+///
+/// # Examples
+/// Identifiers are useful for functions like `.map` or `.filter` where one
+/// of the arguments is the declaration of a variable. In this case, as noted
+/// below, the x is an identifier, and we want to be able to parse it
+/// automatically.
+///
+/// ```javascript
+/// //        Identifier
+/// //            ↓
+/// [1, 2, 3].map(x, x * 2) == [2, 4, 6]
+/// ```
+///
+/// The function signature for the Rust implementation of `map` looks like this
+///
+/// ```skip
+/// pub fn map(
+///     ftx: &FunctionContext,
+///     This(this): This<Value>, // <- [1, 2, 3]
+///     ident: Identifier,       // <- x
+///     expr: Expression,        // <- x * 2
+/// ) -> Result<Value>;
+/// ```
 #[derive(Clone)]
 pub struct Identifier(pub Rc<String>);
 
@@ -155,12 +146,11 @@ impl<'a, 'context> FromContext<'a, 'context> for Identifier {
     {
         match arg_expr_from_context(ctx) {
             Expression::Ident(ident) => Ok(Identifier(ident.clone())),
-            _ => {
-                // todo: better error
+            expr => {
                 return Err(ExecutionError::UnexpectedType {
-                    got: "not an identifier".to_string(),
+                    got: format!("{:?}", expr),
                     want: "identifier".to_string(),
-                });
+                })
             }
         }
     }
@@ -251,15 +241,6 @@ impl IntoResolveResult for Result<Value, ExecutionError> {
     }
 }
 
-impl_from_value!(i32, Value::Int);
-impl_from_value!(u32, Value::UInt);
-impl_from_value!(f64, Value::Float);
-impl_from_value!(Rc<String>, Value::String);
-impl_from_value!(Rc<Vec<u8>>, Value::Bytes);
-impl_from_value!(bool, Value::Bool);
-impl_from_value!(Duration, Value::Duration);
-impl_from_value!(DateTime<FixedOffset>, Value::Timestamp);
-
 impl_arg_value_from_context!(
     i32,
     u32,
@@ -279,80 +260,10 @@ impl_handler!(C1);
 impl_handler!(C1, C2);
 impl_handler!(C1, C2, C3);
 impl_handler!(C1, C2, C3, C4);
-
-// impl<F, C1, C2, R> Handler<(C1, C2)> for F
-// where
-//     F: Fn(C1, C2) -> R + Clone,
-//     C1: for<'a, 'context> FromContext<'a, 'context>,
-//     C2: for<'a, 'context> FromContext<'a, 'context>,
-//     R: IntoResolveResult,
-// {
-//     fn call(self, ftx: &mut FunctionContext) -> ResolveResult {
-//         let arg1 = C1::from_context(ftx)?;
-//         let arg2 = C2::from_context(ftx)?;
-//         self(arg1, arg2).into_resolve_result()
-//     }
-// }
-
-// impl<F, C1, C2, R> Handler<(WithFunctionContext, C1, C2)> for F
-// where
-//     F: Fn(&FunctionContext, C1, C2) -> R + Clone,
-//     C1: for<'a, 'context> FromContext<'a, 'context>,
-//     C2: for<'a, 'context> FromContext<'a, 'context>,
-//     R: IntoResolveResult,
-// {
-//     fn call(self, ftx: &mut FunctionContext) -> ResolveResult {
-//         let arg1 = C1::from_context(ftx)?;
-//         let arg2 = C2::from_context(ftx)?;
-//         self(ftx, arg1, arg2).into_resolve_result()
-//     }
-// }
-
-// impl<F, C1, R> Handler<(C1)> for F
-// where
-//     F: Fn(C1) -> R + Clone + 'static,
-//     C1: for<'a, 'context> FromContext<'a, 'context>,
-//     R: IntoResolveResult,
-// {
-//     fn call(self, ftx: &mut FunctionContext) -> ResolveResult {
-//         let arg1 = C1::from_context(ftx)?;
-//         self(arg1).into_resolve_result()
-//     }
-// }
-
-// impl<F, C1, C2, C3, R> Handler<(WithFunctionContext, C1, C2, C3)> for F
-// where
-//     F: Fn(&FunctionContext, C1, C2, C3) -> R + Clone + 'static,
-//     C1: for<'a, 'context> FromContext<'a, 'context>,
-//     C2: for<'a, 'context> FromContext<'a, 'context>,
-//     C3: for<'a, 'context> FromContext<'a, 'context>,
-//     R: IntoResolveResult,
-// {
-//     fn call(self, ftx: &mut FunctionContext) -> ResolveResult {
-//         let arg1 = C1::from_context(ftx)?;
-//         let arg2 = C2::from_context(ftx)?;
-//         let arg3 = C3::from_context(ftx)?;
-//         self(ftx, arg1, arg2, arg3).into_resolve_result()
-//     }
-// }
-
-// impl<F, C1, C2, C3, C4, R> Handler<(WithFunctionContext, C1, C2, C3, C4)> for F
-// where
-//     F: Fn(&FunctionContext, C1, C2, C3, C4) -> R + Clone + 'static,
-//     C1: for<'a, 'context> FromContext<'a, 'context>,
-//     C2: for<'a, 'context> FromContext<'a, 'context>,
-//     C3: for<'a, 'context> FromContext<'a, 'context>,
-//     C4: for<'a, 'context> FromContext<'a, 'context>,
-//     R: IntoResolveResult,
-// {
-//     fn call(self, ftx: &mut FunctionContext) -> ResolveResult {
-//         let arg1 = C1::from_context(ftx)?;
-//         let arg2 = C2::from_context(ftx)?;
-//         let arg3 = C3::from_context(ftx)?;
-//         let arg4 = C4::from_context(ftx)?;
-//         self(ftx, arg1, arg2, arg3, arg4).into_resolve_result()
-//     }
-// }
+impl_handler!(C1, C2, C3, C4, C5);
+impl_handler!(C1, C2, C3, C4, C5, C6);
+impl_handler!(C1, C2, C3, C4, C5, C6, C7);
+impl_handler!(C1, C2, C3, C4, C5, C6, C7, C8);
 
 // Heavily inspired by https://users.rust-lang.org/t/common-data-type-for-functions-with-different-parameters-e-g-axum-route-handlers/90207/6
 // and https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=c6744c27c2358ec1d1196033a0ec11e4
@@ -463,46 +374,4 @@ where
 
 pub trait Handler<T>: Clone {
     fn call(self, ctx: &mut FunctionContext) -> ResolveResult;
-}
-
-fn double(x: i32) -> i32 {
-    x * 2
-}
-
-// fn add(a: i32, b: i32) -> i32 {
-//     a + b
-// }
-
-fn starts_with(ftx: &FunctionContext, This(this): This<Rc<String>>, prefix: Rc<String>) -> bool {
-    this.starts_with(prefix.as_str())
-}
-
-// fn starts_with(This(this): This<Rc<String>>, name: Rc<String>) -> bool {
-//     this.starts_with(name.as_str())
-// }
-
-#[test]
-fn test() {
-    let mut router = FunctionRegistry::default();
-    // router.add("double", double);
-    // router.add("add", add);
-    router.add("starts_with", starts_with);
-    let target = Value::String(Rc::new("foobar".to_string()));
-    let mut ctx = FunctionContext {
-        name: Rc::new("".to_string()),
-        // target: Some(&target),
-        this: None,
-        ptx: &Default::default(),
-        args: vec![
-            Expression::Atom(Atom::String(Rc::new("foobar".to_string()))).into(),
-            Expression::Atom(Atom::String(Rc::new("foo".to_string()))).into(),
-            // Expression::Atom(Atom::Int(20)),
-            // Expression::Atom(Atom::Int(10)),
-        ]
-        .into(),
-        arg_idx: 0,
-    };
-
-    let result = router.call("starts_with", &mut ctx);
-    println!("{:?}", result)
 }

@@ -1,8 +1,8 @@
 use crate::context::Context;
 use crate::duration::{format_duration, parse_duration};
-use crate::magic::{Arguments, Identifier, IntoResolveResult, List, This};
-use crate::objects::Value;
-use crate::{AllArguments, Argument, ExecutionError, Resolver};
+use crate::magic::{Arguments, Identifier, IntoResolveResult, This};
+use crate::objects::{Value, ValueType};
+use crate::{Argument, ExecutionError, Resolver};
 use cel_parser::Expression;
 use chrono::{DateTime, Duration, FixedOffset};
 use std::convert::TryInto;
@@ -54,18 +54,6 @@ impl<'context> FunctionContext<'context> {
         T::from_this(target)
     }
 
-    /// Checks that the function is not being called as a method, and returns
-    /// an error if it is.
-    pub fn check_no_method(&self) -> Result<()> {
-        // if self.this.is_some() {
-        //     return Err(ExecutionError::not_supported_as_method(
-        //         self.name.as_str(),
-        //         self.this.cloned().unwrap(),
-        //     ));
-        // }
-        Ok(())
-    }
-
     /// Resolves the given expression using the program's [`Context`].
     pub fn resolve<R>(&self, resolver: R) -> Result<Value>
     where
@@ -74,34 +62,9 @@ impl<'context> FunctionContext<'context> {
         resolver.resolve(self)
     }
 
-    /// Returns the argument at the given index. An error is returned if the
-    /// argument does not exist.
-    pub fn arg(&self, index: usize) -> Result<&Expression> {
-        self.args
-            .get(index)
-            .ok_or(ExecutionError::invalid_argument_count(
-                index + 1,
-                self.args.len(),
-            ))
-    }
-
-    /// Returns the argument at the given index as a identifier. An error
-    /// is returned if the argument does not exist, or if it is not an
-    /// identifier.
-    pub fn arg_ident(&self, index: usize) -> Result<Rc<String>> {
-        let arg = self.arg(index)?;
-        match arg {
-            Expression::Ident(ident) => Ok(ident.clone()),
-            _ => Err(ExecutionError::function_error(
-                "map",
-                &format!("argument {} must be an identifier", index),
-            )),
-        }
-    }
-
     /// Returns an execution error for the currently execution function.
-    pub fn error(&self, message: &str) -> Result<Value> {
-        Err(ExecutionError::function_error(self.name.as_str(), message))
+    pub fn error(&self, message: &str) -> ExecutionError {
+        ExecutionError::function_error(self.name.as_str(), message)
     }
 }
 
@@ -119,18 +82,13 @@ impl<'context> FunctionContext<'context> {
 /// ```skip
 /// size([1, 2, 3]) == 3
 /// ```
-pub fn size(value: Value) -> Result<i32> {
+pub fn size(ftx: &FunctionContext, value: Value) -> Result<i32> {
     let size = match value {
         Value::List(l) => l.len(),
         Value::Map(m) => m.map.len(),
         Value::String(s) => s.len(),
         Value::Bytes(b) => b.len(),
-        value => {
-            return Err(ExecutionError::function_error(
-                "size",
-                &format!("cannot determine the size of {:?}", value),
-            ))
-        }
+        value => return Err(ftx.error(&format!("cannot determine the size of {:?}", value))),
     };
     Ok(size as i32)
 }
@@ -200,7 +158,7 @@ pub fn contains(This(this): This<Value>, arg: Value) -> Result<Value> {
 // * `uint` - Returns the unsigned integer value of the target.
 // * `float` - Returns the float value of the target.
 // * `bytes` - Converts bytes to string using from_utf8_lossy.
-pub fn string(This(this): This<Value>) -> Result<Value> {
+pub fn string(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
     Ok(match this {
         Value::String(v) => Value::String(v.clone()),
         Value::Timestamp(t) => Value::String(t.to_rfc3339().into()),
@@ -209,28 +167,18 @@ pub fn string(This(this): This<Value>) -> Result<Value> {
         Value::UInt(v) => Value::String(v.to_string().into()),
         Value::Float(v) => Value::String(v.to_string().into()),
         Value::Bytes(v) => Value::String(Rc::new(String::from_utf8_lossy(v.as_slice()).into())),
-        v => {
-            return Err(ExecutionError::function_error(
-                "string",
-                &format!("cannot convert {:?} to string", v),
-            ))
-        }
+        v => return Err(ftx.error(&format!("cannot convert {:?} to string", v))),
     })
 }
 
 // Performs a type conversion on the target.
-pub fn double(This(this): This<Value>) -> Result<Value> {
+pub fn double(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
     Ok(match this {
         Value::String(v) => v.parse::<f64>().map(Value::Float).unwrap(),
         Value::Float(v) => Value::Float(v),
         Value::Int(v) => Value::Float(v as f64),
         Value::UInt(v) => Value::Float(v as f64),
-        v => {
-            return Err(ExecutionError::function_error(
-                "double",
-                &format!("cannot convert {:?} to double", v),
-            ))
-        }
+        v => return Err(ftx.error(&format!("cannot convert {:?} to double", v))),
     })
 }
 
@@ -294,7 +242,7 @@ pub fn map(
             }
             Value::List(Rc::new(values))
         }
-        _ => ftx.error("only lists are supported")?,
+        _ => return Err(this.error_expected_type(ValueType::List)),
     }
     .into()
 }
@@ -316,7 +264,7 @@ pub fn filter(
     ident: Identifier,
     expr: Expression,
 ) -> Result<Value> {
-    match ftx.this::<Value>()? {
+    match this {
         Value::List(items) => {
             let mut values = Vec::with_capacity(items.len());
             let mut ptx = ftx.ptx.clone();
@@ -328,7 +276,7 @@ pub fn filter(
             }
             Value::List(Rc::new(values))
         }
-        _ => ftx.error("only lists are supported")?,
+        _ => return Err(this.error_expected_type(ValueType::List)),
     }
     .into()
 }
@@ -351,7 +299,7 @@ pub fn all(
     ident: Identifier,
     expr: Expression,
 ) -> Result<bool> {
-    match this {
+    return match this {
         Value::List(items) => {
             let mut ptx = ftx.ptx.clone();
             for item in items.iter() {
@@ -360,7 +308,7 @@ pub fn all(
                     return Ok(false);
                 }
             }
-            return Ok(true);
+            Ok(true)
         }
         Value::Map(value) => {
             let mut ptx = ftx.ptx.clone();
@@ -370,15 +318,10 @@ pub fn all(
                     return Ok(false);
                 }
             }
-            return Ok(true);
+            Ok(true)
         }
-        _ => {
-            return Err(ExecutionError::function_error(
-                "all",
-                "only lists are supported",
-            ))
-        }
-    }
+        _ => return Err(this.error_expected_type(ValueType::List)),
+    };
 }
 
 /// Duration parses the provided argument into a [`Value::Duration`] value.

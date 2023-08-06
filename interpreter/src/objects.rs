@@ -8,20 +8,8 @@ use core::ops;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::fmt::{Display, Formatter};
 use std::rc::Rc;
-
-// Easily create conversions from primitive types to Value
-macro_rules! impl_from {
-    ($($t:ty => $v:expr),*) => {
-        $(
-            impl From<$t> for Value {
-                fn from(v: $t) -> Self {
-                    $v(v)
-                }
-            }
-        )*
-    };
-}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Map {
@@ -129,6 +117,66 @@ pub enum Value {
     Null,
 }
 
+pub enum ValueType {
+    List,
+    Map,
+    Function,
+    Int,
+    UInt,
+    Float,
+    String,
+    Bytes,
+    Bool,
+    Duration,
+    Timestamp,
+    Null,
+}
+
+impl Display for ValueType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ValueType::List => write!(f, "list"),
+            ValueType::Map => write!(f, "map"),
+            ValueType::Function => write!(f, "function"),
+            ValueType::Int => write!(f, "int"),
+            ValueType::UInt => write!(f, "uint"),
+            ValueType::Float => write!(f, "float"),
+            ValueType::String => write!(f, "string"),
+            ValueType::Bytes => write!(f, "bytes"),
+            ValueType::Bool => write!(f, "bool"),
+            ValueType::Duration => write!(f, "duration"),
+            ValueType::Timestamp => write!(f, "timestamp"),
+            ValueType::Null => write!(f, "null"),
+        }
+    }
+}
+
+impl Value {
+    pub fn type_of(&self) -> ValueType {
+        match self {
+            Value::List(_) => ValueType::List,
+            Value::Map(_) => ValueType::Map,
+            Value::Function(_, _) => ValueType::Function,
+            Value::Int(_) => ValueType::Int,
+            Value::UInt(_) => ValueType::UInt,
+            Value::Float(_) => ValueType::Float,
+            Value::String(_) => ValueType::String,
+            Value::Bytes(_) => ValueType::Bytes,
+            Value::Bool(_) => ValueType::Bool,
+            Value::Duration(_) => ValueType::Duration,
+            Value::Timestamp(_) => ValueType::Timestamp,
+            Value::Null => ValueType::Null,
+        }
+    }
+
+    pub fn error_expected_type(&self, expected: ValueType) -> ExecutionError {
+        ExecutionError::UnexpectedType {
+            got: self.type_of().to_string(),
+            want: expected.to_string(),
+        }
+    }
+}
+
 impl Eq for Value {}
 
 impl PartialOrd for Value {
@@ -195,12 +243,6 @@ impl From<String> for Value {
         Value::String(v.into())
     }
 }
-//
-// impl From<Duration> for Value {
-//     fn from(v: Duration) -> Self {
-//         Value::Duration(v)
-//     }
-// }
 
 // Convert Option<T> to Value
 impl<T: Into<Value>> From<Option<T>> for Value {
@@ -218,12 +260,6 @@ impl<K: Into<Key>, V: Into<Value>> From<HashMap<K, V>> for Value {
         Value::Map(v.into())
     }
 }
-
-// impl_from!(
-//     i32 => Value::Int,
-//     f64 => Value::Float,
-//     bool => Value::Bool
-// );
 
 impl From<ExecutionError> for ResolveResult {
     fn from(value: ExecutionError) -> Self {
@@ -591,16 +627,5 @@ impl ops::Rem<Value> for Value {
 
             _ => unimplemented!(),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::objects::Value;
-
-    #[test]
-    fn test_from_primitives() {
-        let value: Value = 1i32.into();
-        assert_eq!(value, Value::Int(1));
     }
 }
