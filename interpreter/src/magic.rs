@@ -146,13 +146,17 @@ impl<'a, 'context> FromContext<'a, 'context> for Identifier {
     {
         match arg_expr_from_context(ctx) {
             Expression::Ident(ident) => Ok(Identifier(ident.clone())),
-            expr => {
-                return Err(ExecutionError::UnexpectedType {
-                    got: format!("{:?}", expr),
-                    want: "identifier".to_string(),
-                })
-            }
+            expr => Err(ExecutionError::UnexpectedType {
+                got: format!("{:?}", expr),
+                want: "identifier".to_string(),
+            }),
         }
+    }
+}
+
+impl From<&Identifier> for String {
+    fn from(value: &Identifier) -> Self {
+        value.0.to_string()
     }
 }
 
@@ -270,7 +274,7 @@ impl_handler!(C1, C2, C3, C4, C5, C6, C7, C8);
 
 #[derive(Default)]
 pub struct FunctionRegistry {
-    routes: HashMap<String, Box<dyn Function>>,
+    functions: HashMap<String, Box<dyn Function>>,
 }
 
 impl FunctionRegistry {
@@ -279,7 +283,7 @@ impl FunctionRegistry {
         H: Handler<T> + 'static,
         T: 'static,
     {
-        self.routes.insert(
+        self.functions.insert(
             name.to_string(),
             Box::new(HandlerFunction {
                 handler,
@@ -289,15 +293,15 @@ impl FunctionRegistry {
     }
 
     pub(crate) fn get(&self, name: &str) -> Option<Box<dyn Function>> {
-        self.routes.get(name).map(|f| f.clone_box())
+        self.functions.get(name).map(|f| f.clone_box())
     }
 
     pub(crate) fn has(&self, name: &str) -> bool {
-        self.routes.contains_key(name)
+        self.functions.contains_key(name)
     }
 
     fn call(&self, name: &str, ctx: &mut FunctionContext) -> ResolveResult {
-        self.routes
+        self.functions
             .get(name)
             .unwrap()
             .clone_box()

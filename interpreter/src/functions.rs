@@ -1,6 +1,6 @@
 use crate::context::Context;
 use crate::duration::{format_duration, parse_duration};
-use crate::magic::{Arguments, Identifier, IntoResolveResult, This};
+use crate::magic::{Arguments, Identifier, This};
 use crate::objects::{Value, ValueType};
 use crate::{Argument, ExecutionError, Resolver};
 use cel_parser::Expression;
@@ -303,7 +303,7 @@ pub fn all(
         Value::List(items) => {
             let mut ptx = ftx.ptx.clone();
             for item in items.iter() {
-                ptx.add_variable(ident.clone(), item.clone());
+                ptx.add_variable(&ident, item);
                 if let Value::Bool(false) = ptx.resolve(&expr)? {
                     return Ok(false);
                 }
@@ -313,7 +313,7 @@ pub fn all(
         Value::Map(value) => {
             let mut ptx = ftx.ptx.clone();
             for key in value.map.keys() {
-                ptx.add_variable(ident.clone(), key.clone());
+                ptx.add_variable(&ident, key);
                 if let Value::Bool(false) = ptx.resolve(&expr)? {
                     return Ok(false);
                 }

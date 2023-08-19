@@ -1,4 +1,4 @@
-use cel_interpreter::{Argument, Context, FunctionContext, Program, ResolveResult};
+use cel_interpreter::{Context, Program};
 
 fn main() {
     let program = Program::compile("add(2, 3)").unwrap();

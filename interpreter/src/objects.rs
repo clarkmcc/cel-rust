@@ -177,6 +177,12 @@ impl Value {
     }
 }
 
+impl From<&Value> for Value {
+    fn from(value: &Value) -> Self {
+        value.clone()
+    }
+}
+
 impl Eq for Value {}
 
 impl PartialOrd for Value {
@@ -220,6 +226,12 @@ impl From<Key> for Value {
             Key::Bool(v) => Value::Bool(v),
             Key::String(v) => Value::String(v),
         }
+    }
+}
+
+impl From<&Key> for Key {
+    fn from(key: &Key) -> Self {
+        key.clone()
     }
 }
 
