@@ -6,7 +6,6 @@ use crate::{Argument, ExecutionError, Resolver};
 use cel_parser::Expression;
 use chrono::{DateTime, Duration, FixedOffset};
 use std::convert::TryInto;
-use std::mem;
 use std::rc::Rc;
 
 type Result<T> = std::result::Result<T, ExecutionError>;
@@ -342,6 +341,8 @@ pub fn duration(value: Rc<String>) -> Result<Value> {
     Ok(Value::Duration(_duration(value.as_str())?))
 }
 
+/// Timestamp parses the provided argument into a [`Value::Timestamp`] value.
+/// The
 pub fn timestamp(value: Rc<String>) -> Result<Value> {
     Ok(Value::Timestamp(
         DateTime::parse_from_rfc3339(value.as_str())
@@ -349,27 +350,15 @@ pub fn timestamp(value: Rc<String>) -> Result<Value> {
     ))
 }
 
-pub fn max(Arguments(items): Arguments) -> Result<Value> {
-    if items.is_empty() {
-        return Err(ExecutionError::function_error("max", "missing arguments"));
+pub fn max(Arguments(args): Arguments) -> Result<Value> {
+    // If items is a list of values, then operate on the list
+    if args.len() == 1 {
+        return Ok(match args[0] {
+            Value::List(ref values) => values.iter().max().cloned().unwrap_or(Value::Null),
+            _ => args[0].clone(),
+        });
     }
-    let items = items.iter().filter(is_numeric).collect::<Vec<_>>();
-    let same_type = items
-        .iter()
-        .all(|item| mem::discriminant(*item) == mem::discriminant(items[0]));
-    if !same_type {
-        return Err(ExecutionError::function_error(
-            "max",
-            "mixed types not supported",
-        ));
-    }
-    items
-        .iter()
-        .max_by(|a, b| a.cmp(b))
-        .cloned()
-        .cloned()
-        .unwrap_or(Value::Null)
-        .into()
+    args.iter().max().cloned().unwrap_or(Value::Null).into()
 }
 
 pub trait FromThis {
@@ -487,6 +476,7 @@ mod tests {
             ("max multiple", "max(1, 2, 3) == 3"),
             ("max negative", "max(-1, 0) == 0"),
             ("max float", "max(-1.0, 0.0) == 0.0"),
+            ("max list", "max([1, 2, 3]) == 3"),
         ]
         .iter()
         .for_each(assert_script);

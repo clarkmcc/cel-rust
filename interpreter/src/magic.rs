@@ -1,10 +1,22 @@
-use crate::macros::{impl_arg_value_from_context, impl_from_value, impl_handler};
+use crate::macros::{impl_conversions, impl_handler};
 use crate::{AllArguments, Argument, ExecutionError, FunctionContext, ResolveResult, Value};
 use cel_parser::Expression;
 use chrono::{DateTime, Duration, FixedOffset};
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::rc::Rc;
+
+impl_conversions!(
+    i32 => Value::Int,
+    u32 => Value::UInt,
+    f64 => Value::Float,
+    Rc<String> => Value::String,
+    Rc<Vec<u8>> => Value::Bytes,
+    bool => Value::Bool,
+    Duration => Value::Duration,
+    DateTime<FixedOffset> => Value::Timestamp,
+    Rc<Vec<Value>> => Value::List
+);
 
 /// Describes any type that can be converted from a [`Value`] into itself.
 /// This is commonly used to convert from [`Value`] into primitive types,
@@ -16,21 +28,30 @@ trait FromValue {
         Self: Sized;
 }
 
-impl_from_value!(i32, Value::Int);
-impl_from_value!(u32, Value::UInt);
-impl_from_value!(f64, Value::Float);
-impl_from_value!(Rc<String>, Value::String);
-impl_from_value!(Rc<Vec<u8>>, Value::Bytes);
-impl_from_value!(bool, Value::Bool);
-impl_from_value!(Duration, Value::Duration);
-impl_from_value!(DateTime<FixedOffset>, Value::Timestamp);
-
 impl FromValue for Value {
     fn from_value(value: &Value) -> Result<Self, ExecutionError>
     where
         Self: Sized,
     {
         Ok(value.clone())
+    }
+}
+
+/// A trait for types that can be converted into a [`ResolveResult`]. Every function that can
+/// be registered to the CEL context must return a value that implements this trait.
+pub trait IntoResolveResult {
+    fn into_resolve_result(self) -> ResolveResult;
+}
+
+impl IntoResolveResult for String {
+    fn into_resolve_result(self) -> ResolveResult {
+        Ok(Value::String(Rc::new(self)))
+    }
+}
+
+impl IntoResolveResult for Result<Value, ExecutionError> {
+    fn into_resolve_result(self) -> ResolveResult {
+        self
     }
 }
 
@@ -184,6 +205,22 @@ impl FromValue for List {
     }
 }
 
+/// An argument extractor that extracts all the arguments passed to a function, resolves their
+/// expressions and returns a vector of [`Value`]. This is useful for functions that accept a
+/// variable number of arguments rather than known arguments and types (for example the `max`
+/// function).
+///
+/// # Example
+/// ```javascript
+/// max(1, 2, 3) == 3
+/// ```
+///
+/// ```rust
+/// # use cel_interpreter::{Arguments, Value};
+/// pub fn max(Arguments(args): Arguments) -> Value {
+///     args.iter().max().cloned().unwrap_or(Value::Null).into()
+/// }
+/// ```
 #[derive(Clone)]
 pub struct Arguments(pub Rc<Vec<Value>>);
 
@@ -217,45 +254,31 @@ impl<'a, 'context> FromContext<'a, 'context> for Expression {
     }
 }
 
+/// Returns the next argument specified by the context's `arg_idx` field as an expression
+/// (i.e. not resolved). Calling this multiple times will increment the `arg_idx` which will
+/// return subsequent arguments every time.
+///
+/// Calling this function when there are no more arguments will result in a panic. Since this
+/// function is only ever called within the context of a controlled macro that calls it once
+/// for each argument, this should never happen.
 fn arg_expr_from_context(ctx: &mut FunctionContext) -> Expression {
     let idx = ctx.arg_idx;
     ctx.arg_idx += 1;
     ctx.args[idx].clone()
 }
 
+/// Returns the next argument specified by the context's `arg_idx` field as after resolving
+/// it. Calling this multiple times will increment the `arg_idx` which will return subsequent
+/// arguments every time.
+///
+/// Calling this function when there are no more arguments will result in a panic. Since this
+/// function is only ever called within the context of a controlled macro that calls it once
+/// for each argument, this should never happen.
 fn arg_value_from_context(ctx: &mut FunctionContext) -> Result<Value, ExecutionError> {
     let idx = ctx.arg_idx;
     ctx.arg_idx += 1;
     ctx.resolve(Argument(idx))
 }
-
-pub trait IntoResolveResult {
-    fn into_resolve_result(self) -> ResolveResult;
-}
-
-impl IntoResolveResult for String {
-    fn into_resolve_result(self) -> ResolveResult {
-        Ok(Value::String(Rc::new(self)))
-    }
-}
-
-impl IntoResolveResult for Result<Value, ExecutionError> {
-    fn into_resolve_result(self) -> ResolveResult {
-        self
-    }
-}
-
-impl_arg_value_from_context!(
-    i32,
-    u32,
-    f64,
-    Rc<String>,
-    Rc<Vec<u8>>,
-    bool,
-    Duration,
-    DateTime<FixedOffset>,
-    List
-);
 
 pub struct WithFunctionContext;
 
