@@ -2,7 +2,8 @@ use crate::context::Context;
 use crate::duration::{format_duration, parse_duration};
 use crate::magic::{Arguments, Identifier, This};
 use crate::objects::{Value, ValueType};
-use crate::{Argument, ExecutionError, Resolver};
+use crate::resolvers::{Argument, Resolver};
+use crate::ExecutionError;
 use cel_parser::Expression;
 use chrono::{DateTime, Duration, FixedOffset};
 use std::convert::TryInto;
@@ -393,10 +394,6 @@ fn _duration(i: &str) -> Result<Duration> {
 fn _timestamp(i: &str) -> Result<DateTime<FixedOffset>> {
     DateTime::parse_from_rfc3339(i)
         .map_err(|e| ExecutionError::function_error("timestamp", &e.to_string()))
-}
-
-fn is_numeric(target: &&Value) -> bool {
-    matches!(target, Value::Int(_) | Value::UInt(_) | Value::Float(_))
 }
 
 #[cfg(test)]

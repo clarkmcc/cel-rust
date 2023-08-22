@@ -17,7 +17,7 @@ pub struct Map {
 }
 
 impl PartialOrd for Map {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    fn partial_cmp(&self, _: &Self) -> Option<Ordering> {
         None
     }
 }

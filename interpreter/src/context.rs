@@ -1,14 +1,8 @@
-use crate::functions::FunctionContext;
 use crate::magic::{Function, FunctionRegistry, Handler};
 use crate::objects::Value;
-use crate::{functions, ExecutionError, ResolveResult};
+use crate::{functions, ExecutionError};
 use cel_parser::Expression;
 use std::collections::HashMap;
-
-/// A function that can be loaded into the [`ParentContext`] and then called from a Common Expression
-/// Language program. If the function is a method, the first parameter will be the target object.
-/// If the function accepts arguments, they will be provided as expressions.
-type ContextFunction = dyn Fn(FunctionContext) -> ResolveResult;
 
 /// Context is a collection of variables and functions that can be used
 /// by the interpreter to resolve expressions. The context can be either

@@ -21,7 +21,6 @@ mod testing;
 use magic::FromContext;
 
 pub use magic::{Arguments, Identifier, This};
-pub use resolvers::{AllArguments, Argument, Resolver};
 
 #[derive(Error, Debug)]
 #[error("Error parsing {msg}")]

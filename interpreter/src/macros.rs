@@ -71,9 +71,9 @@ macro_rules! impl_handler {
             {
                 fn call(self, ftx: &mut FunctionContext) -> ResolveResult {
                     $(
-                        let [<arg_ $t>] = $t::from_context(ftx)?;
+                        let [<arg_ $t:lower>] = $t::from_context(ftx)?;
                     )*
-                    self($([<arg_ $t>],)*).into_resolve_result()
+                    self($([<arg_ $t:lower>],)*).into_resolve_result()
                 }
             }
 
@@ -85,9 +85,9 @@ macro_rules! impl_handler {
             {
                 fn call(self, ftx: &mut FunctionContext) -> ResolveResult {
                     $(
-                        let [<arg_ $t>] = $t::from_context(ftx)?;
+                        let [<arg_ $t:lower>] = $t::from_context(ftx)?;
                     )*
-                    self(ftx, $([<arg_ $t>],)*).into_resolve_result()
+                    self(ftx, $([<arg_ $t:lower>],)*).into_resolve_result()
                 }
             }
         }

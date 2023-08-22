@@ -1,6 +1,17 @@
 use crate::{ExecutionError, FunctionContext, ResolveResult, Value};
 use cel_parser::Expression;
 
+/// Resolver knows how to resolve a [`Value`] from a [`FunctionContext`].
+/// At their core, resolvers are responsible for taking Expressions and
+/// turned them into values, but this trait allows us to abstract away
+/// some of the complexity surrounding how the expression is obtained in
+/// the first place.
+///
+/// For example, the [`Argument`] resolver takes an index and resolves the
+/// corresponding argument from the [`FunctionContext`]. Resolver makes it
+/// easy to (1) get the expression for a specific argument index, (2)
+/// return an error if the argument is missing, and (3) resolve the expression
+/// into a value.
 pub trait Resolver {
     fn resolve(&self, ctx: &FunctionContext) -> ResolveResult;
 }
@@ -11,31 +22,13 @@ impl Resolver for Expression {
     }
 }
 
-/// Argument is a [`Resolver`] that resolves to the nth argument. Previously
-/// users would have to call a separate method `resolve_arg` and provide the
-/// arg that they wanted, but this is now handled by the [`Resolver`] trait.
+/// Argument is a [`Resolver`] that resolves to the nth argument.
 ///
 /// # Example
+/// ```skip
+/// let arg0 = ftx.resolve(Argument(0))?;
 /// ```
-/// # use cel_interpreter::{Argument, Context, FunctionContext, Program, ResolveResult};
-/// #
-/// # let program = Program::compile("add(2, 3)").unwrap();
-/// # let mut context = Context::default();
-/// # context.add_function("add", add);
-/// #
-/// # let value = program.execute(&context).unwrap();
-/// # assert_eq!(value, 5.into());
-///
-/// /// The add function takes two arguments and returns their sum. We discard the first
-/// /// parameter because the add function is not a method, it is always called with two
-/// /// arguments.
-/// fn add(ftx: &FunctionContext) -> ResolveResult {
-///     let a = ftx.resolve(Argument(0))?;
-///     let b = ftx.resolve(Argument(1))?;
-///     Ok(a + b)
-/// }
-/// ```
-pub struct Argument(pub usize);
+pub(crate) struct Argument(pub usize);
 
 impl Resolver for Argument {
     fn resolve(&self, ctx: &FunctionContext) -> ResolveResult {
@@ -44,7 +37,7 @@ impl Resolver for Argument {
             .args
             .get(index)
             .ok_or(ExecutionError::invalid_argument_count(
-                (index + 1) as usize,
+                index + 1,
                 ctx.args.len(),
             ))?;
         Value::resolve(arg, ctx.ptx)
@@ -55,22 +48,10 @@ impl Resolver for Argument {
 /// resolved and then returned as a [`Value::List`]
 ///
 /// # Example
+/// ```skip
+/// let args = ftx.resolve(AllArguments)?;
 /// ```
-/// # use cel_interpreter::{Argument, AllArguments, Context, FunctionContext, Program, ResolveResult};
-/// #
-/// # let program = Program::compile("list(1, 2, 3)").unwrap();
-/// # let mut context = Context::default();
-/// # context.add_function("list", list);
-/// #
-/// # let value = program.execute(&context).unwrap();
-/// # assert_eq!(value, vec![1, 2, 3].into());
-///
-/// /// The list function takes all the provided arguments and returns them as a list.
-/// fn list(ftx: &FunctionContext) -> ResolveResult {
-///     ftx.resolve(AllArguments)
-/// }
-/// ```
-pub struct AllArguments;
+pub(crate) struct AllArguments;
 
 impl Resolver for AllArguments {
     fn resolve(&self, ctx: &FunctionContext) -> ResolveResult {

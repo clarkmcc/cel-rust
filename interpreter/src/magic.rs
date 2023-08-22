@@ -1,5 +1,6 @@
 use crate::macros::{impl_conversions, impl_handler};
-use crate::{AllArguments, Argument, ExecutionError, FunctionContext, ResolveResult, Value};
+use crate::resolvers::{AllArguments, Argument};
+use crate::{ExecutionError, FunctionContext, ResolveResult, Value};
 use cel_parser::Expression;
 use chrono::{DateTime, Duration, FixedOffset};
 use std::collections::HashMap;
@@ -322,20 +323,12 @@ impl FunctionRegistry {
     pub(crate) fn has(&self, name: &str) -> bool {
         self.functions.contains_key(name)
     }
-
-    fn call(&self, name: &str, ctx: &mut FunctionContext) -> ResolveResult {
-        self.functions
-            .get(name)
-            .unwrap()
-            .clone_box()
-            .call_with_context(ctx)
-    }
 }
 
 pub trait Function {
     fn clone_box(&self) -> Box<dyn Function>;
     fn into_callable<'a>(self: Box<Self>, ctx: &'a mut FunctionContext) -> Box<dyn Callable + 'a>;
-    fn call_with_context<'a>(self: Box<Self>, ctx: &'a mut FunctionContext) -> ResolveResult;
+    fn call_with_context(self: Box<Self>, ctx: &mut FunctionContext) -> ResolveResult;
 }
 
 pub struct HandlerFunction<H: Clone> {
@@ -364,7 +357,7 @@ where
         (self.into_callable)(self.handler, ctx)
     }
 
-    fn call_with_context<'a>(self: Box<Self>, ctx: &'a mut FunctionContext) -> ResolveResult {
+    fn call_with_context(self: Box<Self>, ctx: &mut FunctionContext) -> ResolveResult {
         self.into_callable(ctx).call()
     }
 }
