@@ -40,20 +40,6 @@ impl<'context> FunctionContext<'context> {
         }
     }
 
-    /// Returns a reference to the target object if the function is being called
-    /// as a method, or it returns an error if the function is not being called
-    /// as a method.
-    pub fn this<T>(&self) -> Result<&T>
-    where
-        T: FromThis,
-    {
-        let target = self
-            .this
-            .as_ref()
-            .ok_or(ExecutionError::missing_argument_or_target())?;
-        T::from_this(target)
-    }
-
     /// Resolves the given expression using the program's [`Context`].
     pub fn resolve<R>(&self, resolver: R) -> Result<Value>
     where
@@ -360,27 +346,6 @@ pub fn max(Arguments(args): Arguments) -> Result<Value> {
         });
     }
     args.iter().max().cloned().unwrap_or(Value::Null).into()
-}
-
-pub trait FromThis {
-    fn from_this(target: &Value) -> Result<&Self>
-    where
-        Self: Sized;
-}
-
-impl FromThis for Value {
-    fn from_this(target: &Value) -> Result<&Self> {
-        Ok(target)
-    }
-}
-
-impl FromThis for Rc<String> {
-    fn from_this(target: &Value) -> Result<&Self> {
-        match target {
-            Value::String(v) => Ok(v),
-            _ => Err(ExecutionError::unsupported_target_type(target.clone())),
-        }
-    }
 }
 
 /// A wrapper around [`parse_duration`] that converts errors into [`ExecutionError`].

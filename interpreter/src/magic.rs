@@ -124,11 +124,13 @@ where
     where
         Self: Sized,
     {
-        let value = ctx
-            .this::<Value>()
-            .cloned()
-            .or_else(|_| arg_value_from_context(ctx))?;
-        Ok(This(T::from_value(&value)?))
+        if let Some(ref this) = ctx.this {
+            Ok(This(T::from_value(this)?))
+        } else {
+            let arg = arg_value_from_context(ctx)
+                .map_err(|_| ExecutionError::missing_argument_or_target())?;
+            Ok(This(T::from_value(&arg)?))
+        }
     }
 }
 
