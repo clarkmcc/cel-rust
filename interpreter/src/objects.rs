@@ -453,9 +453,6 @@ impl<'a> Value {
                     let func = ctx.get_function(&**name).unwrap();
                     match target {
                         None => {
-                            if args.is_empty() {
-                                return Err(ExecutionError::MissingArgumentOrTarget);
-                            }
                             let mut ctx =
                                 FunctionContext::new(name.clone(), None, ctx, args.clone());
                             func.call_with_context(&mut ctx)

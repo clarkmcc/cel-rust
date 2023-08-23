@@ -20,7 +20,9 @@ mod resolvers;
 mod testing;
 use magic::FromContext;
 
-pub use magic::{Arguments, Identifier, This};
+pub mod extractors {
+    pub use crate::magic::{Arguments, Identifier, This};
+}
 
 #[derive(Error, Debug)]
 #[error("Error parsing {msg}")]
