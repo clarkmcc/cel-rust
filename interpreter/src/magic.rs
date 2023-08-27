@@ -8,8 +8,8 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 
 impl_conversions!(
-    i32 => Value::Int,
-    u32 => Value::UInt,
+    i64 => Value::Int,
+    u64 => Value::UInt,
     f64 => Value::Float,
     Rc<String> => Value::String,
     Rc<Vec<u8>> => Value::Bytes,
@@ -18,6 +18,12 @@ impl_conversions!(
     DateTime<FixedOffset> => Value::Timestamp,
     Rc<Vec<Value>> => Value::List
 );
+
+impl From<i32> for Value {
+    fn from(value: i32) -> Self {
+        Value::Int(value as i64)
+    }
+}
 
 /// Describes any type that can be converted from a [`Value`] into itself.
 /// This is commonly used to convert from [`Value`] into primitive types,

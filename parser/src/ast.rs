@@ -57,8 +57,8 @@ pub enum Member {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Atom {
-    Int(i32),
-    UInt(u32),
+    Int(i64),
+    UInt(u64),
     Float(f64),
     String(Rc<String>),
     Bytes(Rc<Vec<u8>>),

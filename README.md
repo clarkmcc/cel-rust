@@ -31,7 +31,7 @@ library aims to be very simple to use, while still being fast, safe, and customi
 fn main() {
     let program = Program::compile("add(2, 3) == 5").unwrap();
     let mut context = Context::default();
-    context.add_function("add", |a: i32, b: i32| a + b);
+    context.add_function("add", |a: i64, b: i64| a + b);
     let value = program.execute(&context).unwrap();
     assert_eq!(value, true.into());
 }

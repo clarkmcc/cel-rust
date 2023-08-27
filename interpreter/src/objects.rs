@@ -24,8 +24,8 @@ impl PartialOrd for Map {
 
 #[derive(Debug, Eq, PartialEq, Hash, Ord, Clone, PartialOrd)]
 pub enum Key {
-    Int(i32),
-    Uint(u32),
+    Int(i64),
+    Uint(u64),
     Bool(bool),
     String(Rc<String>),
 }
@@ -56,14 +56,14 @@ impl From<bool> for Key {
     }
 }
 
-impl From<i32> for Key {
-    fn from(v: i32) -> Self {
+impl From<i64> for Key {
+    fn from(v: i64) -> Self {
         Key::Int(v)
     }
 }
 
-impl From<u32> for Key {
-    fn from(v: u32) -> Self {
+impl From<u64> for Key {
+    fn from(v: u64) -> Self {
         Key::Uint(v)
     }
 }
@@ -106,8 +106,8 @@ pub enum Value {
     Function(Rc<String>, Option<Box<Value>>),
 
     // Atoms
-    Int(i32),
-    UInt(u32),
+    Int(i64),
+    UInt(u64),
     Float(f64),
     String(Rc<String>),
     Bytes(Rc<Vec<u8>>),

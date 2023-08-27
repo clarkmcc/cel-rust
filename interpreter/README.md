@@ -36,7 +36,7 @@ fn main() {
 
     // Add any variables or functions that the program will need
     let mut context = Context::default();
-    context.add_function("add", |a: i32, b: i32| a + b);
+    context.add_function("add", |a: i64, b: i64| a + b);
 
     // Run the program
     let value = program.execute(&context).unwrap();

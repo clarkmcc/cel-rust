@@ -68,7 +68,7 @@ impl<'context> FunctionContext<'context> {
 /// ```skip
 /// size([1, 2, 3]) == 3
 /// ```
-pub fn size(ftx: &FunctionContext, value: Value) -> Result<i32> {
+pub fn size(ftx: &FunctionContext, value: Value) -> Result<i64> {
     let size = match value {
         Value::List(l) => l.len(),
         Value::Map(m) => m.map.len(),
@@ -76,7 +76,7 @@ pub fn size(ftx: &FunctionContext, value: Value) -> Result<i32> {
         Value::Bytes(b) => b.len(),
         value => return Err(ftx.error(&format!("cannot determine the size of {:?}", value))),
     };
-    Ok(size as i32)
+    Ok(size as i64)
 }
 
 /// Returns true if the target contains the provided argument. The actual behavior
