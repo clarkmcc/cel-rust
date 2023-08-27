@@ -23,9 +23,7 @@ pub enum ArithmeticOp {
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum UnaryOp {
     Not,
-    DoubleNot,
-    Minus,
-    DoubleMinus,
+    Neg,
 }
 
 #[derive(Debug, PartialEq, Clone)]

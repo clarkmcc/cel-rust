@@ -212,10 +212,15 @@ mod tests {
     #[test]
     fn test_parser_bool_unary_ops_repeated() {
         assert_eq!(
-            parse("!!true"),
+            parse("!(!true)"),  // Parens to help LALRPOP
             (Unary(
-                UnaryOp::DoubleNot,
-                Box::new(Expression::Atom(Atom::Bool(true))),
+                UnaryOp::Not,
+                Box::new(
+                    Expression::Unary(
+                        UnaryOp::Not,
+                        Box::new(Expression::Atom(Atom::Bool(true)))
+                    )
+                ),
             ))
         );
     }
@@ -224,7 +229,7 @@ mod tests {
     fn delimited_expressions() {
         assert_parse_eq(
             "(-((1)))",
-            Unary(UnaryOp::Minus, Box::new(Expression::Atom(Atom::Int(1)))),
+            Unary(UnaryOp::Neg, Box::new(Expression::Atom(Atom::Int(1)))),
         );
     }
 

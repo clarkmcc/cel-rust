@@ -357,16 +357,9 @@ impl<'a> Value {
                 let expr = Value::resolve(expr, ctx)?;
                 match op {
                     UnaryOp::Not => Value::Bool(!expr.to_bool()),
-                    UnaryOp::DoubleNot => Value::Bool(expr.to_bool()),
-                    UnaryOp::Minus => match expr {
+                    UnaryOp::Neg => match expr {
                         Value::Int(i) => Value::Int(-i),
                         Value::Float(i) => Value::Float(-i),
-                        _ => unimplemented!(),
-                    },
-                    UnaryOp::DoubleMinus => match expr {
-                        Value::Int(_) => expr,
-                        Value::UInt(_) => expr,
-                        Value::Float(_) => expr,
                         _ => unimplemented!(),
                     },
                 }
