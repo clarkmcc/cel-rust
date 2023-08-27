@@ -3,6 +3,7 @@ use lalrpop_util::lalrpop_mod;
 pub mod ast;
 pub use ast::*;
 
+mod chumsky_parser;
 use std::fmt::Display;
 
 lalrpop_mod!(#[allow(clippy::all)] pub parser, "/cel.rs");
