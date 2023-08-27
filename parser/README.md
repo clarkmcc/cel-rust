@@ -5,11 +5,10 @@ This module implements a LALRPOP parser for the [Common Expression Language](htt
 ## Usage:
 
 ```rust
-use cel_parser::ast::Expression;
-use cel_parser::parser::ExpressionParser;
+use cel_parser::parse;
 
 pub fn main() {
-    let ast = ExpressionParser::new().parse("1 + 1 && [1,2,3].size() == 3").unwrap();
-    println!("{:?}", ast);
+    let expr = parse("1 + 1").unwrap();
+    println!("{:?}", expr);
 }
 ```

@@ -7,7 +7,6 @@ use std::fmt::Display;
 
 lalrpop_mod!(#[allow(clippy::all)] pub parser, "/cel.rs");
 
-
 #[derive(Debug)]
 pub struct ParseError {
     msg: String,
@@ -19,6 +18,14 @@ impl Display for ParseError {
     }
 }
 
+/// Parses a CEL expression and returns it.
+///
+/// # Example
+/// ```
+/// use cel_parser::parse;
+/// let expr = parse("1 + 1").unwrap();
+/// println!("{:?}", expr);
+/// ```
 pub fn parse(input: &str) -> Result<Expression, ParseError> {
     // Wrap the internal parser function - whether larlpop or chumsky
 
@@ -31,24 +38,22 @@ pub fn parse(input: &str) -> Result<Expression, ParseError> {
     //         }
     //     })
 
-
     // Existing Larlpop Parser:
     crate::parser::ExpressionParser::new()
         .parse(input)
         .map_err(|e| ParseError {
             msg: format!("{}", e),
         })
-
 }
-
 
 #[cfg(test)]
 mod tests {
-    use crate::{Atom::*, Expression, Expression::*, Member::*, RelationOp, UnaryOp, Atom, ArithmeticOp};
+    use crate::{
+        ArithmeticOp, Atom, Atom::*, Expression, Expression::*, Member::*, RelationOp, UnaryOp,
+    };
 
     fn parse(input: &str) -> Expression {
-        crate::parse(input)
-            .unwrap_or_else(|e| panic!("{}", e))
+        crate::parse(input).unwrap_or_else(|e| panic!("{}", e))
     }
 
     fn assert_parse_eq(input: &str, expected: Expression) {
@@ -70,7 +75,6 @@ mod tests {
     fn simple_float() {
         assert_parse_eq("1.0", Atom(Float(1.0)))
     }
-
 
     #[test]
     fn other_floats() {
@@ -140,20 +144,18 @@ mod tests {
             "[1, 2, 3].map(x, x * 2)",
             Member(
                 Box::new(Member(
-                    Box::new(List(
-                        vec![Atom(Int(1)), Atom(Int(2)), Atom(Int(3))]
-                    )),
-                    Box::new(Attribute("map".to_string().into()))
+                    Box::new(List(vec![Atom(Int(1)), Atom(Int(2)), Atom(Int(3))])),
+                    Box::new(Attribute("map".to_string().into())),
                 )),
-                Box::new(FunctionCall(
-                    vec![
-                        Ident("x".to_string().into()),
-                        Arithmetic(
-                            Box::new(Ident("x".to_string().into())),
-                            ArithmeticOp::Multiply,
-                            Box::new(Atom(Int(2))))
-                    ]))
-            )
+                Box::new(FunctionCall(vec![
+                    Ident("x".to_string().into()),
+                    Arithmetic(
+                        Box::new(Ident("x".to_string().into())),
+                        ArithmeticOp::Multiply,
+                        Box::new(Atom(Int(2))),
+                    ),
+                ])),
+            ),
         )
     }
 
@@ -218,7 +220,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn delimited_expressions() {
         assert_parse_eq(
@@ -259,7 +260,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn mixed_type_list() {
         assert_parse_eq(
@@ -299,7 +299,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn test_empty_map_parsing() {
         assert_eq!(parse("{}"), (Map(vec![])));
@@ -322,7 +321,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn nonempty_map_index_parsing() {
         assert_parse_eq(
@@ -338,9 +336,7 @@ mod tests {
                         Expression::Atom(Int(2)),
                     ),
                 ])),
-                Box::new(
-                    Index(Box::new(Expression::Atom(Int(0)))),
-                )
+                Box::new(Index(Box::new(Expression::Atom(Int(0))))),
             ),
         );
     }
@@ -383,7 +379,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn binary_product_expressions() {
         assert_parse_eq(
@@ -423,7 +418,6 @@ mod tests {
     //     );
     // }
 
-
     #[test]
     fn test_parser_sum_expressions() {
         assert_parse_eq(
@@ -448,7 +442,6 @@ mod tests {
         // );
     }
 
-
     #[test]
     fn conditionals() {
         assert_parse_eq(
@@ -472,12 +465,8 @@ mod tests {
             "true ? 'result_true' : 'result_false'",
             Ternary(
                 Box::new(Expression::Atom(Bool(true))),
-                Box::new(Expression::Atom(String(
-                    "result_true".to_string().into(),
-                ))),
-                Box::new(Expression::Atom(String(
-                    "result_false".to_string().into(),
-                ))),
+                Box::new(Expression::Atom(String("result_true".to_string().into()))),
+                Box::new(Expression::Atom(String("result_false".to_string().into()))),
             ),
         );
 
@@ -497,14 +486,9 @@ mod tests {
             "false ? 'result_true' : 'result_false'",
             Ternary(
                 Box::new(Expression::Atom(Bool(false))),
-                Box::new(Expression::Atom(String(
-                    "result_true".to_string().into(),
-                ))),
-                Box::new(Expression::Atom(String(
-                    "result_false".to_string().into(),
-                ))),
+                Box::new(Expression::Atom(String("result_true".to_string().into()))),
+                Box::new(Expression::Atom(String("result_false".to_string().into()))),
             ),
         );
     }
-
 }
