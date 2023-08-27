@@ -1,13 +1,8 @@
-use crate::functions::FunctionContext;
+use crate::magic::{Function, FunctionRegistry, Handler};
 use crate::objects::Value;
-use crate::{functions, ExecutionError, ResolveResult};
+use crate::{functions, ExecutionError};
 use cel_parser::Expression;
 use std::collections::HashMap;
-
-/// A function that can be loaded into the [`ParentContext`] and then called from a Common Expression
-/// Language program. If the function is a method, the first parameter will be the target object.
-/// If the function accepts arguments, they will be provided as expressions.
-type ContextFunction = dyn Fn(FunctionContext) -> ResolveResult;
 
 /// Context is a collection of variables and functions that can be used
 /// by the interpreter to resolve expressions. The context can be either
@@ -35,7 +30,7 @@ type ContextFunction = dyn Fn(FunctionContext) -> ResolveResult;
 ///
 pub enum Context<'a> {
     Root {
-        functions: HashMap<String, Box<ContextFunction>>,
+        functions: FunctionRegistry,
         variables: HashMap<String, Value>,
     },
     Child {
@@ -84,29 +79,28 @@ impl<'a> Context<'a> {
     {
         let name = name.into();
         match self {
-            Context::Root { functions, .. } => functions.contains_key(&name),
+            Context::Root { functions, .. } => functions.has(&name),
             Context::Child { parent, .. } => parent.has_function(name),
         }
     }
 
-    pub(crate) fn get_function<S>(&self, name: S) -> Option<&ContextFunction>
+    pub(crate) fn get_function<S>(&self, name: S) -> Option<Box<dyn Function>>
     where
         S: Into<String>,
     {
         let name = name.into();
         match self {
-            Context::Root { functions, .. } => functions.get(&name).map(|v| v.as_ref()),
+            Context::Root { functions, .. } => functions.get(&name),
             Context::Child { parent, .. } => parent.get_function(name),
         }
     }
 
-    pub fn add_function<S, F: 'static>(&mut self, name: S, value: F)
+    pub fn add_function<T: 'static, F: 'static>(&mut self, name: &str, value: F)
     where
-        F: Fn(FunctionContext) -> Result<Value, ExecutionError>,
-        S: Into<String>,
+        F: Handler<T> + 'static,
     {
         if let Context::Root { functions, .. } = self {
-            functions.insert(name.into(), Box::new(value));
+            functions.add(name, value);
         };
     }
 

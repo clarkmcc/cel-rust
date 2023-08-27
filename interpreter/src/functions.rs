@@ -1,11 +1,12 @@
 use crate::context::Context;
 use crate::duration::{format_duration, parse_duration};
-use crate::objects::Value;
-use crate::{ExecutionError, ResolveResult};
+use crate::magic::{Arguments, Identifier, This};
+use crate::objects::{Value, ValueType};
+use crate::resolvers::{Argument, Resolver};
+use crate::ExecutionError;
 use cel_parser::Expression;
 use chrono::{DateTime, Duration, FixedOffset};
 use std::convert::TryInto;
-use std::mem;
 use std::rc::Rc;
 
 type Result<T> = std::result::Result<T, ExecutionError>;
@@ -14,79 +15,42 @@ type Result<T> = std::result::Result<T, ExecutionError>;
 /// It contains references ot the target object (if the function is called as
 /// a method), the program context ([`Context`]) which gives functions access
 /// to variables, and the arguments to the function call.
-pub struct FunctionContext<'t, 'c, 'e> {
+#[derive(Clone)]
+pub struct FunctionContext<'context> {
     pub name: Rc<String>,
-    pub target: Option<&'t Value>,
-    pub ptx: &'c Context<'c>,
-    pub args: &'e [Expression],
+    pub this: Option<Value>,
+    pub ptx: &'context Context<'context>,
+    pub args: Vec<Expression>,
+    pub arg_idx: usize,
 }
 
-impl<'t, 'c, 'e> FunctionContext<'t, 'c, 'e> {
-    /// Returns a reference to the target object if the function is being called
-    /// as a method, or it returns an error if the function is not being called
-    /// as a method.
-    pub fn target(&self) -> Result<&'t Value> {
-        self.target
-            .ok_or(ExecutionError::missing_argument_or_target())
-    }
-
-    /// Checks that the function is not being called as a method, and returns
-    /// an error if it is.
-    pub fn check_no_method(&self) -> Result<()> {
-        if self.target.is_some() {
-            return Err(ExecutionError::not_supported_as_method(
-                self.name.as_str(),
-                self.target.cloned().unwrap(),
-            ));
+impl<'context> FunctionContext<'context> {
+    pub fn new(
+        name: Rc<String>,
+        this: Option<Value>,
+        ptx: &'context Context<'context>,
+        args: Vec<Expression>,
+    ) -> Self {
+        Self {
+            name,
+            this,
+            ptx,
+            args,
+            arg_idx: 0,
         }
-        Ok(())
     }
 
     /// Resolves the given expression using the program's [`Context`].
-    pub fn resolve(&self, expr: &'e Expression) -> Result<Value> {
-        self.ptx.resolve(expr)
-    }
-
-    /// Resolves all of the given expressions using the program's [`Context`].
-    /// The resolved values are returned as a [`Value::List`].
-    pub fn resolve_all(&self, exprs: &[Expression]) -> ResolveResult {
-        self.ptx.resolve_all(exprs)
-    }
-
-    /// Resolves the argument at the given index. An error is returned if the
-    /// argument does not exist.
-    pub fn resolve_arg(&self, index: usize) -> Result<Value> {
-        self.ptx.resolve(self.arg(index)?)
-    }
-
-    /// Returns the argument at the given index. An error is returned if the
-    /// argument does not exist.
-    pub fn arg(&self, index: usize) -> Result<&'e Expression> {
-        self.args
-            .get(index)
-            .ok_or(ExecutionError::invalid_argument_count(
-                index + 1,
-                self.args.len(),
-            ))
-    }
-
-    /// Returns the argument at the given index as a identifier. An error
-    /// is returned if the argument does not exist, or if it is not an
-    /// identifier.
-    pub fn arg_ident(&self, index: usize) -> Result<Rc<String>> {
-        let arg = self.arg(index)?;
-        match arg {
-            Expression::Ident(ident) => Ok(ident.clone()),
-            _ => Err(ExecutionError::function_error(
-                "map",
-                &format!("argument {} must be an identifier", index),
-            )),
-        }
+    pub fn resolve<R>(&self, resolver: R) -> Result<Value>
+    where
+        R: Resolver,
+    {
+        resolver.resolve(self)
     }
 
     /// Returns an execution error for the currently execution function.
-    pub fn error(&self, message: &str) -> Result<Value> {
-        Err(ExecutionError::function_error(self.name.as_str(), message))
+    pub fn error(&self, message: &str) -> ExecutionError {
+        ExecutionError::function_error(self.name.as_str(), message)
     }
 }
 
@@ -104,17 +68,15 @@ impl<'t, 'c, 'e> FunctionContext<'t, 'c, 'e> {
 /// ```skip
 /// size([1, 2, 3]) == 3
 /// ```
-pub fn size(ftx: FunctionContext) -> Result<Value> {
-    ftx.check_no_method()?;
-    let arg = ftx.arg(0)?;
-    let size = match ftx.resolve(arg)? {
+pub fn size(ftx: &FunctionContext, value: Value) -> Result<i32> {
+    let size = match value {
         Value::List(l) => l.len(),
         Value::Map(m) => m.map.len(),
         Value::String(s) => s.len(),
         Value::Bytes(b) => b.len(),
-        value => return ftx.error(&format!("cannot determine size of {:?}", value)),
+        value => return Err(ftx.error(&format!("cannot determine the size of {:?}", value))),
     };
-    Value::Int(size as i32).into()
+    Ok(size as i32)
 }
 
 /// Returns true if the target contains the provided argument. The actual behavior
@@ -147,10 +109,8 @@ pub fn size(ftx: FunctionContext) -> Result<Value> {
 /// ```cel
 /// b"abc".contains(b"c") == true
 /// ```
-pub fn contains(ftx: FunctionContext) -> Result<Value> {
-    let target = ftx.target()?;
-    let arg = ftx.resolve_arg(0)?;
-    Ok(match target {
+pub fn contains(This(this): This<Value>, arg: Value) -> Result<Value> {
+    Ok(match this {
         Value::List(v) => v.contains(&arg),
         Value::Map(v) => v
             .map
@@ -164,15 +124,8 @@ pub fn contains(ftx: FunctionContext) -> Result<Value> {
         }
         Value::Bytes(b) => {
             if let Value::Bytes(arg) = arg {
-                // When search raw bytes, we can only search for a single byte right now.
-                let length = arg.len();
-                if length > 1 {
-                    return ftx.error(&format!("expected 1 byte, found {}", length));
-                }
-                arg.as_slice()
-                    .first()
-                    .map(|byte| b.contains(byte))
-                    .unwrap_or(false)
+                let s = arg.as_slice();
+                b.windows(arg.len()).any(|w| w == s)
             } else {
                 false
             }
@@ -191,27 +144,27 @@ pub fn contains(ftx: FunctionContext) -> Result<Value> {
 // * `uint` - Returns the unsigned integer value of the target.
 // * `float` - Returns the float value of the target.
 // * `bytes` - Converts bytes to string using from_utf8_lossy.
-pub fn string(ftx: FunctionContext) -> Result<Value> {
-    Ok(match ftx.target()? {
+pub fn string(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
+    Ok(match this {
         Value::String(v) => Value::String(v.clone()),
         Value::Timestamp(t) => Value::String(t.to_rfc3339().into()),
-        Value::Duration(v) => Value::String(format_duration(v).into()),
+        Value::Duration(v) => Value::String(format_duration(&v).into()),
         Value::Int(v) => Value::String(v.to_string().into()),
         Value::UInt(v) => Value::String(v.to_string().into()),
         Value::Float(v) => Value::String(v.to_string().into()),
         Value::Bytes(v) => Value::String(Rc::new(String::from_utf8_lossy(v.as_slice()).into())),
-        v => ftx.error(&format!("cannot convert {:?} to string", v))?,
+        v => return Err(ftx.error(&format!("cannot convert {:?} to string", v))),
     })
 }
 
 // Performs a type conversion on the target.
-pub fn double(ftx: FunctionContext) -> Result<Value> {
-    Ok(match ftx.target()? {
+pub fn double(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
+    Ok(match this {
         Value::String(v) => v.parse::<f64>().map(Value::Float).unwrap(),
-        Value::Float(v) => Value::Float(*v),
-        Value::Int(v) => Value::Float(*v as f64),
-        Value::UInt(v) => Value::Float(*v as f64),
-        v => ftx.error(&format!("cannot convert {:?} to double", v))?,
+        Value::Float(v) => Value::Float(v),
+        Value::Int(v) => Value::Float(v as f64),
+        Value::UInt(v) => Value::Float(v as f64),
+        v => return Err(ftx.error(&format!("cannot convert {:?} to double", v))),
     })
 }
 
@@ -221,19 +174,8 @@ pub fn double(ftx: FunctionContext) -> Result<Value> {
 /// ```cel
 /// "abc".startsWith("a") == true
 /// ```
-pub fn starts_with(ftx: FunctionContext) -> Result<Value> {
-    let target = ftx.target()?;
-    Ok(match target {
-        Value::String(s) => {
-            if let Value::String(arg) = ftx.resolve_arg(0)? {
-                s.starts_with(arg.as_str())
-            } else {
-                false
-            }
-        }
-        _ => false,
-    }
-    .into())
+pub fn starts_with(This(this): This<Rc<String>>, prefix: Rc<String>) -> bool {
+    this.starts_with(prefix.as_str())
 }
 
 /// Returns true if the provided argument can be resolved. This function is
@@ -248,11 +190,10 @@ pub fn starts_with(ftx: FunctionContext) -> Result<Value> {
 /// ```cel
 /// has(foo.bar.baz)
 /// ```
-pub fn has(ftx: FunctionContext) -> Result<Value> {
-    ftx.check_no_method()?;
+pub fn has(ftx: &FunctionContext) -> Result<Value> {
     // We determine if a type has a property by attempting to resolve it.
     // If we get a NoSuchKey error, then we know the property does not exist
-    match ftx.resolve_arg(0) {
+    match ftx.resolve(Argument(0)) {
         Ok(_) => Value::Bool(true),
         Err(err) => match err {
             ExecutionError::NoSuchKey(_) => Value::Bool(false),
@@ -270,21 +211,24 @@ pub fn has(ftx: FunctionContext) -> Result<Value> {
 /// ```cel
 /// [1, 2, 3].map(x, x * 2) == [2, 4, 6]
 /// ```
-pub fn map(ftx: FunctionContext) -> Result<Value> {
-    let ident = ftx.arg_ident(0)?;
-    let expr = ftx.arg(1)?;
-    match ftx.target()? {
+pub fn map(
+    ftx: &FunctionContext,
+    This(this): This<Value>,
+    ident: Identifier,
+    expr: Expression,
+) -> Result<Value> {
+    match this {
         Value::List(items) => {
             let mut values = Vec::with_capacity(items.len());
             let mut ptx = ftx.ptx.clone();
             for item in items.iter() {
-                ptx.add_variable(&**ident, item.clone());
-                let value = ptx.resolve(expr)?;
+                ptx.add_variable(ident.clone(), item.clone());
+                let value = ptx.resolve(&expr)?;
                 values.push(value);
             }
             Value::List(Rc::new(values))
         }
-        _ => ftx.error("only lists are supported")?,
+        _ => return Err(this.error_expected_type(ValueType::List)),
     }
     .into()
 }
@@ -300,22 +244,25 @@ pub fn map(ftx: FunctionContext) -> Result<Value> {
 /// ```cel
 /// [1, 2, 3].filter(x, x > 1) == [2, 3]
 /// ```
-pub fn filter(ftx: FunctionContext) -> Result<Value> {
-    let ident = ftx.arg_ident(0)?;
-    let expr = ftx.arg(1)?;
-    match ftx.target()? {
+pub fn filter(
+    ftx: &FunctionContext,
+    This(this): This<Value>,
+    ident: Identifier,
+    expr: Expression,
+) -> Result<Value> {
+    match this {
         Value::List(items) => {
             let mut values = Vec::with_capacity(items.len());
             let mut ptx = ftx.ptx.clone();
             for item in items.iter() {
-                ptx.add_variable(&**ident, item.clone());
-                if let Value::Bool(true) = ptx.resolve(expr)? {
+                ptx.add_variable(ident.clone(), item.clone());
+                if let Value::Bool(true) = ptx.resolve(&expr)? {
                     values.push(item.clone());
                 }
             }
             Value::List(Rc::new(values))
         }
-        _ => ftx.error("only lists are supported")?,
+        _ => return Err(this.error_expected_type(ValueType::List)),
     }
     .into()
 }
@@ -332,33 +279,35 @@ pub fn filter(ftx: FunctionContext) -> Result<Value> {
 /// [1, 2, 3].all(x, x > 0) == true
 /// [{1:true, 2:true, 3:false}].all(x, x > 0) == true
 /// ```
-pub fn all(ftx: FunctionContext) -> Result<Value> {
-    let ident = ftx.arg_ident(0)?;
-    let expr = ftx.arg(1)?;
-    match ftx.target()? {
+pub fn all(
+    ftx: &FunctionContext,
+    This(this): This<Value>,
+    ident: Identifier,
+    expr: Expression,
+) -> Result<bool> {
+    return match this {
         Value::List(items) => {
             let mut ptx = ftx.ptx.clone();
             for item in items.iter() {
-                ptx.add_variable(&**ident, item.clone());
-                if let Value::Bool(false) = ptx.resolve(expr)? {
-                    return Ok(Value::Bool(false));
+                ptx.add_variable(&ident, item);
+                if let Value::Bool(false) = ptx.resolve(&expr)? {
+                    return Ok(false);
                 }
             }
-            return Ok(Value::Bool(true));
+            Ok(true)
         }
         Value::Map(value) => {
             let mut ptx = ftx.ptx.clone();
             for key in value.map.keys() {
-                ptx.add_variable(&**ident, key.clone());
-                if let Value::Bool(false) = ptx.resolve(expr)? {
-                    return Ok(Value::Bool(false));
+                ptx.add_variable(&ident, key);
+                if let Value::Bool(false) = ptx.resolve(&expr)? {
+                    return Ok(false);
                 }
             }
-            return Ok(Value::Bool(true));
+            Ok(true)
         }
-        _ => ftx.error("only lists are supported")?,
-    }
-    .into()
+        _ => return Err(this.error_expected_type(ValueType::List)),
+    };
 }
 
 /// Duration parses the provided argument into a [`Value::Duration`] value.
@@ -375,55 +324,28 @@ pub fn all(ftx: FunctionContext) -> Result<Value> {
 /// - `1.5ms` parses as 1 millisecond and 500 microseconds
 /// - `1ns` parses as 1 nanosecond
 /// - `1.5ns` parses as 1 nanosecond (sub-nanosecond durations not supported)
-pub fn duration(ftx: FunctionContext) -> Result<Value> {
-    ftx.check_no_method()?;
-    let value = ftx.resolve_arg(0)?;
-    match value {
-        Value::String(v) => Value::Duration(_duration(v.as_str())?),
-        _ => return Err(ExecutionError::unsupported_target_type(value)),
-    }
-    .into()
+pub fn duration(value: Rc<String>) -> Result<Value> {
+    Ok(Value::Duration(_duration(value.as_str())?))
 }
 
-pub fn timestamp(ftx: FunctionContext) -> Result<Value> {
-    ftx.check_no_method()?;
-    let value = ftx.resolve(ftx.arg(0)?)?;
-    match value {
-        Value::String(v) => Value::Timestamp(
-            DateTime::parse_from_rfc3339(v.as_str())
-                .map_err(|e| ftx.error(e.to_string().as_str()).err().unwrap())?,
-        ),
-        _ => return Err(ExecutionError::unsupported_target_type(value)),
-    }
-    .into()
+/// Timestamp parses the provided argument into a [`Value::Timestamp`] value.
+/// The
+pub fn timestamp(value: Rc<String>) -> Result<Value> {
+    Ok(Value::Timestamp(
+        DateTime::parse_from_rfc3339(value.as_str())
+            .map_err(|e| ExecutionError::function_error("timestamp", e.to_string().as_str()))?,
+    ))
 }
 
-pub fn max(ftx: FunctionContext) -> Result<Value> {
-    match ftx.resolve_all(ftx.args)? {
-        Value::List(items) => {
-            if items.is_empty() {
-                return Err(ExecutionError::function_error("max", "missing arguments"));
-            }
-            let items = items.iter().filter(is_numeric).collect::<Vec<_>>();
-            let same_type = items
-                .iter()
-                .all(|item| mem::discriminant(*item) == mem::discriminant(items[0]));
-            if !same_type {
-                return Err(ExecutionError::function_error(
-                    "max",
-                    "mixed types not supported",
-                ));
-            }
-            items
-                .iter()
-                .max_by(|a, b| a.cmp(b))
-                .cloned()
-                .cloned()
-                .unwrap_or(Value::Null)
-                .into()
-        }
-        _ => ftx.error("only lists are supported"),
+pub fn max(Arguments(args): Arguments) -> Result<Value> {
+    // If items is a list of values, then operate on the list
+    if args.len() == 1 {
+        return Ok(match args[0] {
+            Value::List(ref values) => values.iter().max().cloned().unwrap_or(Value::Null),
+            _ => args[0].clone(),
+        });
     }
+    args.iter().max().cloned().unwrap_or(Value::Null).into()
 }
 
 /// A wrapper around [`parse_duration`] that converts errors into [`ExecutionError`].
@@ -437,10 +359,6 @@ fn _duration(i: &str) -> Result<Duration> {
 fn _timestamp(i: &str) -> Result<DateTime<FixedOffset>> {
     DateTime::parse_from_rfc3339(i)
         .map_err(|e| ExecutionError::function_error("timestamp", &e.to_string()))
-}
-
-fn is_numeric(target: &&Value) -> bool {
-    matches!(target, Value::Int(_) | Value::UInt(_) | Value::Float(_))
 }
 
 #[cfg(test)]
@@ -520,6 +438,7 @@ mod tests {
             ("max multiple", "max(1, 2, 3) == 3"),
             ("max negative", "max(-1, 0) == 0"),
             ("max float", "max(-1.0, 0.0) == 0.0"),
+            ("max list", "max([1, 2, 3]) == 3"),
         ]
         .iter()
         .for_each(assert_script);
