@@ -230,7 +230,7 @@ fn str_() -> impl Parser<char, Expression, Error = Simple<char>> {
 pub fn parser() -> impl Parser<char, Expression, Error = Simple<char>> {
     let ident = text::ident::<char, Simple<char>>()
         .padded()
-        .map(Expression::Ident)
+        .map(|name| Expression::Ident(Rc::new(name)))
         .labelled("identifier");
 
     let null = just("null")

@@ -5,6 +5,7 @@ pub use ast::*;
 
 mod chumsky_parser;
 use std::fmt::Display;
+use chumsky::Parser;
 
 lalrpop_mod!(#[allow(clippy::all)] pub parser, "/cel.rs");
 
@@ -31,20 +32,19 @@ pub fn parse(input: &str) -> Result<Expression, ParseError> {
     // Wrap the internal parser function - whether larlpop or chumsky
 
     // Example for a possible new chumsky based parser...
-    // parser().parse(input)
-    //     .into_result()
-    //     .map_err(|e|  {
-    //         ParseError {
-    //             msg: e.iter().map(|e| format!("{}", e)).collect::<Vec<_>>().join("\n")
-    //         }
-    //     })
+    chumsky_parser::parser().parse(input)
+        .map_err(|e|  {
+            ParseError {
+                msg: e.iter().map(|e| format!("{}", e)).collect::<Vec<_>>().join("\n")
+            }
+        })
 
     // Existing Larlpop Parser:
-    crate::parser::ExpressionParser::new()
-        .parse(input)
-        .map_err(|e| ParseError {
-            msg: format!("{}", e),
-        })
+    // crate::parser::ExpressionParser::new()
+    //     .parse(input)
+    //     .map_err(|e| ParseError {
+    //         msg: format!("{}", e),
+    //     })
 }
 
 #[cfg(test)]
