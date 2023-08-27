@@ -176,7 +176,7 @@ mod tests {
         // Test that we can merge two maps
         assert_output(
             "{'a': 1} + {'a': 2, 'b': 3}",
-            Ok(HashMap::from([("a", 2i64), ("b", 3i64)]).into()),
+            Ok(HashMap::from([("a", 2), ("b", 3)]).into()),
         );
     }
 
@@ -216,7 +216,7 @@ mod tests {
 
         for (name, script, error) in tests {
             let mut ctx = Context::default();
-            ctx.add_variable("foo", HashMap::from([("bar", 1i64)]));
+            ctx.add_variable("foo", HashMap::from([("bar", 1)]));
             let res = test_script(script, Some(ctx));
             assert_eq!(res, error.into(), "{}", name);
         }
