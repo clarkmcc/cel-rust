@@ -2,7 +2,8 @@
 
 [![Rust](https://github.com/clarkmcc/cel-rust/actions/workflows/rust.yml/badge.svg)](https://github.com/clarkmcc/cel-rust/actions/workflows/rust.yml)
 
-The [Common Expression Language (CEL)](https://github.com/google/cel-spec) is a non-Turing complete language designed for simplicity, speed, safety, and
+The [Common Expression Language (CEL)](https://github.com/google/cel-spec) is a non-Turing complete language designed
+for simplicity, speed, safety, and
 portability. CEL's C-like syntax looks nearly identical to equivalent expressions in C++, Go, Java, and TypeScript. CEL
 is ideal for lightweight expression evaluation when a fully sandboxed scripting language is too resource intensive.
 
@@ -28,8 +29,9 @@ library aims to be very simple to use, while still being fast, safe, and customi
 
 ```rust
 fn main() {
-    let program = Program::compile("1 == 1").unwrap();
-    let context = Context::default();
+    let program = Program::compile("add(2, 3) == 5").unwrap();
+    let mut context = Context::default();
+    context.add_function("add", |a: i32, b: i32| a + b);
     let value = program.execute(&context).unwrap();
     assert_eq!(value, true.into());
 }
