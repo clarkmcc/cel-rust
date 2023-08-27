@@ -121,7 +121,7 @@ pub fn format_duration(d: &Duration) -> String {
     if u < SECOND {
         // Special case: if duration is smaller than a second,
         // use smaller units, like 1.2ms
-        let mut prec = 0;
+        let mut _prec = 0;
         w -= 1;
         buf[w] = b's';
         w -= 1;
@@ -129,19 +129,19 @@ pub fn format_duration(d: &Duration) -> String {
         if u == 0 {
             return "0s".to_string();
         } else if u < MICROSECOND {
-            prec = 0;
+            _prec = 0;
             buf[w] = b'n';
         } else if u < MILLISECOND {
-            prec = 3;
+            _prec = 3;
             // U+00B5 'µ' micro sign == 0xC2 0xB5
             buf[w] = 0xB5;
             w -= 1;
             buf[w] = 0xC2;
         } else {
-            prec = 6;
+            _prec = 6;
             buf[w] = b'm';
         }
-        (w, u) = format_float(&mut buf[..w], u, prec);
+        (w, u) = format_float(&mut buf[..w], u, _prec);
         w = format_int(&mut buf[..w], u);
     } else {
         w -= 1;

@@ -1,5 +1,7 @@
+#![allow(clippy::too_many_arguments)]
 use cel_interpreter::extractors::This;
-use cel_interpreter::{Context, ExecutionError, FunctionContext, Program, ResolveResult};
+use cel_interpreter::{Context, ExecutionError, FunctionContext, Program, ResolveResult, Value};
+use chrono::{DateTime, Duration, FixedOffset};
 use std::rc::Rc;
 
 fn main() {
@@ -14,6 +16,9 @@ fn main() {
 
     // Use the function context to return error messages
     context.add_function("fail", fail);
+
+    // See all the different value types you can accept in your functions
+    context.add_function("primitives", primitives);
 
     // Run the program
     let result = program.execute(&context);
@@ -40,4 +45,21 @@ fn is_empty(This(s): This<Rc<String>>) -> bool {
 ///    which attaches some helpful context for the error.
 fn fail(ftx: &FunctionContext) -> ResolveResult {
     ftx.error("This function always fails").into()
+}
+
+/// A function that illustrates all the different types of values that are supported
+/// as arguments to a function, as well as the fact that any of these types can also
+/// be returned from a function.
+fn primitives(
+    _a: i32,
+    _b: u32,
+    _c: f64,
+    _d: bool,
+    _e: Rc<String>,
+    _f: Rc<Vec<u8>>,
+    _g: Duration,
+    _h: DateTime<FixedOffset>,
+    _i: Rc<Vec<Value>>,
+) -> Duration {
+    Duration::zero()
 }

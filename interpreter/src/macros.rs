@@ -69,9 +69,9 @@ macro_rules! impl_handler {
                 $($t: for<'a, 'context> crate::FromContext<'a, 'context>,)*
                 R: IntoResolveResult,
             {
-                fn call(self, ftx: &mut FunctionContext) -> ResolveResult {
+                fn call(self, _ftx: &mut FunctionContext) -> ResolveResult {
                     $(
-                        let [<arg_ $t:lower>] = $t::from_context(ftx)?;
+                        let [<arg_ $t:lower>] = $t::from_context(_ftx)?;
                     )*
                     self($([<arg_ $t:lower>],)*).into_resolve_result()
                 }
@@ -83,11 +83,11 @@ macro_rules! impl_handler {
                 $($t: for<'a, 'context> crate::FromContext<'a, 'context>,)*
                 R: IntoResolveResult,
             {
-                fn call(self, ftx: &mut FunctionContext) -> ResolveResult {
+                fn call(self, _ftx: &mut FunctionContext) -> ResolveResult {
                     $(
-                        let [<arg_ $t:lower>] = $t::from_context(ftx)?;
+                        let [<arg_ $t:lower>] = $t::from_context(_ftx)?;
                     )*
-                    self(ftx, $([<arg_ $t:lower>],)*).into_resolve_result()
+                    self(_ftx, $([<arg_ $t:lower>],)*).into_resolve_result()
                 }
             }
         }

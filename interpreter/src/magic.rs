@@ -75,7 +75,8 @@ pub(crate) trait FromContext<'a, 'context> {
 /// # Using `This`
 /// ```
 /// # use std::rc::Rc;
-/// # use cel_interpreter::{This, Program, Context};
+/// # use cel_interpreter::{Program, Context};
+/// use cel_interpreter::extractors::This;
 /// # let mut context = Context::default();
 /// # context.add_function("startsWith", starts_with);
 ///
@@ -219,7 +220,8 @@ impl FromValue for List {
 /// ```
 ///
 /// ```rust
-/// # use cel_interpreter::{Arguments, Value};
+/// # use cel_interpreter::{Value};
+/// use cel_interpreter::extractors::Arguments;
 /// pub fn max(Arguments(args): Arguments) -> Value {
 ///     args.iter().max().cloned().unwrap_or(Value::Null).into()
 /// }
@@ -294,6 +296,7 @@ impl_handler!(C1, C2, C3, C4, C5);
 impl_handler!(C1, C2, C3, C4, C5, C6);
 impl_handler!(C1, C2, C3, C4, C5, C6, C7);
 impl_handler!(C1, C2, C3, C4, C5, C6, C7, C8);
+impl_handler!(C1, C2, C3, C4, C5, C6, C7, C8, C9);
 
 // Heavily inspired by https://users.rust-lang.org/t/common-data-type-for-functions-with-different-parameters-e-g-axum-route-handlers/90207/6
 // and https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=c6744c27c2358ec1d1196033a0ec11e4
