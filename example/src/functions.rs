@@ -9,7 +9,7 @@ fn main() {
     let mut context = Context::default();
 
     // Add functions using closures
-    context.add_function("add", |a: i32, b: i32| a + b);
+    context.add_function("add", |a: i64, b: i64| a + b);
 
     // Add methods to a string type
     context.add_function("isEmpty", is_empty);
@@ -51,8 +51,8 @@ fn fail(ftx: &FunctionContext) -> ResolveResult {
 /// as arguments to a function, as well as the fact that any of these types can also
 /// be returned from a function.
 fn primitives(
-    _a: i32,
-    _b: u32,
+    _a: i64,
+    _b: u64,
     _c: f64,
     _d: bool,
     _e: Rc<String>,

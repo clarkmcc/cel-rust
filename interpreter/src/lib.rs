@@ -154,8 +154,8 @@ mod tests {
     fn variables() {
         fn assert_output(script: &str, expected: ResolveResult) {
             let mut ctx = Context::default();
-            ctx.add_variable("foo", HashMap::from([("bar", 1)]));
-            ctx.add_variable("arr", vec![1i32, 2, 3]);
+            ctx.add_variable("foo", HashMap::from([("bar", 1i64)]));
+            ctx.add_variable("arr", vec![1i64, 2, 3]);
             ctx.add_variable("str", "foobar".to_string());
             assert_eq!(test_script(script, Some(ctx)), expected);
         }
