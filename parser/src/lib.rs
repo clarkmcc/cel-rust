@@ -3,7 +3,9 @@ use lalrpop_util::lalrpop_mod;
 pub mod ast;
 pub use ast::*;
 
+mod chumsky_parser;
 use std::fmt::Display;
+use chumsky::Parser;
 
 lalrpop_mod!(#[allow(clippy::all)] pub parser, "/cel.rs");
 
@@ -30,20 +32,19 @@ pub fn parse(input: &str) -> Result<Expression, ParseError> {
     // Wrap the internal parser function - whether larlpop or chumsky
 
     // Example for a possible new chumsky based parser...
-    // parser().parse(input)
-    //     .into_result()
-    //     .map_err(|e|  {
-    //         ParseError {
-    //             msg: e.iter().map(|e| format!("{}", e)).collect::<Vec<_>>().join("\n")
-    //         }
-    //     })
+    chumsky_parser::parser().parse(input)
+        .map_err(|e|  {
+            ParseError {
+                msg: e.iter().map(|e| format!("{}", e)).collect::<Vec<_>>().join("\n")
+            }
+        })
 
     // Existing Larlpop Parser:
-    crate::parser::ExpressionParser::new()
-        .parse(input)
-        .map_err(|e| ParseError {
-            msg: format!("{}", e),
-        })
+    // crate::parser::ExpressionParser::new()
+    //     .parse(input)
+    //     .map_err(|e| ParseError {
+    //         msg: format!("{}", e),
+    //     })
 }
 
 #[cfg(test)]
@@ -212,10 +213,15 @@ mod tests {
     #[test]
     fn test_parser_bool_unary_ops_repeated() {
         assert_eq!(
-            parse("!!true"),
+            parse("!(!true)"),  // Parens to help LALRPOP
             (Unary(
-                UnaryOp::DoubleNot,
-                Box::new(Expression::Atom(Atom::Bool(true))),
+                UnaryOp::Not,
+                Box::new(
+                    Expression::Unary(
+                        UnaryOp::Not,
+                        Box::new(Expression::Atom(Atom::Bool(true)))
+                    )
+                ),
             ))
         );
     }
@@ -224,7 +230,7 @@ mod tests {
     fn delimited_expressions() {
         assert_parse_eq(
             "(-((1)))",
-            Unary(UnaryOp::Minus, Box::new(Expression::Atom(Atom::Int(1)))),
+            Unary(UnaryOp::Neg, Box::new(Expression::Atom(Atom::Int(1)))),
         );
     }
 
@@ -489,6 +495,20 @@ mod tests {
                 Box::new(Expression::Atom(String("result_true".to_string().into()))),
                 Box::new(Expression::Atom(String("result_false".to_string().into()))),
             ),
+        );
+    }
+
+    #[test]
+    fn test_primitive_function_call() {
+        assert_parse_eq(
+            "10.double()",
+            Member(
+                Box::new(Member(
+                    Box::new(Expression::Atom(Int(10))),
+                    Box::new(Attribute("double".to_string().into())),
+                )),
+                Box::new(FunctionCall(vec![])),
+            )
         );
     }
 }
