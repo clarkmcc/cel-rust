@@ -497,4 +497,18 @@ mod tests {
             ),
         );
     }
+
+    #[test]
+    fn test_primitive_function_call() {
+        assert_parse_eq(
+            "10.double()",
+            Member(
+                Box::new(Member(
+                    Box::new(Expression::Atom(Int(10))),
+                    Box::new(Attribute("double".to_string().into())),
+                )),
+                Box::new(FunctionCall(vec![])),
+            )
+        );
+    }
 }

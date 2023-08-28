@@ -26,7 +26,7 @@ fn boolean() -> impl Parser<char, Expression, Error = Simple<char>> {
 fn numbers() -> impl Parser<char, Expression, Error = Simple<char>> {
     let digits = text::digits::<char, Simple<char>>(10);
 
-    let frac = just('.').chain::<char, _, _>(digits.clone().or_not());
+    let frac = just('.').chain::<char, _, _>(digits.clone());
 
     let exp = just('e')
         .or(just('E'))
