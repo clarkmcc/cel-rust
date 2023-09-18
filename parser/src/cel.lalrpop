@@ -12,14 +12,42 @@ match {
 }
 
 pub Expression: Expression = {
-    <left:Expression> <op:ArithmeticOp> <right:Member> => Expression::Arithmetic(left.into(), op, right.into()),
-    <left:Expression> <op:RelationOp> <right:Member> => Expression::Relation(left.into(), op, right.into()),
-    <condition:Expression> "?" <left:Member> ":" <right:Primary> => Expression::Ternary(condition.into(), left.into(), right.into()),
-    <left:Expression> "||" <right:Member> => Expression::Or(left.into(), right.into()),
-    <left:Expression> "&&" <right:Member> => Expression::And(left.into(), right.into()),
-    <op:UnaryOp> <right:Member> => Expression::Unary(op, right.into()),
+    Conditional
+};
 
-    Member,
+pub Conditional: Expression = {
+    <condition:LogicalOr> "?" <if_true:LogicalOr> ":" <if_false:Conditional> => Expression::Ternary(condition.into(), if_true.into(), if_false.into()),
+    LogicalOr
+};
+
+pub LogicalOr: Expression = {
+    <left:LogicalOr> "||" <right:LogicalAnd> => Expression::Or(left.into(), right.into()),
+    LogicalAnd
+};
+
+pub LogicalAnd: Expression = {
+    <left:LogicalAnd> "&&" <right:Relations> => Expression::And(left.into(), right.into()),
+    Relations
+};
+
+pub Relations: Expression = {
+    <left:ArithmeticAddSub> <op:RelationOp> <right:ArithmeticAddSub> => Expression::Relation(left.into(), op, right.into()),
+    ArithmeticAddSub
+};
+
+pub ArithmeticAddSub: Expression = {
+    <left:ArithmeticAddSub> <op:ArithmeticOpAddSub> <right:ArithmeticMulDivMod> => Expression::Arithmetic(left.into(), op, right.into()),
+    ArithmeticMulDivMod
+};
+
+pub ArithmeticMulDivMod: Expression = {
+    <left:ArithmeticMulDivMod> <op:ArithmeticOpMulDivMod> <right:Unary> => Expression::Arithmetic(left.into(), op, right.into()),
+    Unary
+};
+
+pub Unary: Expression = {
+    <op:UnaryOp> <right:Member> => Expression::Unary(op, right.into()),
+    Member
 };
 
 pub Member: Expression = {
@@ -64,13 +92,17 @@ CommaSeparated<T>: Vec<T> = {
     }
 };
 
-ArithmeticOp: ArithmeticOp = { // (3)
+ArithmeticOpAddSub: ArithmeticOp = {
     "+" => ArithmeticOp::Add,
-    "-" => ArithmeticOp::Subtract,
+    "-" => ArithmeticOp::Subtract
+};
+
+ArithmeticOpMulDivMod: ArithmeticOp = {
     "*" => ArithmeticOp::Multiply,
     "/" => ArithmeticOp::Divide,
-    "%" => ArithmeticOp::Modulus,
+    "%" => ArithmeticOp::Modulus
 };
+
 
 UnaryOp: UnaryOp = {
     "!" => UnaryOp::Not,

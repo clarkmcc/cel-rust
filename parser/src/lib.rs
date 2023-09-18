@@ -491,4 +491,19 @@ mod tests {
             ),
         );
     }
+
+    #[test]
+    fn test_operator_precedence() {
+        assert_parse_eq(
+            "a && b == 'string'",
+            And(
+                Box::new(Ident("a".to_string().into())),
+                Box::new(Relation(
+                    Box::new(Ident("b".to_string().into())),
+                    RelationOp::Equals,
+                    Box::new(Expression::Atom(String("string".to_string().into()))),
+                )),
+            ),
+        );
+    }
 }
