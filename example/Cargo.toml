@@ -20,3 +20,7 @@ path = "src/variables.rs"
 [[bin]]
 name = "functions"
 path = "src/functions.rs"
+
+[[bin]]
+name = "threads"
+path = "src/threads.rs"

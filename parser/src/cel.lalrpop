@@ -1,5 +1,5 @@
 use crate::{RelationOp, ArithmeticOp, Expression, UnaryOp, Member, Atom};
-use std::rc::Rc;
+use std::sync::Arc;
 
 grammar;
 
@@ -73,7 +73,7 @@ pub Primary: Expression = {
     "(" <Expression> ")"
 }
 
-pub FieldInits: (Rc<String>, Expression) = {
+pub FieldInits: (Arc<String>, Expression) = {
     <Ident> ":" <Expression>
 }
 
@@ -158,6 +158,6 @@ Atom: Atom = {
     "null" => Atom::Null,
 };
 
-Ident: Rc<String> = {
+Ident: Arc<String> = {
     r"[_a-zA-Z][_a-zA-Z0-9]*" => <>.to_string().into()
 }

@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum RelationOp {
@@ -44,15 +44,15 @@ pub enum Expression {
     Map(Vec<(Expression, Expression)>),
 
     Atom(Atom),
-    Ident(Rc<String>),
+    Ident(Arc<String>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Member {
-    Attribute(Rc<String>),
+    Attribute(Arc<String>),
     FunctionCall(Vec<Expression>),
     Index(Box<Expression>),
-    Fields(Vec<(Rc<String>, Expression)>),
+    Fields(Vec<(Arc<String>, Expression)>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -60,8 +60,8 @@ pub enum Atom {
     Int(i64),
     UInt(u64),
     Float(f64),
-    String(Rc<String>),
-    Bytes(Rc<Vec<u8>>),
+    String(Arc<String>),
+    Bytes(Arc<Vec<u8>>),
     Bool(bool),
     Null,
 }

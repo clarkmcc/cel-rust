@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fmt::{Display, Formatter};
 use std::rc::Rc;
+use std::sync::Arc;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Map {
@@ -27,7 +28,7 @@ pub enum Key {
     Int(i64),
     Uint(u64),
     Bool(bool),
-    String(Rc<String>),
+    String(Arc<String>),
 }
 
 /// Implement conversions from primitive types to [`Key`]
@@ -38,15 +39,15 @@ impl From<String> for Key {
     }
 }
 
-impl From<Rc<String>> for Key {
-    fn from(v: Rc<String>) -> Self {
+impl From<Arc<String>> for Key {
+    fn from(v: Arc<String>) -> Self {
         Key::String(v.clone())
     }
 }
 
 impl<'a> From<&'a str> for Key {
     fn from(v: &'a str) -> Self {
-        Key::String(Rc::new(v.into()))
+        Key::String(Arc::new(v.into()))
     }
 }
 
@@ -100,17 +101,17 @@ impl<K: Into<Key>, V: Into<Value>> From<HashMap<K, V>> for Map {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
-    List(Rc<Vec<Value>>),
+    List(Arc<Vec<Value>>),
     Map(Map),
 
-    Function(Rc<String>, Option<Box<Value>>),
+    Function(Arc<String>, Option<Box<Value>>),
 
     // Atoms
     Int(i64),
     UInt(u64),
     Float(f64),
-    String(Rc<String>),
-    Bytes(Rc<Vec<u8>>),
+    String(Arc<String>),
+    Bytes(Arc<Vec<u8>>),
     Bool(bool),
     Duration(Duration),
     Timestamp(DateTime<FixedOffset>),

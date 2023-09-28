@@ -5,18 +5,18 @@ use cel_parser::Expression;
 use chrono::{DateTime, Duration, FixedOffset};
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use std::rc::Rc;
+use std::sync::Arc;
 
 impl_conversions!(
     i64 => Value::Int,
     u64 => Value::UInt,
     f64 => Value::Float,
-    Rc<String> => Value::String,
-    Rc<Vec<u8>> => Value::Bytes,
+    Arc<String> => Value::String,
+    Arc<Vec<u8>> => Value::Bytes,
     bool => Value::Bool,
     Duration => Value::Duration,
     DateTime<FixedOffset> => Value::Timestamp,
-    Rc<Vec<Value>> => Value::List
+    Arc<Vec<Value>> => Value::List
 );
 
 impl From<i32> for Value {
@@ -52,7 +52,7 @@ pub trait IntoResolveResult {
 
 impl IntoResolveResult for String {
     fn into_resolve_result(self) -> ResolveResult {
-        Ok(Value::String(Rc::new(self)))
+        Ok(Value::String(Arc::new(self)))
     }
 }
 
@@ -80,7 +80,7 @@ pub(crate) trait FromContext<'a, 'context> {
 ///
 /// # Using `This`
 /// ```
-/// # use std::rc::Rc;
+/// # use std::sync::Arc;
 /// # use cel_interpreter::{Program, Context};
 /// use cel_interpreter::extractors::This;
 /// # let mut context = Context::default();
@@ -97,7 +97,7 @@ pub(crate) trait FromContext<'a, 'context> {
 /// # let value = program2.execute(&context).unwrap();
 /// # assert_eq!(value, true.into());
 ///
-/// fn starts_with(This(this): This<Rc<String>>, prefix: Rc<String>) -> bool {
+/// fn starts_with(This(this): This<Arc<String>>, prefix: Arc<String>) -> bool {
 ///     this.starts_with(prefix.as_str())
 /// }
 /// ```
@@ -168,7 +168,7 @@ where
 /// ) -> Result<Value>;
 /// ```
 #[derive(Clone)]
-pub struct Identifier(pub Rc<String>);
+pub struct Identifier(pub Arc<String>);
 
 impl<'a, 'context> FromContext<'a, 'context> for Identifier {
     fn from_context(ctx: &'a mut FunctionContext<'context>) -> Result<Self, ExecutionError>
@@ -198,7 +198,7 @@ impl From<Identifier> for String {
 }
 
 #[derive(Clone)]
-pub struct List(pub Rc<Vec<Value>>);
+pub struct List(pub Arc<Vec<Value>>);
 
 impl FromValue for List {
     fn from_value(value: &Value) -> Result<Self, ExecutionError>
@@ -233,7 +233,7 @@ impl FromValue for List {
 /// }
 /// ```
 #[derive(Clone)]
-pub struct Arguments(pub Rc<Vec<Value>>);
+pub struct Arguments(pub Arc<Vec<Value>>);
 
 impl<'a, 'context> FromContext<'a, 'context> for Arguments {
     fn from_context(ctx: &'a mut FunctionContext) -> Result<Self, ExecutionError>
