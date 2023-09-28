@@ -2,7 +2,7 @@
 use cel_interpreter::extractors::This;
 use cel_interpreter::{Context, ExecutionError, FunctionContext, Program, ResolveResult, Value};
 use chrono::{DateTime, Duration, FixedOffset};
-use std::rc::Rc;
+use std::sync::Arc;
 
 fn main() {
     let program = Program::compile("add(2, 3) == 5 && ''.isEmpty() && fail()").unwrap();
@@ -32,7 +32,7 @@ fn main() {
 /// ```skip
 /// "foo".isEmpty()
 /// ```
-fn is_empty(This(s): This<Rc<String>>) -> bool {
+fn is_empty(This(s): This<Arc<String>>) -> bool {
     s.is_empty()
 }
 
@@ -55,11 +55,11 @@ fn primitives(
     _b: u64,
     _c: f64,
     _d: bool,
-    _e: Rc<String>,
-    _f: Rc<Vec<u8>>,
+    _e: Arc<String>,
+    _f: Arc<Vec<u8>>,
     _g: Duration,
     _h: DateTime<FixedOffset>,
-    _i: Rc<Vec<Value>>,
+    _i: Arc<Vec<Value>>,
 ) -> Duration {
     Duration::zero()
 }
