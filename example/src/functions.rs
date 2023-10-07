@@ -32,7 +32,7 @@ fn main() {
 /// ```skip
 /// "foo".isEmpty()
 /// ```
-fn is_empty(This(s): This<Arc<String>>) -> bool {
+fn is_empty(This(s): This<Arc<str>>) -> bool {
     s.is_empty()
 }
 
@@ -55,7 +55,7 @@ fn primitives(
     _b: u64,
     _c: f64,
     _d: bool,
-    _e: Arc<String>,
+    _e: Arc<str>,
     _f: Arc<Vec<u8>>,
     _g: Duration,
     _h: DateTime<FixedOffset>,

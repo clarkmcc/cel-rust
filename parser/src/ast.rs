@@ -44,15 +44,15 @@ pub enum Expression {
     Map(Vec<(Expression, Expression)>),
 
     Atom(Atom),
-    Ident(Arc<String>),
+    Ident(Arc<str>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Member {
-    Attribute(Arc<String>),
+    Attribute(Arc<str>),
     FunctionCall(Vec<Expression>),
     Index(Box<Expression>),
-    Fields(Vec<(Arc<String>, Expression)>),
+    Fields(Vec<(Arc<str>, Expression)>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -60,7 +60,7 @@ pub enum Atom {
     Int(i64),
     UInt(u64),
     Float(f64),
-    String(Arc<String>),
+    String(Arc<str>),
     Bytes(Arc<Vec<u8>>),
     Bool(bool),
     Null,

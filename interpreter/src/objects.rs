@@ -28,7 +28,7 @@ pub enum Key {
     Int(i64),
     Uint(u64),
     Bool(bool),
-    String(Arc<String>),
+    String(Arc<str>),
 }
 
 /// Implement conversions from primitive types to [`Key`]
@@ -39,15 +39,15 @@ impl From<String> for Key {
     }
 }
 
-impl From<Arc<String>> for Key {
-    fn from(v: Arc<String>) -> Self {
+impl From<Arc<str>> for Key {
+    fn from(v: Arc<str>) -> Self {
         Key::String(v.clone())
     }
 }
 
 impl<'a> From<&'a str> for Key {
     fn from(v: &'a str) -> Self {
-        Key::String(Arc::new(v.into()))
+        Key::String(Arc::from(v))
     }
 }
 
@@ -104,13 +104,13 @@ pub enum Value {
     List(Arc<Vec<Value>>),
     Map(Map),
 
-    Function(Arc<String>, Option<Box<Value>>),
+    Function(Arc<str>, Option<Box<Value>>),
 
     // Atoms
     Int(i64),
     UInt(u64),
     Float(f64),
-    String(Arc<String>),
+    String(Arc<str>),
     Bytes(Arc<Vec<u8>>),
     Bool(bool),
     Duration(Duration),
@@ -402,10 +402,10 @@ impl<'a> Value {
                 Value::Map(Map { map: Rc::from(map) }).into()
             }
             Expression::Ident(name) => {
-                if ctx.has_function(&***name) {
+                if ctx.has_function(&**name) {
                     Value::Function(name.clone(), None).into()
                 } else {
-                    ctx.get_variable(&***name)
+                    ctx.get_variable(&**name)
                 }
             }
         }
@@ -455,7 +455,7 @@ impl<'a> Value {
                 // If the property is both an attribute and a method, then we
                 // give priority to the property. Maybe we can implement lookahead
                 // to see if the next token is a function call?
-                match (child.is_some(), ctx.has_function(&***name)) {
+                match (child.is_some(), ctx.has_function(&**name)) {
                     (false, false) => NoSuchKey(name.clone()).into(),
                     (true, true) | (true, false) => child.unwrap().into(),
                     (false, true) => Value::Function(name.clone(), Some(self.into())).into(),
@@ -463,20 +463,15 @@ impl<'a> Value {
             }
             Member::FunctionCall(args) => {
                 if let Value::Function(name, target) = self {
-                    let func = ctx.get_function(&**name).unwrap();
+                    let func = ctx.get_function(&*name).unwrap();
                     match target {
                         None => {
-                            let mut ctx =
-                                FunctionContext::new(name.clone(), None, ctx, args.clone());
+                            let mut ctx = FunctionContext::new(name, None, ctx, args.clone());
                             func.call_with_context(&mut ctx)
                         }
                         Some(target) => {
-                            let mut ctx = FunctionContext::new(
-                                name.clone(),
-                                Some(*target),
-                                ctx,
-                                args.clone(),
-                            );
+                            let mut ctx =
+                                FunctionContext::new(name, Some(*target), ctx, args.clone());
                             func.call_with_context(&mut ctx)
                         }
                     }

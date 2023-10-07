@@ -48,11 +48,11 @@ pub enum ExecutionError {
     /// Indicates that the script attempted to reference a key on a type that
     /// was missing the requested key.
     #[error("No such key: {0}")]
-    NoSuchKey(Arc<String>),
+    NoSuchKey(Arc<str>),
     /// Indicates that the script attempted to reference an undeclared variable
     /// method, or function.
     #[error("Undeclared reference to '{0}'")]
-    UndeclaredReference(Arc<String>),
+    UndeclaredReference(Arc<str>),
     /// Indicates that a function expected to be called as a method, or to be
     /// called with at least one parameter.
     #[error("Missing argument or target")]
@@ -64,11 +64,11 @@ pub enum ExecutionError {
 
 impl ExecutionError {
     pub fn no_such_key(name: &str) -> Self {
-        ExecutionError::NoSuchKey(Arc::new(name.to_string()))
+        ExecutionError::NoSuchKey(Arc::from(name))
     }
 
     pub fn undeclared_reference(name: &str) -> Self {
-        ExecutionError::UndeclaredReference(Arc::new(name.to_string()))
+        ExecutionError::UndeclaredReference(Arc::from(name))
     }
 
     pub fn invalid_argument_count(expected: usize, actual: usize) -> Self {

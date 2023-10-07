@@ -18,7 +18,7 @@ type Result<T> = std::result::Result<T, ExecutionError>;
 /// to variables, and the arguments to the function call.
 #[derive(Clone)]
 pub struct FunctionContext<'context> {
-    pub name: Arc<String>,
+    pub name: Arc<str>,
     pub this: Option<Value>,
     pub ptx: &'context Context<'context>,
     pub args: Vec<Expression>,
@@ -27,7 +27,7 @@ pub struct FunctionContext<'context> {
 
 impl<'context> FunctionContext<'context> {
     pub fn new(
-        name: Arc<String>,
+        name: Arc<str>,
         this: Option<Value>,
         ptx: &'context Context<'context>,
         args: Vec<Expression>,
@@ -51,7 +51,7 @@ impl<'context> FunctionContext<'context> {
 
     /// Returns an execution error for the currently execution function.
     pub fn error(&self, message: &str) -> ExecutionError {
-        ExecutionError::function_error(self.name.as_str(), message)
+        ExecutionError::function_error(&self.name, message)
     }
 }
 
@@ -118,7 +118,7 @@ pub fn contains(This(this): This<Value>, arg: Value) -> Result<Value> {
             .contains_key(&arg.try_into().map_err(ExecutionError::UnsupportedKeyType)?),
         Value::String(s) => {
             if let Value::String(arg) = arg {
-                s.contains(arg.as_str())
+                s.contains(&*arg)
             } else {
                 false
             }
@@ -147,13 +147,16 @@ pub fn contains(This(this): This<Value>, arg: Value) -> Result<Value> {
 // * `bytes` - Converts bytes to string using from_utf8_lossy.
 pub fn string(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
     Ok(match this {
-        Value::String(v) => Value::String(v.clone()),
+        Value::String(v) => Value::String(v),
         Value::Timestamp(t) => Value::String(t.to_rfc3339().into()),
         Value::Duration(v) => Value::String(format_duration(&v).into()),
         Value::Int(v) => Value::String(v.to_string().into()),
         Value::UInt(v) => Value::String(v.to_string().into()),
         Value::Float(v) => Value::String(v.to_string().into()),
-        Value::Bytes(v) => Value::String(Arc::new(String::from_utf8_lossy(v.as_slice()).into())),
+        Value::Bytes(v) => {
+            let str = String::from_utf8_lossy(v.as_slice()).to_string();
+            Value::String(Arc::from(str.as_str()))
+        }
         v => return Err(ftx.error(&format!("cannot convert {:?} to string", v))),
     })
 }
@@ -175,8 +178,8 @@ pub fn double(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
 /// ```cel
 /// "abc".startsWith("a") == true
 /// ```
-pub fn starts_with(This(this): This<Arc<String>>, prefix: Arc<String>) -> bool {
-    this.starts_with(prefix.as_str())
+pub fn starts_with(This(this): This<Arc<str>>, prefix: Arc<str>) -> bool {
+    this.starts_with(&*prefix)
 }
 
 /// Returns true if the provided argument can be resolved. This function is
@@ -325,15 +328,15 @@ pub fn all(
 /// - `1.5ms` parses as 1 millisecond and 500 microseconds
 /// - `1ns` parses as 1 nanosecond
 /// - `1.5ns` parses as 1 nanosecond (sub-nanosecond durations not supported)
-pub fn duration(value: Arc<String>) -> Result<Value> {
-    Ok(Value::Duration(_duration(value.as_str())?))
+pub fn duration(value: Arc<str>) -> Result<Value> {
+    Ok(Value::Duration(_duration(&*value)?))
 }
 
 /// Timestamp parses the provided argument into a [`Value::Timestamp`] value.
 /// The
-pub fn timestamp(value: Arc<String>) -> Result<Value> {
+pub fn timestamp(value: Arc<str>) -> Result<Value> {
     Ok(Value::Timestamp(
-        DateTime::parse_from_rfc3339(value.as_str())
+        DateTime::parse_from_rfc3339(&*value)
             .map_err(|e| ExecutionError::function_error("timestamp", e.to_string().as_str()))?,
     ))
 }
@@ -532,5 +535,10 @@ mod tests {
         ]
         .iter()
         .for_each(assert_script);
+    }
+
+    #[test]
+    fn test_foo() {
+        [("or", "1 || 2 == true")].iter().for_each(assert_script)
     }
 }

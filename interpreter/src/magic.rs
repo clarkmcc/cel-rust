@@ -11,7 +11,7 @@ impl_conversions!(
     i64 => Value::Int,
     u64 => Value::UInt,
     f64 => Value::Float,
-    Arc<String> => Value::String,
+    Arc<str> => Value::String,
     Arc<Vec<u8>> => Value::Bytes,
     bool => Value::Bool,
     Duration => Value::Duration,
@@ -52,7 +52,7 @@ pub trait IntoResolveResult {
 
 impl IntoResolveResult for String {
     fn into_resolve_result(self) -> ResolveResult {
-        Ok(Value::String(Arc::new(self)))
+        Ok(Value::String(Arc::from(self.as_str())))
     }
 }
 
@@ -97,7 +97,7 @@ pub(crate) trait FromContext<'a, 'context> {
 /// # let value = program2.execute(&context).unwrap();
 /// # assert_eq!(value, true.into());
 ///
-/// fn starts_with(This(this): This<Arc<String>>, prefix: Arc<String>) -> bool {
+/// fn starts_with(This(this): This<Arc<str>>, prefix: Arc<str>) -> bool {
 ///     this.starts_with(prefix.as_str())
 /// }
 /// ```
@@ -168,7 +168,7 @@ where
 /// ) -> Result<Value>;
 /// ```
 #[derive(Clone)]
-pub struct Identifier(pub Arc<String>);
+pub struct Identifier(pub Arc<str>);
 
 impl<'a, 'context> FromContext<'a, 'context> for Identifier {
     fn from_context(ctx: &'a mut FunctionContext<'context>) -> Result<Self, ExecutionError>
@@ -193,7 +193,7 @@ impl From<&Identifier> for String {
 
 impl From<Identifier> for String {
     fn from(value: Identifier) -> Self {
-        value.0.as_ref().clone()
+        value.0.to_string()
     }
 }
 

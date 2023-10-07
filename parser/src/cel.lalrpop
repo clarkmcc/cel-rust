@@ -73,7 +73,7 @@ pub Primary: Expression = {
     "(" <Expression> ")"
 }
 
-pub FieldInits: (Arc<String>, Expression) = {
+pub FieldInits: (Arc<str>, Expression) = {
     <Ident> ":" <Expression>
 }
 
@@ -158,6 +158,6 @@ Atom: Atom = {
     "null" => Atom::Null,
 };
 
-Ident: Arc<String> = {
+Ident: Arc<str> = {
     r"[_a-zA-Z][_a-zA-Z0-9]*" => <>.to_string().into()
 }
