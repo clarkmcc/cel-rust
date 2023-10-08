@@ -256,6 +256,12 @@ impl From<String> for Value {
     }
 }
 
+impl From<&str> for Value {
+    fn from(v: &str) -> Self {
+        Value::String(v.to_string().into())
+    }
+}
+
 // Convert Option<T> to Value
 impl<T: Into<Value>> From<Option<T>> for Value {
     fn from(v: Option<T>) -> Self {
@@ -427,6 +433,12 @@ impl<'a> Value {
                         }
                         .into()
                     }
+                    (Value::Map(map), Value::String(property)) => map
+                        .map
+                        .get(&property.into())
+                        .cloned()
+                        .unwrap_or(Value::Null)
+                        .into(),
                     _ => unimplemented!(),
                 }
             }
@@ -636,5 +648,23 @@ impl ops::Rem<Value> for Value {
 
             _ => unimplemented!(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Context, Program};
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_indexed_map_access() {
+        let mut context = Context::default();
+        let mut headers = HashMap::new();
+        headers.insert("Content-Type", "application/json".to_string());
+        context.add_variable("headers", headers);
+
+        let program = Program::compile("headers[\"Content-Type\"]").unwrap();
+        let value = program.execute(&context).unwrap();
+        assert_eq!(value, "application/json".into());
     }
 }
