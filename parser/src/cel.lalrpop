@@ -1,5 +1,5 @@
 use crate::{RelationOp, ArithmeticOp, Expression, UnaryOp, Member, Atom};
-use std::rc::Rc;
+use std::sync::Arc;
 
 grammar;
 
@@ -73,7 +73,7 @@ pub Primary: Expression = {
     "(" <Expression> ")"
 }
 
-pub FieldInits: (Rc<String>, Expression) = {
+pub FieldInits: (Arc<String>, Expression) = {
     <Ident> ":" <Expression>
 }
 
@@ -138,19 +138,19 @@ Atom: Atom = {
     // the LALRPOP parser.
 
     // Double quoted string
-    r#""(\\.|[^"\n])*""# => Atom::String(<>[1..<>.len()-1].to_string().into()),
+    r#""(\\.|[^"\n])*""# => Atom::String(Arc::from(<>[1..<>.len()-1].to_string())),
     // r#""""(\\.|[^"{3}])*""""# => Atom::String(<>.to_string().into()),
 
     // Single quoted string
-    r#"'(\\.|[^'\n])*'"# => Atom::String(<>[1..<>.len()-1].to_string().into()),
+    r#"'(\\.|[^'\n])*'"# => Atom::String(Arc::from(<>[1..<>.len()-1].to_string())),
     // r#"'''(\\.|[^'{3}])*'''"# => Atom::String(<>.to_string().into()),
 
     // Double quoted bytes
-    r#"[bB]"(\\.|[^"\n])*""# => Atom::Bytes(Vec::from(<>[2..<>.len()-1].as_bytes()).into()),
+    r#"[bB]"(\\.|[^"\n])*""# => Atom::Bytes(Arc::from(<>[2..<>.len()-1].as_bytes().to_vec())),
     // r#"[bB]"""(\\.|[^"{3}])*""""# => Atom::Bytes(Vec::from(<>.as_bytes()).into()),
 
     // Single quoted bytes
-    r#"[bB]'(\\.|[^'\n])*'"# => Atom::Bytes(Vec::from(<>[2..<>.len()-1].as_bytes()).into()),
+    r#"[bB]'(\\.|[^'\n])*'"# => Atom::Bytes(Arc::from(<>[2..<>.len()-1].as_bytes().to_vec())),
     // r#"[bB]'''(\\.|[^'{3}])*'''"# => Atom::Bytes(Vec::from(<>.as_bytes()).into()),
 
     "true" => Atom::Bool(true),
@@ -158,6 +158,6 @@ Atom: Atom = {
     "null" => Atom::Null,
 };
 
-Ident: Rc<String> = {
-    r"[_a-zA-Z][_a-zA-Z0-9]*" => <>.to_string().into()
+Ident: Arc<String> = {
+    r"[_a-zA-Z][_a-zA-Z0-9]*" => Arc::from(<>.to_string())
 }

@@ -7,7 +7,7 @@ use crate::ExecutionError;
 use cel_parser::Expression;
 use chrono::{DateTime, Duration, FixedOffset};
 use std::convert::TryInto;
-use std::rc::Rc;
+use std::sync::Arc;
 
 type Result<T> = std::result::Result<T, ExecutionError>;
 
@@ -17,7 +17,7 @@ type Result<T> = std::result::Result<T, ExecutionError>;
 /// to variables, and the arguments to the function call.
 #[derive(Clone)]
 pub struct FunctionContext<'context> {
-    pub name: Rc<String>,
+    pub name: Arc<String>,
     pub this: Option<Value>,
     pub ptx: &'context Context<'context>,
     pub args: Vec<Expression>,
@@ -26,7 +26,7 @@ pub struct FunctionContext<'context> {
 
 impl<'context> FunctionContext<'context> {
     pub fn new(
-        name: Rc<String>,
+        name: Arc<String>,
         this: Option<Value>,
         ptx: &'context Context<'context>,
         args: Vec<Expression>,
@@ -152,7 +152,7 @@ pub fn string(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
         Value::Int(v) => Value::String(v.to_string().into()),
         Value::UInt(v) => Value::String(v.to_string().into()),
         Value::Float(v) => Value::String(v.to_string().into()),
-        Value::Bytes(v) => Value::String(Rc::new(String::from_utf8_lossy(v.as_slice()).into())),
+        Value::Bytes(v) => Value::String(Arc::new(String::from_utf8_lossy(v.as_slice()).into())),
         v => return Err(ftx.error(&format!("cannot convert {:?} to string", v))),
     })
 }
@@ -174,7 +174,7 @@ pub fn double(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
 /// ```cel
 /// "abc".startsWith("a") == true
 /// ```
-pub fn starts_with(This(this): This<Rc<String>>, prefix: Rc<String>) -> bool {
+pub fn starts_with(This(this): This<Arc<String>>, prefix: Arc<String>) -> bool {
     this.starts_with(prefix.as_str())
 }
 
@@ -226,7 +226,7 @@ pub fn map(
                 let value = ptx.resolve(&expr)?;
                 values.push(value);
             }
-            Value::List(Rc::new(values))
+            Value::List(Arc::new(values))
         }
         _ => return Err(this.error_expected_type(ValueType::List)),
     }
@@ -260,7 +260,7 @@ pub fn filter(
                     values.push(item.clone());
                 }
             }
-            Value::List(Rc::new(values))
+            Value::List(Arc::new(values))
         }
         _ => return Err(this.error_expected_type(ValueType::List)),
     }
@@ -324,13 +324,13 @@ pub fn all(
 /// - `1.5ms` parses as 1 millisecond and 500 microseconds
 /// - `1ns` parses as 1 nanosecond
 /// - `1.5ns` parses as 1 nanosecond (sub-nanosecond durations not supported)
-pub fn duration(value: Rc<String>) -> Result<Value> {
+pub fn duration(value: Arc<String>) -> Result<Value> {
     Ok(Value::Duration(_duration(value.as_str())?))
 }
 
 /// Timestamp parses the provided argument into a [`Value::Timestamp`] value.
 /// The
-pub fn timestamp(value: Rc<String>) -> Result<Value> {
+pub fn timestamp(value: Arc<String>) -> Result<Value> {
     Ok(Value::Timestamp(
         DateTime::parse_from_rfc3339(value.as_str())
             .map_err(|e| ExecutionError::function_error("timestamp", e.to_string().as_str()))?,
