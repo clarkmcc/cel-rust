@@ -138,13 +138,22 @@ Atom: Atom = {
     // the LALRPOP parser.
 
     // Double quoted string
-    r#"".*""# => Atom::String(parse_string(<>).unwrap().into()),
-    r#"[rR]".*""# => Atom::String(parse_string(<>).unwrap().into()),
+    // I used ChatGPT to come up with this pattern and the explanation is as follows:
+    //   1. `"`: Match the opening double quote.
+    //   2. `([^"\\]*(?:\\.[^"\\]*)*)`: This is the main part of the regex which matches the content inside the double quotes.
+    //     a. `[^"\\]*`: Match any sequence of characters that are neither a double quote nor a backslash.
+    //     b. `(?:\\.[^"\\]*)*`: This part matches an escaped character followed by any sequence of characters that are
+    //        neither a double quote nor a backslash. It uses a non-capturing group (?:...) to repeat the pattern.
+    //        This handles sequences like \", \\, or any other escaped character.
+    //   3. `"`: Match the closing double quote.
+    r#""([^"\\]*(?:\\.[^"\\]*)*)""# => Atom::String(parse_string(<>).unwrap().into()),
+    r#"[rR]"([^"\\]*(?:\\.[^"\\]*)*)""# => Atom::String(parse_string(<>).unwrap().into()),
     // r#""""(\\.|[^"{3}])*""""# => Atom::String(<>.to_string().into()),
 
     // Single quoted string
-    r#"'.*'"# => Atom::String(parse_string(<>).unwrap().into()),
-    r#"[rR]'.*'"# => Atom::String(parse_string(<>).unwrap().into()),
+    // Uses similar regex as above, but replace double quote with a single one
+    r#"'([^'\\]*(?:\\.[^'\\]*)*)'"# => Atom::String(parse_string(<>).unwrap().into()),
+    r#"[rR]'([^'\\]*(?:\\.[^'\\]*)*)'"# => Atom::String(parse_string(<>).unwrap().into()),
     // r#"'''(\\.|[^'{3}])*'''"# => Atom::String(<>.to_string().into()),
 
     // Double quoted bytes
