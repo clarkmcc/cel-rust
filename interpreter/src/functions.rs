@@ -7,7 +7,6 @@ use crate::ExecutionError;
 use cel_parser::Expression;
 use chrono::{DateTime, Duration, FixedOffset};
 use std::convert::TryInto;
-use std::rc::Rc;
 use std::sync::Arc;
 
 type Result<T> = std::result::Result<T, ExecutionError>;
