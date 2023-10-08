@@ -153,10 +153,7 @@ pub fn string(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
         Value::Int(v) => Value::String(v.to_string().into()),
         Value::UInt(v) => Value::String(v.to_string().into()),
         Value::Float(v) => Value::String(v.to_string().into()),
-        Value::Bytes(v) => {
-            let str = String::from_utf8_lossy(v.as_slice()).to_string();
-            Value::String(Arc::from(str.as_str()))
-        }
+        Value::Bytes(v) => Value::String(Arc::from(String::from_utf8_lossy(v.as_slice()))),
         v => return Err(ftx.error(&format!("cannot convert {:?} to string", v))),
     })
 }
@@ -535,10 +532,5 @@ mod tests {
         ]
         .iter()
         .for_each(assert_script);
-    }
-
-    #[test]
-    fn test_foo() {
-        [("or", "1 || 2 == true")].iter().for_each(assert_script)
     }
 }

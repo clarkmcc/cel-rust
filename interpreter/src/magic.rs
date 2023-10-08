@@ -52,7 +52,7 @@ pub trait IntoResolveResult {
 
 impl IntoResolveResult for String {
     fn into_resolve_result(self) -> ResolveResult {
-        Ok(Value::String(Arc::from(self.as_str())))
+        Ok(Value::String(Arc::from(self)))
     }
 }
 
