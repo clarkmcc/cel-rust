@@ -30,3 +30,31 @@ jobs:
         run: cargo build --verbose
       - name: Run conformance tests
         run: cargo test --test conformance
+      - id: conformance
+        name: Conformance results
+        run: |
+          cargo test --test conformance > conformance.log
+          
+          read -r passed skipped failed <<< $(cat conformance.log | perl -n -e'/steps \((\d+) passed, (\d+) skipped, (\d+) failed\)/ && print "$1 $2 $3"')
+          
+          echo "passed=$passed"
+          echo "skipped=$skipped"
+          echo "failed=$failed"
+          
+          # Calculate the conformance score as a percentage (passed / (passed + skipped + failed))
+          score=$(echo "scale=2; $passed / ($passed + $skipped + $failed) * 100" | bc)
+          
+          # Set the output
+          echo "score=$score" >> "$GITHUB_OUTPUT"
+          echo "passed=$passed" >> "$GITHUB_OUTPUT"
+          echo "skipped=$skipped" >> "$GITHUB_OUTPUT"
+          echo "failed=$failed" >> "$GITHUB_OUTPUT"
+      - name: Comment PR
+        uses: thollander/actions-comment-pull-request@v2
+        with:
+          message: |
+            Conformance score: ${{ steps.conformance.outputs.score }}%
+            Passed: ${{ steps.conformance.outputs.passed }}
+            Skipped: ${{ steps.conformance.outputs.skipped }}
+            Failed: ${{ steps.conformance.outputs.failed }}
+
