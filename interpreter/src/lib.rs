@@ -5,6 +5,8 @@ use std::convert::TryFrom;
 use std::sync::Arc;
 use thiserror::Error;
 
+pub mod gherkin;
+
 mod macros;
 
 pub mod context;
