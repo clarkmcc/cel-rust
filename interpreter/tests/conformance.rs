@@ -1,5 +1,3 @@
-mod parse_utilities;
-
 use cel_interpreter::{Context, Program};
 use cucumber::{given, then, when, World};
 
