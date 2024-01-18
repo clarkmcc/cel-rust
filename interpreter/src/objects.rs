@@ -245,6 +245,29 @@ impl Ord for Value {
             (Value::Null, Value::Null) => Ordering::Equal,
             (Value::Duration(a), Value::Duration(b)) => a.cmp(b),
             (Value::Timestamp(a), Value::Timestamp(b)) => a.cmp(b),
+            // Allow different numeric types to be compared without explicit casting.
+            (Value::Int(a), Value::UInt(b)) => a
+                .to_owned()
+                .try_into()
+                .and_then(|a: u64| Ok(a.cmp(b)))
+                .unwrap_or(Ordering::Greater),
+            (Value::Int(a), Value::Float(b)) => {
+                (*a as f64).partial_cmp(b).unwrap_or(Ordering::Equal)
+            }
+            (Value::UInt(a), Value::Int(b)) => a
+                .to_owned()
+                .try_into()
+                .and_then(|a: i64| Ok(a.cmp(b)))
+                .unwrap_or(Ordering::Less),
+            (Value::UInt(a), Value::Float(b)) => {
+                (*a as f64).partial_cmp(b).unwrap_or(Ordering::Equal)
+            }
+            (Value::Float(a), Value::Int(b)) => {
+                a.partial_cmp(&(*b as f64)).unwrap_or(Ordering::Equal)
+            }
+            (Value::Float(a), Value::UInt(b)) => {
+                a.partial_cmp(&(*b as f64)).unwrap_or(Ordering::Equal)
+            }
             (a, b) => panic!("unable to compare {:?} with {:?}", a, b),
         }
     }
@@ -696,7 +719,7 @@ impl ops::Rem<Value> for Value {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Context, Program};
+    use crate::{objects::Key, Context, Program};
     use std::collections::HashMap;
 
     #[test]
