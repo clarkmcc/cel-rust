@@ -9,7 +9,7 @@ use core::ops;
 use serde::Serialize;
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::convert::{Infallible, TryInto};
+use std::convert::{Infallible, TryFrom, TryInto};
 use std::fmt::{Display, Formatter};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -482,6 +482,38 @@ impl<'a> Value {
                         .cloned()
                         .unwrap_or(Value::Null)
                         .into(),
+                    (Value::Map(map), Value::Bool(property)) => map
+                        .map
+                        .get(&property.into())
+                        .cloned()
+                        .unwrap_or(Value::Null)
+                        .into(),
+                    (Value::Map(map), Value::Int(property)) => map
+                        .map
+                        .get(&property.into())
+                        .cloned()
+                        .or_else(|| {
+                            // Check for matching unsinged int indexes too.
+                            let Ok(index) = u64::try_from(property) else {
+                                return None;
+                            };
+                            map.map.get(&index.into()).cloned()
+                        })
+                        .unwrap_or(Value::Null)
+                        .into(),
+                    (Value::Map(map), Value::UInt(property)) => map
+                        .map
+                        .get(&property.into())
+                        .cloned()
+                        .or_else(|| {
+                            // Check for matching singed int indexes too.
+                            let Ok(index) = i64::try_from(property) else {
+                                return None;
+                            };
+                            map.map.get(&index.into()).cloned()
+                        })
+                        .unwrap_or(Value::Null)
+                        .into(),
                     _ => unimplemented!(),
                 }
             }
@@ -696,7 +728,7 @@ impl ops::Rem<Value> for Value {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Context, Program};
+    use crate::{objects::Key, Context, Program};
     use std::collections::HashMap;
 
     #[test]
@@ -709,5 +741,17 @@ mod tests {
         let program = Program::compile("headers[\"Content-Type\"]").unwrap();
         let value = program.execute(&context).unwrap();
         assert_eq!(value, "application/json".into());
+    }
+
+    #[test]
+    fn test_numeric_map_access() {
+        let mut context = Context::default();
+        let mut headers = HashMap::new();
+        headers.insert(Key::Uint(0), "zero".to_string());
+        context.add_variable_from_value("headers", headers);
+
+        let program = Program::compile("headers[0]").unwrap();
+        let value = program.execute(&context).unwrap();
+        assert_eq!(value, "zero".into());
     }
 }
