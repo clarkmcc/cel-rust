@@ -141,7 +141,7 @@ impl TryIntoValue for &Key {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum Value {
     List(Arc<Vec<Value>>),
     Map(Map),
@@ -223,6 +223,41 @@ impl Value {
 impl From<&Value> for Value {
     fn from(value: &Value) -> Self {
         value.clone()
+    }
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Map(a), Value::Map(b)) => a == b,
+            (Value::List(a), Value::List(b)) => a == b,
+            (Value::Function(a1, a2), Value::Function(b1, b2)) => a1 == b1 && a2 == b2,
+            (Value::Int(a), Value::Int(b)) => a == b,
+            (Value::UInt(a), Value::UInt(b)) => a == b,
+            (Value::Float(a), Value::Float(b)) => a == b,
+            (Value::String(a), Value::String(b)) => a == b,
+            (Value::Bytes(a), Value::Bytes(b)) => a == b,
+            (Value::Bool(a), Value::Bool(b)) => a == b,
+            (Value::Null, Value::Null) => true,
+            (Value::Duration(a), Value::Duration(b)) => a == b,
+            (Value::Timestamp(a), Value::Timestamp(b)) => a == b,
+            // Allow different numeric types to be compared without explicit casting.
+            (Value::Int(a), Value::UInt(b)) => a
+                .to_owned()
+                .try_into()
+                .and_then(|a: u64| Ok(a == *b))
+                .unwrap_or(false),
+            (Value::Int(a), Value::Float(b)) => (*a as f64) == *b,
+            (Value::UInt(a), Value::Int(b)) => a
+                .to_owned()
+                .try_into()
+                .and_then(|a: i64| Ok(a == *b))
+                .unwrap_or(false),
+            (Value::UInt(a), Value::Float(b)) => (*a as f64) == *b,
+            (Value::Float(a), Value::Int(b)) => *a == (*b as f64),
+            (Value::Float(a), Value::UInt(b)) => *a == (*b as f64),
+            (a, b) => panic!("unable to compare {:?} with {:?}", a, b),
+        }
     }
 }
 
@@ -732,5 +767,18 @@ mod tests {
         let program = Program::compile("headers[\"Content-Type\"]").unwrap();
         let value = program.execute(&context).unwrap();
         assert_eq!(value, "application/json".into());
+    }
+
+    #[test]
+    fn test_heterogeneous_compare() {
+        let context = Context::default();
+
+        let program = Program::compile("1 < uint(2)").unwrap();
+        let value = program.execute(&context).unwrap();
+        assert_eq!(value, true.into());
+
+        let program = Program::compile("1 < 1.1").unwrap();
+        let value = program.execute(&context).unwrap();
+        assert_eq!(value, true.into());
     }
 }

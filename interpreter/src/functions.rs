@@ -168,6 +168,41 @@ pub fn double(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
     })
 }
 
+// Performs a type conversion on the target.
+pub fn uint(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
+    Ok(match this {
+        Value::String(v) => v.parse::<u64>().map(Value::UInt).unwrap(),
+        Value::Float(v) => {
+            if v > u64::MAX as f64 || v < u64::MIN as f64 {
+                return Err(ftx.error("unsigned integer overflow"));
+            }
+            Value::UInt(v as u64)
+        }
+        Value::Int(v) => Value::UInt(
+            v.try_into()
+                .map_err(|_| ftx.error("unsigned integer overflow"))?,
+        ),
+        Value::UInt(v) => Value::UInt(v),
+        v => return Err(ftx.error(&format!("cannot convert {:?} to uint", v))),
+    })
+}
+
+// Performs a type conversion on the target.
+pub fn int(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
+    Ok(match this {
+        Value::String(v) => v.parse::<i64>().map(Value::Int).unwrap(),
+        Value::Float(v) => {
+            if v > i64::MAX as f64 || v < i64::MIN as f64 {
+                return Err(ftx.error("integer overflow"));
+            }
+            Value::Int(v as i64)
+        }
+        Value::Int(v) => Value::Int(v),
+        Value::UInt(v) => Value::Int(v.try_into().map_err(|_| ftx.error("integer overflow"))?),
+        v => return Err(ftx.error(&format!("cannot convert {:?} to int", v))),
+    })
+}
+
 /// Returns true if a string starts with another string.
 ///
 /// # Example
@@ -646,6 +681,28 @@ mod tests {
             ("string", "'10'.double() == 10.0"),
             ("int", "10.double() == 10.0"),
             ("double", "10.0.double() == 10.0"),
+        ]
+        .iter()
+        .for_each(assert_script);
+    }
+
+    #[test]
+    fn test_uint() {
+        [
+            ("string", "'10'.uint() == 10.uint()"),
+            ("double", "10.5.uint() == 10.uint()"),
+        ]
+        .iter()
+        .for_each(assert_script);
+    }
+
+    #[test]
+    fn test_int() {
+        [
+            ("string", "'10'.int() == 10"),
+            ("int", "10.int() == 10"),
+            ("uint", "10.uint().int() == 10"),
+            ("double", "10.5.int() == 10"),
         ]
         .iter()
         .for_each(assert_script);
