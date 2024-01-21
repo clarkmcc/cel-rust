@@ -175,33 +175,27 @@ fn parse_quoted_string(s: &str, mut chars: &mut Enumerate<Chars>, mut res: Strin
                     });
                 }
                 Some((idx, c2)) => {
-                    match c2 {
-                        'a' => res.push('\u{07}'),
-                        'b' => res.push('\u{08}'),
-                        'v' => res.push('\u{0B}'),
-                        'f' => res.push('\u{0C}'),
-                        'n' => res.push('\n'),
-                        'r' => res.push('\r'),
-                        't' => res.push('\t'),
-                        '\\' => res.push('\\'),
-                        '?' => res.push('?'),
+                    let mut push_escape_character = false;
+
+                    let value = match c2 {
+                        'a' => '\u{07}',
+                        'b' => '\u{08}',
+                        'v' => '\u{0B}',
+                        'f' => '\u{0C}',
+                        'n' => '\n',
+                        'r' => '\r',
+                        't' => '\t',
+                        '\\' => c2,
+                        '?' => c2,
                         '\'' => {
-                            if in_double_quotes {
-                                res.push('\\');
-                                res.push('\'');
-                            } else {
-                                res.push('\'');
-                            }
+                            push_escape_character = in_double_quotes;
+                            c2
                         },
                         '"' => {
-                            if in_single_quotes {
-                                res.push('\\');
-                                res.push('"');
-                            } else {
-                                res.push('"');
-                            }
+                            push_escape_character = in_single_quotes;
+                            c2
                         },
-                        '`' => res.push('`'),
+                        '`' => c2,
                         'x' | 'u' | 'U' => {
                             let length = match c2 {
                                 'x' => 2,
@@ -209,25 +203,22 @@ fn parse_quoted_string(s: &str, mut chars: &mut Enumerate<Chars>, mut res: Strin
                                 'U' => 8,
                                 _ => unreachable!(),
                             };
-                            res.push(
-                                parse_unicode_hex(length, &mut chars).map_err(|x| {
-                                    ParseError::InvalidUnicode {
-                                        source: x,
-                                        index: idx,
-                                        string: String::from(s),
-                                    }
-                                }).unwrap()
-                            )
-                        },
-                        x if ('0'..='3').contains(&x) => res.push(
-                            parse_unicode_oct(&x, &mut chars).map_err(|x| {
+
+                            parse_unicode_hex(length, &mut chars).map_err(|x| {
                                 ParseError::InvalidUnicode {
                                     source: x,
                                     index: idx,
                                     string: String::from(s),
                                 }
                             }).unwrap()
-                        ),
+                        },
+                        n if ('0'..='3').contains(&n) => parse_unicode_oct(&n, &mut chars).map_err(|x| {
+                            ParseError::InvalidUnicode {
+                                source: x,
+                                index: idx,
+                                string: String::from(s),
+                            }
+                        }).unwrap(),
                         _ => {
                             return Err(ParseError::InvalidEscape {
                                 escape: format!("{}{}", c, c2),
@@ -236,6 +227,13 @@ fn parse_quoted_string(s: &str, mut chars: &mut Enumerate<Chars>, mut res: Strin
                             });
                         }
                     };
+
+                    if push_escape_character {
+                        res.push(c);
+                    }
+
+                    res.push(value);
+
                     continue;
                 }
             };
