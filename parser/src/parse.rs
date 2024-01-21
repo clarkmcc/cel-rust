@@ -202,33 +202,23 @@ fn parse_quoted_string(s: &str, mut chars: &mut Enumerate<Chars>, mut res: Strin
                             }
                         },
                         '`' => res.push('`'),
-                        'x' => res.push(
-                            parse_unicode_hex(2, &mut chars).map_err(|x| {
-                                ParseError::InvalidUnicode {
-                                    source: x,
-                                    index: idx,
-                                    string: String::from(s),
-                                }
-                            }).unwrap()
-                        ),
-                        'u' => res.push(
-                            parse_unicode_hex(4, &mut chars).map_err(|x| {
-                                ParseError::InvalidUnicode {
-                                    source: x,
-                                    index: idx,
-                                    string: String::from(s),
-                                }
-                            }).unwrap()
-                        ),
-                        'U' => res.push(
-                            parse_unicode_hex(8, &mut chars).map_err(|x| {
-                                ParseError::InvalidUnicode {
-                                    source: x,
-                                    index: idx,
-                                    string: String::from(s),
-                                }
-                            }).unwrap()
-                        ),
+                        'x' | 'u' | 'U' => {
+                            let length = match c2 {
+                                'x' => 2,
+                                'u' => 4,
+                                'U' => 8,
+                                _ => unreachable!(),
+                            };
+                            res.push(
+                                parse_unicode_hex(length, &mut chars).map_err(|x| {
+                                    ParseError::InvalidUnicode {
+                                        source: x,
+                                        index: idx,
+                                        string: String::from(s),
+                                    }
+                                }).unwrap()
+                            )
+                        },
                         x if ('0'..='3').contains(&x) => res.push(
                             parse_unicode_oct(&x, &mut chars).map_err(|x| {
                                 ParseError::InvalidUnicode {
@@ -296,9 +286,7 @@ fn parse_unicode_hex<I>(length: usize, chars: &mut I) -> Result<char, ParseUnico
             string: unicode_seq,
         })
         .and_then(|u| {
-            char::from_u32(u)
-                .and_then(|c| Some(c))
-                .ok_or_else(|| ParseUnicodeError::ParseUnicodeFailed { value: u })
+            char::from_u32(u).ok_or(ParseUnicodeError::ParseUnicodeFailed { value: u })
         })
 }
 
@@ -317,9 +305,7 @@ fn parse_unicode_oct<I>(first_char: &char, chars: &mut I) -> Result<char, ParseU
         })
         .and_then(|u| {
             if u <= 255 {
-                char::from_u32(u)
-                    .and_then(|c| Some(c))
-                    .ok_or_else(|| ParseUnicodeError::ParseUnicodeFailed { value: u })
+                char::from_u32(u).ok_or(ParseUnicodeError::ParseUnicodeFailed { value: u })
             } else {
                 Err(ParseUnicodeError::ParseUnicodeFailed { value: u })
             }
