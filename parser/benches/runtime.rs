@@ -1,5 +1,5 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use cel_parser::parse_string;
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 pub fn parse_string_benchmark(c: &mut Criterion) {
     let expressions = vec![
@@ -11,9 +11,7 @@ pub fn parse_string_benchmark(c: &mut Criterion) {
     ];
 
     for (name, expr) in black_box(&expressions) {
-        c.bench_function(name, |b| {
-            b.iter(|| parse_string(expr))
-        });
+        c.bench_function(name, |b| b.iter(|| parse_string(expr)));
     }
 }
 

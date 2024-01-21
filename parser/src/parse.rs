@@ -42,7 +42,9 @@ pub enum ParseUnicodeError {
         string: String,
     },
     // #[error("could not parse {value} as a unicode char")]
-    ParseUnicodeFailed { value: u32 },
+    ParseUnicodeFailed {
+        value: u32,
+    },
 }
 
 /// Parse the provided quoted string.
@@ -86,17 +88,11 @@ pub fn parse_string(s: &str) -> Result<String, ParseError> {
     let mut chars = s.chars().enumerate();
     let res = String::with_capacity(s.len());
 
-   return match chars.next() {
-        Some((_, c)) if c == 'r' || c == 'R' => {
-            parse_raw_string(&mut chars, res)
-        },
-        Some((_, c)) if c == '\'' || c == '"' => {
-            parse_quoted_string(s, &mut chars, res, c)
-        },
-        _ => {
-            Err(ParseError::MissingOpeningQuote)
-        }
-    }
+    return match chars.next() {
+        Some((_, c)) if c == 'r' || c == 'R' => parse_raw_string(&mut chars, res),
+        Some((_, c)) if c == '\'' || c == '"' => parse_quoted_string(s, &mut chars, res, c),
+        _ => Err(ParseError::MissingOpeningQuote),
+    };
 }
 
 fn parse_raw_string(chars: &mut Enumerate<Chars>, mut res: String) -> Result<String, ParseError> {
@@ -108,34 +104,34 @@ fn parse_raw_string(chars: &mut Enumerate<Chars>, mut res: String) -> Result<Str
 
         if c == '\\' && in_quotes {
             match chars.next() {
-                Some((_, c2)) =>{
+                Some((_, c2)) => {
                     match c2 {
                         '"' => {
                             if in_single_quotes {
                                 res.push(c);
                             }
-                        },
+                        }
                         '\'' => {
                             if in_double_quotes {
                                 res.push(c);
                             }
-                        },
+                        }
                         _ => {
                             res.push(c);
-                        },
+                        }
                     };
                     res.push(c2);
                     continue;
-                },
+                }
                 _ => {
                     res.push(c);
                     continue;
-                },
+                }
             };
         } else if c == '\'' {
             if in_double_quotes {
                 res.push(c);
-                continue
+                continue;
             }
 
             in_single_quotes = !in_single_quotes;
@@ -143,7 +139,7 @@ fn parse_raw_string(chars: &mut Enumerate<Chars>, mut res: String) -> Result<Str
         } else if c == '"' {
             if in_single_quotes {
                 res.push(c);
-                continue
+                continue;
             }
 
             in_double_quotes = !in_double_quotes;
@@ -158,14 +154,19 @@ fn parse_raw_string(chars: &mut Enumerate<Chars>, mut res: String) -> Result<Str
     Ok(res)
 }
 
-fn parse_quoted_string(s: &str, mut chars: &mut Enumerate<Chars>, mut res: String, quote: char,) -> Result<String, ParseError> {
+fn parse_quoted_string(
+    s: &str,
+    mut chars: &mut Enumerate<Chars>,
+    mut res: String,
+    quote: char,
+) -> Result<String, ParseError> {
     let mut in_single_quotes = quote == '\'';
     let mut in_double_quotes = quote == '"';
 
     while let Some((idx, c)) = chars.next() {
         let in_quotes = in_single_quotes || in_double_quotes;
 
-        if c == '\\' &&  in_quotes {
+        if c == '\\' && in_quotes {
             match chars.next() {
                 None => {
                     return Err(ParseError::InvalidEscape {
@@ -190,11 +191,11 @@ fn parse_quoted_string(s: &str, mut chars: &mut Enumerate<Chars>, mut res: Strin
                         '\'' => {
                             push_escape_character = in_double_quotes;
                             c2
-                        },
+                        }
                         '"' => {
                             push_escape_character = in_single_quotes;
                             c2
-                        },
+                        }
                         '`' => c2,
                         'x' | 'u' | 'U' => {
                             let length = match c2 {
@@ -204,21 +205,21 @@ fn parse_quoted_string(s: &str, mut chars: &mut Enumerate<Chars>, mut res: Strin
                                 _ => unreachable!(),
                             };
 
-                            parse_unicode_hex(length, &mut chars).map_err(|x| {
-                                ParseError::InvalidUnicode {
+                            parse_unicode_hex(length, &mut chars)
+                                .map_err(|x| ParseError::InvalidUnicode {
                                     source: x,
                                     index: idx,
                                     string: String::from(s),
-                                }
-                            }).unwrap()
-                        },
-                        n if ('0'..='3').contains(&n) => parse_unicode_oct(&n, &mut chars).map_err(|x| {
-                            ParseError::InvalidUnicode {
+                                })
+                                .unwrap()
+                        }
+                        n if ('0'..='3').contains(&n) => parse_unicode_oct(&n, &mut chars)
+                            .map_err(|x| ParseError::InvalidUnicode {
                                 source: x,
                                 index: idx,
                                 string: String::from(s),
-                            }
-                        }).unwrap(),
+                            })
+                            .unwrap(),
                         _ => {
                             return Err(ParseError::InvalidEscape {
                                 escape: format!("{}{}", c, c2),
@@ -237,11 +238,10 @@ fn parse_quoted_string(s: &str, mut chars: &mut Enumerate<Chars>, mut res: Strin
                     continue;
                 }
             };
-        }
-        else if c == '\'' {
+        } else if c == '\'' {
             if in_double_quotes {
                 res.push(c);
-                continue
+                continue;
             }
 
             in_single_quotes = !in_single_quotes;
@@ -249,7 +249,7 @@ fn parse_quoted_string(s: &str, mut chars: &mut Enumerate<Chars>, mut res: Strin
         } else if c == '"' {
             if in_single_quotes {
                 res.push(c);
-                continue
+                continue;
             }
 
             in_double_quotes = !in_double_quotes;
@@ -270,27 +270,22 @@ fn parse_quoted_string(s: &str, mut chars: &mut Enumerate<Chars>, mut res: Strin
 }
 
 fn parse_unicode_hex<I>(length: usize, chars: &mut I) -> Result<char, ParseUnicodeError>
-    where
-        I: Iterator<Item = (usize, char)>,
+where
+    I: Iterator<Item = (usize, char)>,
 {
-    let unicode_seq: String = chars
-        .take(length)
-        .map(|(_, c)| c)
-        .collect();
+    let unicode_seq: String = chars.take(length).map(|(_, c)| c).collect();
 
     u32::from_str_radix(&unicode_seq, 16)
         .map_err(|e| ParseUnicodeError::ParseHexFailed {
             source: e,
             string: unicode_seq,
         })
-        .and_then(|u| {
-            char::from_u32(u).ok_or(ParseUnicodeError::ParseUnicodeFailed { value: u })
-        })
+        .and_then(|u| char::from_u32(u).ok_or(ParseUnicodeError::ParseUnicodeFailed { value: u }))
 }
 
 fn parse_unicode_oct<I>(first_char: &char, chars: &mut I) -> Result<char, ParseUnicodeError>
-    where
-        I: Iterator<Item = (usize, char)>,
+where
+    I: Iterator<Item = (usize, char)>,
 {
     let mut unicode_seq: String = String::with_capacity(3);
     unicode_seq.push(*first_char);
@@ -312,8 +307,8 @@ fn parse_unicode_oct<I>(first_char: &char, chars: &mut I) -> Result<char, ParseU
 
 #[cfg(test)]
 mod tests {
-    use crate::{parse_string};
     use crate::parse::ParseError;
+    use crate::parse_string;
 
     #[test]
     fn single_quotes_interprets_escapes() {
@@ -334,12 +329,23 @@ mod tests {
             ("'Hello \\u270c'", Ok(String::from("Hello ✌"))),
             ("'Hello \\U0001f431'", Ok(String::from("Hello 🐱"))),
             ("'Hello \\040'", Ok(String::from("Hello  "))),
-
-            ("Missing closing quote'", Err(ParseError::MissingOpeningQuote)),
-            ("'Missing closing quote", Err(ParseError::MissingClosingQuote)),
-
+            (
+                "Missing closing quote'",
+                Err(ParseError::MissingOpeningQuote),
+            ),
+            (
+                "'Missing closing quote",
+                Err(ParseError::MissingClosingQuote),
+            ),
             // Testing octal value is out of range
-            ("'\\440'", Err(ParseError::InvalidEscape { escape: String::from("\\4"), index: 2, string: String::from("'\\440'") })),
+            (
+                "'\\440'",
+                Err(ParseError::InvalidEscape {
+                    escape: String::from("\\4"),
+                    index: 2,
+                    string: String::from("'\\440'"),
+                }),
+            ),
         ];
 
         for (s, expected) in tests {
@@ -368,12 +374,23 @@ mod tests {
             ("\"Hello \\u270c\"", Ok(String::from("Hello ✌"))),
             ("\"Hello \\U0001f431\"", Ok(String::from("Hello 🐱"))),
             ("\"Hello \\040\"", Ok(String::from("Hello  "))),
-
-            ("Missing closing quote\"", Err(ParseError::MissingOpeningQuote)),
-            ("\"Missing closing quote", Err(ParseError::MissingClosingQuote)),
-
+            (
+                "Missing closing quote\"",
+                Err(ParseError::MissingOpeningQuote),
+            ),
+            (
+                "\"Missing closing quote",
+                Err(ParseError::MissingClosingQuote),
+            ),
             // Testing octal value is out of range
-            ("\"\\440\"", Err(ParseError::InvalidEscape { escape: String::from("\\4"), index: 2, string: String::from("\"\\440\"") })),
+            (
+                "\"\\440\"",
+                Err(ParseError::InvalidEscape {
+                    escape: String::from("\\4"),
+                    index: 2,
+                    string: String::from("\"\\440\""),
+                }),
+            ),
         ];
 
         for (s, expected) in tests {
@@ -388,14 +405,25 @@ mod tests {
             // Raw string in double quotes
             // r"Hello \a \" ' \' \U0001f431 " => Hello \a " ' \' \U0001f431
             // R"Hello \a \" ' \' \U0001f431 " => Hello \a " ' \' \U0001f431
-            ("r\"Hello \\a \\\" ' \\' \\U0001f431 \"", Ok(String::from("Hello \\a \" ' \\' \\U0001f431 "))),
-            ("R\"Hello \\a \\\" ' \\' \\U0001f431 \"", Ok(String::from("Hello \\a \" ' \\' \\U0001f431 "))),
-
+            (
+                "r\"Hello \\a \\\" ' \\' \\U0001f431 \"",
+                Ok(String::from("Hello \\a \" ' \\' \\U0001f431 ")),
+            ),
+            (
+                "R\"Hello \\a \\\" ' \\' \\U0001f431 \"",
+                Ok(String::from("Hello \\a \" ' \\' \\U0001f431 ")),
+            ),
             // Raw string in single quotes
             // r'Hello \a \" " \' \U0001f431 ' => Hello \a \" " ' \U0001f431
             // R'Hello \a \" " \' \U0001f431 ' => Hello \a \" " ' \U0001f431
-            ("r'Hello \\a \\\" \" \\' \\U0001f431 '", Ok(String::from("Hello \\a \\\" \" ' \\U0001f431 "))),
-            ("R'Hello \\a \\\" \" \\' \\U0001f431 '", Ok(String::from("Hello \\a \\\" \" ' \\U0001f431 "))),
+            (
+                "r'Hello \\a \\\" \" \\' \\U0001f431 '",
+                Ok(String::from("Hello \\a \\\" \" ' \\U0001f431 ")),
+            ),
+            (
+                "R'Hello \\a \\\" \" \\' \\U0001f431 '",
+                Ok(String::from("Hello \\a \\\" \" ' \\U0001f431 ")),
+            ),
         ];
 
         for (s, expected) in tests {
@@ -404,4 +432,3 @@ mod tests {
         }
     }
 }
-
