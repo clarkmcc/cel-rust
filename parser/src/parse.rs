@@ -28,7 +28,7 @@ pub enum ParseError {
 }
 
 /// Source error type of [ParseError::InvalidUnicode](ParseError::InvalidUnicode).
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ParseUnicodeError {
     // #[error("could not parse {string} as u32 hex: {source}")]
     ParseHexFailed {
@@ -205,21 +205,20 @@ fn parse_quoted_string(
                                 _ => unreachable!(),
                             };
 
-                            parse_unicode_hex(length, &mut chars)
-                                .map_err(|x| ParseError::InvalidUnicode {
-                                    source: x,
+                            parse_unicode_hex(length, &mut chars).map_err(|x| {
+                                ParseError::InvalidUnicode {
+                                    source: x.clone(),
                                     index: idx,
                                     string: String::from(s),
-                                })
-                                .unwrap()
+                                }
+                            })?
                         }
                         n if ('0'..='3').contains(&n) => parse_unicode_oct(&n, &mut chars)
                             .map_err(|x| ParseError::InvalidUnicode {
-                                source: x,
+                                source: x.clone(),
                                 index: idx,
                                 string: String::from(s),
-                            })
-                            .unwrap(),
+                            })?,
                         _ => {
                             return Err(ParseError::InvalidEscape {
                                 escape: format!("{}{}", c, c2),
