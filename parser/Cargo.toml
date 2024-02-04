@@ -12,5 +12,12 @@ categories = ["parsing", "cel"]
 lalrpop-util = { version = "0.19.1", features = ["lexer"] }
 regex = "1.4.2"
 
+[dev-dependencies]
+criterion = { version = "0.5.1", features = ["html_reports"] }
+
 [build-dependencies]
 lalrpop = { version = "0.19.1", features = ["lexer"] }
+
+[[bench]]
+name = "runtime"
+harness = false
