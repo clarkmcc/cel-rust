@@ -48,7 +48,7 @@ fn main() {
 
 Check out these other examples to learn how to use this library:
 
-- [Simple](../example/src/simple.rs) - A simple example of how to use the library.
-- [Variables](../example/src/variables.rs) - Passing variables and using them in your program.
-- [Functions](../example/src/functions.rs) - Defining and using custom functions in your program.
-- [Concurrent Execution](../example/src/threads.rs) - Executing the same program concurrently.
+- [Simple](https://github.com/clarkmcc/cel-rust/blob/master/example/src/simple.rs) - A simple example of how to use the library.
+- [Variables](https://github.com/clarkmcc/cel-rust/blob/master/example/src/variables.rs) - Passing variables and using them in your program.
+- [Functions](https://github.com/clarkmcc/cel-rust/blob/master/example/src/functions.rs) - Defining and using custom functions in your program.
+- [Concurrent Execution](https://github.com/clarkmcc/cel-rust/blob/master/example/src/threads.rs) - Executing the same program concurrently.
