@@ -112,7 +112,7 @@ impl<'a> Context<'a> {
         Value::resolve_all(exprs, self)
     }
 
-    pub(crate) fn clone(&self) -> Context {
+    pub fn clone(&self) -> Context {
         Context::Child {
             parent: self,
             variables: Default::default(),
