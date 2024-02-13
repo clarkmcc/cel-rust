@@ -17,6 +17,8 @@ mod functions;
 mod magic;
 pub mod objects;
 mod resolvers;
+mod ser;
+pub use ser::to_value;
 mod testing;
 use magic::FromContext;
 
