@@ -3,6 +3,7 @@ use crate::objects::Value;
 use crate::{functions, ExecutionError};
 use cel_parser::Expression;
 use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
 
 /// Context is a collection of variables and functions that can be used
 /// by the interpreter to resolve expressions. The context can be either
@@ -37,6 +38,12 @@ pub enum Context<'a> {
         parent: &'a Context<'a>,
         variables: HashMap<String, Value>,
     },
+}
+
+impl<'a> Debug for Context<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Context {{ ... }}")
+    }
 }
 
 impl<'a> Context<'a> {
