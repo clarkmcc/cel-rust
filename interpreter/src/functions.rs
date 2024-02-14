@@ -526,6 +526,29 @@ mod tests {
     }
 
     #[test]
+    fn test_exists() {
+        [
+            ("exist list #1", "[0, 1, 2].exists(x, x > 0)"),
+            ("exist list #2", "[0, 1, 2].exists(x, x == 3) == false"),
+            ("exist list #3", "[0, 1, 2, 2].exists(x, x == 2)"),
+            ("exist map", "{0: 0, 1:1, 2:2}.exists(x, x > 0)"),
+        ]
+        .iter()
+        .for_each(assert_script);
+    }
+
+    #[test]
+    fn test_exists_one() {
+        [
+            ("exist list #1", "[0, 1, 2].exists_one(x, x > 0) == false"),
+            ("exist list #2", "[0, 1, 2].exists_one(x, x == 0)"),
+            ("exist map", "{0: 0, 1:1, 2:2}.exists_one(x, x == 2)"),
+        ]
+        .iter()
+        .for_each(assert_script);
+    }
+
+    #[test]
     fn test_max() {
         [
             ("max single", "max(1) == 1"),
