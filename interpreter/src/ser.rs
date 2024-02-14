@@ -777,12 +777,6 @@ mod tests {
             )]),
         )])
         .into();
-
-        let program = Program::compile("test == expected").unwrap();
-        let mut context = Context::default();
-        context.add_variable("expected", expected);
-        context.add_variable("test", map);
-        let value = program.execute(&context).unwrap();
-        assert_eq!(value, true.into())
+        assert_eq!(map, expected)
     }
 }
