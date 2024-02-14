@@ -5,7 +5,6 @@ use serde::{
 };
 use std::{collections::HashMap, fmt::Display, iter::FromIterator, sync::Arc};
 use thiserror::Error;
-
 pub struct Serializer;
 pub struct KeySerializer;
 
@@ -549,5 +548,241 @@ impl<'a> ser::Serializer for KeySerializer {
         Err(SerializationError::InvalidKey(
             "Struct variants are not supported".to_string(),
         ))
+    }
+}
+
+/*
+ * Tests
+ */
+
+#[cfg(test)]
+mod tests {
+    use crate::{objects::Key, to_value, Value};
+    use crate::{Context, Program};
+    use serde::Serialize;
+    use serde_bytes::Bytes;
+    use std::{collections::HashMap, iter::FromIterator, sync::Arc};
+
+    #[test]
+    fn test_primitives() {
+        #[derive(Serialize)]
+        struct TestPrimitives {
+            bool: bool,
+            u8: u8,
+            u16: u16,
+            u32: u32,
+            u64: u64,
+            int8: i8,
+            int16: i16,
+            int32: i32,
+            int64: i64,
+            f32: f32,
+            f64: f64,
+            char: char,
+            string: String,
+            bytes: &'static Bytes,
+        }
+
+        let test = TestPrimitives {
+            bool: true,
+            int8: 8_i8,
+            int16: 16_i16,
+            int32: 32_i32,
+            int64: 64_i64,
+            u8: 8_u8,
+            u16: 16_u16,
+            u32: 32_u32,
+            u64: 64_u64,
+            f32: 0.32_f32,
+            f64: 0.64_f64,
+            char: 'a',
+            string: "string".to_string(),
+            bytes: Bytes::new(&[1_u8, 1_u8, 1_u8, 1_u8]),
+        };
+
+        let serialized = to_value(&test).unwrap();
+        let expected: Value = HashMap::from_iter([
+            (Key::String(Arc::new("bool".to_string())), Value::Bool(true)),
+            (Key::String(Arc::new("int8".to_string())), Value::Int(8)),
+            (Key::String(Arc::new("int16".to_string())), Value::Int(16)),
+            (Key::String(Arc::new("int32".to_string())), Value::Int(32)),
+            (Key::String(Arc::new("int64".to_string())), Value::Int(64)),
+            (Key::String(Arc::new("u8".to_string())), Value::UInt(8)),
+            (Key::String(Arc::new("u16".to_string())), Value::UInt(16)),
+            (Key::String(Arc::new("u32".to_string())), Value::UInt(32)),
+            (Key::String(Arc::new("u64".to_string())), Value::UInt(64)),
+            (
+                Key::String(Arc::new("f32".to_string())),
+                Value::Float(f64::from(0.32_f32)),
+            ),
+            (Key::String(Arc::new("f64".to_string())), Value::Float(0.64)),
+            (
+                Key::String(Arc::new("char".to_string())),
+                Value::String(Arc::new("a".to_string())),
+            ),
+            (
+                Key::String(Arc::new("string".to_string())),
+                Value::String(Arc::new("string".to_string())),
+            ),
+            (
+                Key::String(Arc::new("bytes".to_string())),
+                Value::Bytes(Arc::new(vec![1, 1, 1, 1])),
+            ),
+        ])
+        .into();
+
+        // Test with CEL because iterator is not implemented for Value::Map
+        let program = Program::compile(
+            "expected.all(key, (has(serialized[key]) && (serialized[key] == expected[key])))",
+        )
+        .unwrap();
+        let mut context = Context::default();
+        context.add_variable("expected", expected);
+        context.add_variable("serialized", serialized);
+        let value = program.execute(&context).unwrap();
+        assert_eq!(value, true.into())
+    }
+
+    #[derive(Serialize)]
+    enum TestCompoundTypes {
+        Unit,
+        Newtype(u32),
+        Wrapped(Option<u8>),
+        Tuple(u32, u32),
+        Struct {
+            a: i32,
+            nested: HashMap<bool, HashMap<String, Vec<String>>>,
+        },
+        Map(HashMap<String, &'static Bytes>),
+    }
+    #[test]
+    fn test_unit() {
+        let unit = to_value(TestCompoundTypes::Unit).unwrap();
+        let expected: Value = "Unit".into();
+        let program = Program::compile("test == expected").unwrap();
+        let mut context = Context::default();
+        context.add_variable("expected", expected);
+        context.add_variable("test", unit);
+        let value = program.execute(&context).unwrap();
+        assert_eq!(value, true.into())
+    }
+    #[test]
+    fn test_newtype() {
+        let newtype = to_value(TestCompoundTypes::Newtype(32)).unwrap();
+        let expected: Value = HashMap::from([("Newtype", Value::UInt(32))]).into();
+        let program = Program::compile("test == expected").unwrap();
+        let mut context = Context::default();
+        context.add_variable("expected", expected);
+        context.add_variable("test", newtype);
+        let value = program.execute(&context).unwrap();
+        assert_eq!(value, true.into())
+    }
+    #[test]
+    fn test_options() {
+        // Test Option serialization
+        let wrapped = to_value(TestCompoundTypes::Wrapped(None)).unwrap();
+        let expected: Value = HashMap::from([("Wrapped", Value::Null)]).into();
+        let program = Program::compile("test == expected").unwrap();
+        let mut context = Context::default();
+        context.add_variable("expected", expected);
+        context.add_variable("test", wrapped);
+        let value = program.execute(&context).unwrap();
+        assert_eq!(value, true.into());
+
+        let wrapped = to_value(TestCompoundTypes::Wrapped(Some(8))).unwrap();
+        let expected: Value = HashMap::from([("Wrapped", Value::UInt(8))]).into();
+        let program = Program::compile("test == expected").unwrap();
+        let mut context = Context::default();
+        context.add_variable("expected", expected);
+        context.add_variable("test", wrapped);
+        let value = program.execute(&context).unwrap();
+        assert_eq!(value, true.into())
+    }
+
+    #[test]
+    fn test_tuples() {
+        // Test Tuple serialization
+        let tuple = to_value(TestCompoundTypes::Tuple(12, 16)).unwrap();
+        let expected: Value = HashMap::from([(
+            "Tuple",
+            Value::List(Arc::new(vec![12_u64.into(), 16_u64.into()])),
+        )])
+        .into();
+        let program = Program::compile("test == expected").unwrap();
+        let mut context = Context::default();
+        context.add_variable("expected", expected);
+        context.add_variable("test", tuple);
+        let value = program.execute(&context).unwrap();
+        assert_eq!(value, true.into())
+    }
+
+    #[test]
+    fn test_structs() {
+        // Test Struct serialization
+        let test_struct = to_value(TestCompoundTypes::Struct {
+            a: 32_i32,
+            nested: HashMap::from_iter([(
+                true,
+                HashMap::from_iter([(
+                    "Test".to_string(),
+                    vec!["a".to_string(), "b".to_string(), "c".to_string()],
+                )]),
+            )]),
+        })
+        .unwrap();
+        dbg!(&test_struct);
+        let expected: Value = HashMap::<Key, Value>::from([(
+            "Struct".into(),
+            HashMap::<Key, Value>::from_iter([
+                ("a".into(), 32_i32.into()),
+                (
+                    "nested".into(),
+                    HashMap::<Key, Value>::from_iter([(
+                        true.into(),
+                        HashMap::<Key, Value>::from_iter([(
+                            "Test".into(),
+                            vec!["a".to_string(), "b".to_string(), "c".to_string()].into(),
+                        )])
+                        .into(),
+                    )])
+                    .into(),
+                ),
+            ])
+            .into(),
+        )])
+        .into();
+        let program = Program::compile("expected.all(key, test[key] == expected[key])").unwrap();
+        let mut context = Context::default();
+        context.add_variable("expected", expected);
+        context.add_variable("test", test_struct);
+        let value = program.execute(&context).unwrap();
+        assert_eq!(value, true.into());
+    }
+
+    #[test]
+    fn test_maps() {
+        // Test Map serialization
+        let map = to_value(TestCompoundTypes::Map(
+            HashMap::<String, &'static Bytes>::from_iter([(
+                "Test".to_string(),
+                Bytes::new(&[0_u8, 0_u8, 0_u8, 0_u8]),
+            )]),
+        ))
+        .unwrap();
+        let expected: Value = HashMap::from([(
+            "Map",
+            HashMap::<Key, Value>::from_iter([(
+                "Test".into(),
+                Value::Bytes(Arc::new(vec![0_u8, 0_u8, 0_u8, 0_u8])),
+            )]),
+        )])
+        .into();
+
+        let program = Program::compile("test == expected").unwrap();
+        let mut context = Context::default();
+        context.add_variable("expected", expected);
+        context.add_variable("test", map);
+        let value = program.execute(&context).unwrap();
+        assert_eq!(value, true.into())
     }
 }
