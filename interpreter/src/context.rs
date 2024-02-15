@@ -1,5 +1,5 @@
 use crate::magic::{Function, FunctionRegistry, Handler};
-use crate::objects::Value;
+use crate::objects::{TryIntoValue, Value};
 use crate::{functions, ExecutionError};
 use cel_parser::Expression;
 use std::collections::HashMap;
@@ -40,19 +40,24 @@ pub enum Context<'a> {
 }
 
 impl<'a> Context<'a> {
-    pub fn add_variable<S, V>(&mut self, name: S, value: V)
+    pub fn add_variable<S, V>(
+        &mut self,
+        name: S,
+        value: V,
+    ) -> Result<(), Box<dyn std::error::Error>>
     where
         S: Into<String>,
-        V: Into<Value>,
+        V: TryIntoValue,
     {
         match self {
             Context::Root { variables, .. } => {
-                variables.insert(name.into(), value.into());
+                variables.insert(name.into(), value.try_into_value()?);
             }
             Context::Child { variables, .. } => {
-                variables.insert(name.into(), value.into());
+                variables.insert(name.into(), value.try_into_value()?);
             }
         }
+        Ok(())
     }
 
     pub fn get_variable<S>(&self, name: S) -> Result<Value, ExecutionError>

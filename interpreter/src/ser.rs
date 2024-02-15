@@ -1,3 +1,9 @@
+
+// The serde_json crate implements a Serializer for its own Value enum, that is 
+// almost exactly the same to our Value enum, so this is more or less copied
+// from [serde_json](https://github.com/serde-rs/json/blob/master/src/value/ser.rs),
+// also mentioned in the [serde documentation](https://serde.rs/).
+
 use crate::{objects::Key, Value};
 use serde::{
     ser::{self, Impossible},
@@ -11,6 +17,7 @@ pub struct KeySerializer;
 #[derive(Error, Debug, PartialEq, Clone)]
 pub enum SerializationError {
     InvalidKey(String),
+    SerdeError(String),
 }
 
 impl ser::Error for SerializationError {
@@ -18,13 +25,14 @@ impl ser::Error for SerializationError {
     where
         T: std::fmt::Display,
     {
-        SerializationError::InvalidKey(msg.to_string())
+        SerializationError::SerdeError(msg.to_string())
     }
 }
 
 impl Display for SerializationError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            SerializationError::SerdeError(msg) => formatter.write_str(msg),
             SerializationError::InvalidKey(msg) => formatter.write_str(msg),
         }
     }
@@ -39,7 +47,10 @@ where
     value.serialize(Serializer)
 }
 
-impl<'a> ser::Serializer for Serializer {
+
+
+
+impl ser::Serializer for Serializer {
     type Ok = Value;
     type Error = SerializationError;
 
@@ -230,7 +241,7 @@ pub struct SerializeStructVariant {
     map: HashMap<Key, Value>,
 }
 
-impl<'a> ser::SerializeSeq for SerializeVec {
+impl ser::SerializeSeq for SerializeVec {
     type Ok = Value;
     type Error = SerializationError;
 
@@ -247,7 +258,7 @@ impl<'a> ser::SerializeSeq for SerializeVec {
     }
 }
 
-impl<'a> ser::SerializeTuple for SerializeVec {
+impl ser::SerializeTuple for SerializeVec {
     type Ok = Value;
     type Error = SerializationError;
 
@@ -263,7 +274,7 @@ impl<'a> ser::SerializeTuple for SerializeVec {
     }
 }
 
-impl<'a> ser::SerializeTupleStruct for SerializeVec {
+impl ser::SerializeTupleStruct for SerializeVec {
     type Ok = Value;
     type Error = SerializationError;
 
@@ -279,7 +290,7 @@ impl<'a> ser::SerializeTupleStruct for SerializeVec {
     }
 }
 
-impl<'a> ser::SerializeTupleVariant for SerializeTupleVariant {
+impl ser::SerializeTupleVariant for SerializeTupleVariant {
     type Ok = Value;
     type Error = SerializationError;
 
@@ -297,7 +308,7 @@ impl<'a> ser::SerializeTupleVariant for SerializeTupleVariant {
     }
 }
 
-impl<'a> ser::SerializeMap for SerializeMap {
+impl ser::SerializeMap for SerializeMap {
     type Ok = Value;
     type Error = SerializationError;
 
@@ -327,7 +338,7 @@ impl<'a> ser::SerializeMap for SerializeMap {
     }
 }
 
-impl<'a> ser::SerializeStruct for SerializeMap {
+impl ser::SerializeStruct for SerializeMap {
     type Ok = Value;
     type Error = SerializationError;
 
@@ -343,7 +354,7 @@ impl<'a> ser::SerializeStruct for SerializeMap {
     }
 }
 
-impl<'a> ser::SerializeStructVariant for SerializeStructVariant {
+impl ser::SerializeStructVariant for SerializeStructVariant {
     type Ok = Value;
     type Error = SerializationError;
 
@@ -362,7 +373,7 @@ impl<'a> ser::SerializeStructVariant for SerializeStructVariant {
     }
 }
 
-impl<'a> ser::Serializer for KeySerializer {
+impl ser::Serializer for KeySerializer {
     type Ok = Key;
     type Error = SerializationError;
 
@@ -417,8 +428,7 @@ impl<'a> ser::Serializer for KeySerializer {
     }
 
     fn serialize_f64(self, _v: f64) -> Result<Key> {
-        Err(SerializationError::InvalidKey(
-            "Float is not supported".to_string(),
+        Err(SerializationError::InvalidKey( "Float is not supported".to_string(),
         ))
     }
 
@@ -600,7 +610,7 @@ mod tests {
             bytes: Bytes::new(&[1_u8, 1_u8, 1_u8, 1_u8]),
         };
 
-        let serialized = to_value(&test).unwrap();
+        let serialized = to_value(test).unwrap();
         let expected: Value = HashMap::from_iter([
             (Key::String(Arc::new("bool".to_string())), Value::Bool(true)),
             (Key::String(Arc::new("int8".to_string())), Value::Int(8)),
@@ -637,8 +647,8 @@ mod tests {
         )
         .unwrap();
         let mut context = Context::default();
-        context.add_variable("expected", expected);
-        context.add_variable("serialized", serialized);
+        context.add_variable("expected", expected).unwrap();
+        context.add_variable("serialized", serialized).unwrap();
         let value = program.execute(&context).unwrap();
         assert_eq!(value, true.into())
     }
@@ -661,8 +671,8 @@ mod tests {
         let expected: Value = "Unit".into();
         let program = Program::compile("test == expected").unwrap();
         let mut context = Context::default();
-        context.add_variable("expected", expected);
-        context.add_variable("test", unit);
+        context.add_variable("expected", expected).unwrap();
+        context.add_variable("test", unit).unwrap();
         let value = program.execute(&context).unwrap();
         assert_eq!(value, true.into())
     }
@@ -672,8 +682,8 @@ mod tests {
         let expected: Value = HashMap::from([("Newtype", Value::UInt(32))]).into();
         let program = Program::compile("test == expected").unwrap();
         let mut context = Context::default();
-        context.add_variable("expected", expected);
-        context.add_variable("test", newtype);
+        context.add_variable("expected", expected).unwrap();
+        context.add_variable("test", newtype).unwrap();
         let value = program.execute(&context).unwrap();
         assert_eq!(value, true.into())
     }
@@ -684,8 +694,8 @@ mod tests {
         let expected: Value = HashMap::from([("Wrapped", Value::Null)]).into();
         let program = Program::compile("test == expected").unwrap();
         let mut context = Context::default();
-        context.add_variable("expected", expected);
-        context.add_variable("test", wrapped);
+        context.add_variable("expected", expected).unwrap();
+        context.add_variable("test", wrapped).unwrap();
         let value = program.execute(&context).unwrap();
         assert_eq!(value, true.into());
 
@@ -693,8 +703,8 @@ mod tests {
         let expected: Value = HashMap::from([("Wrapped", Value::UInt(8))]).into();
         let program = Program::compile("test == expected").unwrap();
         let mut context = Context::default();
-        context.add_variable("expected", expected);
-        context.add_variable("test", wrapped);
+        context.add_variable("expected", expected).unwrap();
+        context.add_variable("test", wrapped).unwrap();
         let value = program.execute(&context).unwrap();
         assert_eq!(value, true.into())
     }
@@ -710,8 +720,8 @@ mod tests {
         .into();
         let program = Program::compile("test == expected").unwrap();
         let mut context = Context::default();
-        context.add_variable("expected", expected);
-        context.add_variable("test", tuple);
+        context.add_variable("expected", expected).unwrap();
+        context.add_variable("test", tuple).unwrap();
         let value = program.execute(&context).unwrap();
         assert_eq!(value, true.into())
     }
@@ -719,7 +729,9 @@ mod tests {
     #[test]
     fn test_structs() {
         // Test Struct serialization
-        let test_struct = to_value(TestCompoundTypes::Struct {
+        let test_struct = 
+            //to_value(
+                TestCompoundTypes::Struct {
             a: 32_i32,
             nested: HashMap::from_iter([(
                 true,
@@ -728,9 +740,9 @@ mod tests {
                     vec!["a".to_string(), "b".to_string(), "c".to_string()],
                 )]),
             )]),
-        })
-        .unwrap();
-        dbg!(&test_struct);
+        };
+        //)
+        //.unwrap();
         let expected: Value = HashMap::<Key, Value>::from([(
             "Struct".into(),
             HashMap::<Key, Value>::from_iter([
@@ -753,8 +765,8 @@ mod tests {
         .into();
         let program = Program::compile("expected.all(key, test[key] == expected[key])").unwrap();
         let mut context = Context::default();
-        context.add_variable("expected", expected);
-        context.add_variable("test", test_struct);
+        context.add_variable("expected", expected).unwrap();
+        context.add_variable("test", test_struct).unwrap();
         let value = program.execute(&context).unwrap();
         assert_eq!(value, true.into());
     }

@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 cel-interpreter = { path = "../interpreter" }
 chrono = "0.4.26"
+serde = { version = "1.0.196", features = ["derive"] }
 
 [[bin]]
 name = "simple"
@@ -24,3 +25,7 @@ path = "src/functions.rs"
 [[bin]]
 name = "threads"
 path = "src/threads.rs"
+
+[[bin]]
+name = "serde"
+path = "src/serde.rs"

@@ -222,7 +222,7 @@ pub fn map(
             let mut values = Vec::with_capacity(items.len());
             let mut ptx = ftx.ptx.clone();
             for item in items.iter() {
-                ptx.add_variable(ident.clone(), item.clone());
+                ptx.add_variable(ident.clone(), item.clone())?;
                 let value = ptx.resolve(&expr)?;
                 values.push(value);
             }
@@ -255,7 +255,7 @@ pub fn filter(
             let mut values = Vec::with_capacity(items.len());
             let mut ptx = ftx.ptx.clone();
             for item in items.iter() {
-                ptx.add_variable(ident.clone(), item.clone());
+                ptx.add_variable(ident.clone(), item.clone())?;
                 if let Value::Bool(true) = ptx.resolve(&expr)? {
                     values.push(item.clone());
                 }
@@ -289,7 +289,7 @@ pub fn all(
         Value::List(items) => {
             let mut ptx = ftx.ptx.clone();
             for item in items.iter() {
-                ptx.add_variable(&ident, item);
+                ptx.add_variable(&ident, item)?;
                 if let Value::Bool(false) = ptx.resolve(&expr)? {
                     return Ok(false);
                 }
@@ -299,7 +299,7 @@ pub fn all(
         Value::Map(value) => {
             let mut ptx = ftx.ptx.clone();
             for key in value.map.keys() {
-                ptx.add_variable(&ident, key);
+                ptx.add_variable(&ident, key)?;
                 if let Value::Bool(false) = ptx.resolve(&expr)? {
                     return Ok(false);
                 }
@@ -332,7 +332,7 @@ pub fn exists(
         Value::List(items) => {
             let mut ptx = ftx.ptx.clone();
             for item in items.iter() {
-                ptx.add_variable(&ident, item);
+                ptx.add_variable(&ident, item)?;
                 if let Value::Bool(true) = ptx.resolve(&expr)? {
                     return Ok(true);
                 }
@@ -342,7 +342,7 @@ pub fn exists(
         Value::Map(value) => {
             let mut ptx = ftx.ptx.clone();
             for key in value.map.keys() {
-                ptx.add_variable(&ident, key);
+                ptx.add_variable(&ident, key)?;
                 if let Value::Bool(true) = ptx.resolve(&expr)? {
                     return Ok(true);
                 }
@@ -362,8 +362,9 @@ pub fn exists(
 ///
 /// # Example
 /// ```cel
-/// [1, 2, 3].exists(x, x > 0) == true
-/// [{1:true, 2:true, 3:false}].exists(x, x > 0) == true
+/// [1, 2, 3].exists_one(x, x > 0) == false
+/// [1, 2, 3].exists_one(x, x == 1) == true
+/// [{1:true, 2:true, 3:false}].exists_one(x, x > 0) == false
 /// ```
 pub fn exists_one(
     ftx: &FunctionContext,
@@ -376,7 +377,7 @@ pub fn exists_one(
             let mut ptx = ftx.ptx.clone();
             let mut exists = false;
             for item in items.iter() {
-                ptx.add_variable(&ident, item);
+                ptx.add_variable(&ident, item)?;
                 if let Value::Bool(true) = ptx.resolve(&expr)? {
                     if exists {
                         return Ok(false);
@@ -390,7 +391,7 @@ pub fn exists_one(
             let mut ptx = ftx.ptx.clone();
             let mut exists = false;
             for key in value.map.keys() {
-                ptx.add_variable(&ident, key);
+                ptx.add_variable(&ident, key)?;
                 if let Value::Bool(true) = ptx.resolve(&expr)? {
                     if exists {
                         return Ok(false);
@@ -488,7 +489,8 @@ mod tests {
 
         for (name, script) in tests {
             let mut ctx = Context::default();
-            ctx.add_variable("foo", HashMap::from([("bar", 1)]));
+            ctx.add_variable("foo", HashMap::from([("bar", 1)]))
+                .unwrap();
             assert_eq!(test_script(script, Some(ctx)), Ok(true.into()), "{}", name);
         }
     }
