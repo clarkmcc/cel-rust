@@ -1,5 +1,4 @@
-
-// The serde_json crate implements a Serializer for its own Value enum, that is 
+// The serde_json crate implements a Serializer for its own Value enum, that is
 // almost exactly the same to our Value enum, so this is more or less copied
 // from [serde_json](https://github.com/serde-rs/json/blob/master/src/value/ser.rs),
 // also mentioned in the [serde documentation](https://serde.rs/).
@@ -46,9 +45,6 @@ where
 {
     value.serialize(Serializer)
 }
-
-
-
 
 impl ser::Serializer for Serializer {
     type Ok = Value;
@@ -325,9 +321,11 @@ impl ser::SerializeMap for SerializeMap {
         T: ?Sized + Serialize,
     {
         self.map.insert(
-            self.next_key
-                .clone()
-                .expect("serialize_value called before serialize_key"),
+            self.next_key.clone().ok_or_else(|| {
+                SerializationError::InvalidKey(
+                    "serialize_value called before serialize_key".to_string(),
+                )
+            })?,
             value.serialize(Serializer)?,
         );
         Ok(())
@@ -428,7 +426,8 @@ impl ser::Serializer for KeySerializer {
     }
 
     fn serialize_f64(self, _v: f64) -> Result<Key> {
-        Err(SerializationError::InvalidKey( "Float is not supported".to_string(),
+        Err(SerializationError::InvalidKey(
+            "Float is not supported".to_string(),
         ))
     }
 
@@ -729,9 +728,7 @@ mod tests {
     #[test]
     fn test_structs() {
         // Test Struct serialization
-        let test_struct = 
-            //to_value(
-                TestCompoundTypes::Struct {
+        let test_struct = TestCompoundTypes::Struct {
             a: 32_i32,
             nested: HashMap::from_iter([(
                 true,
@@ -741,8 +738,6 @@ mod tests {
                 )]),
             )]),
         };
-        //)
-        //.unwrap();
         let expected: Value = HashMap::<Key, Value>::from([(
             "Struct".into(),
             HashMap::<Key, Value>::from_iter([

@@ -61,8 +61,6 @@ pub enum ExecutionError {
     /// Indicates that a function had an error during execution.
     #[error("Error executing function '{function}': {message}")]
     FunctionError { function: String, message: String },
-    #[error("Serialization error: {0}")]
-    SerializationError(String),
 }
 
 impl ExecutionError {
@@ -158,10 +156,9 @@ mod tests {
     fn variables() {
         fn assert_output(script: &str, expected: ResolveResult) {
             let mut ctx = Context::default();
-            ctx.add_variable("foo", HashMap::from([("bar", 1i64)]))
-                .unwrap();
-            ctx.add_variable("arr", vec![1i64, 2, 3]).unwrap();
-            ctx.add_variable("str", "foobar".to_string()).unwrap();
+            ctx.add_variable_from_value("foo", HashMap::from([("bar", 1i64)]));
+            ctx.add_variable_from_value("arr", vec![1i64, 2, 3]);
+            ctx.add_variable_from_value("str", "foobar".to_string());
             assert_eq!(test_script(script, Some(ctx)), expected);
         }
 
@@ -221,8 +218,7 @@ mod tests {
 
         for (name, script, error) in tests {
             let mut ctx = Context::default();
-            ctx.add_variable("foo", HashMap::from([("bar", 1)]))
-                .unwrap();
+            ctx.add_variable_from_value("foo", HashMap::from([("bar", 1)]));
             let res = test_script(script, Some(ctx));
             assert_eq!(res, error.into(), "{}", name);
         }

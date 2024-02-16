@@ -60,6 +60,21 @@ impl<'a> Context<'a> {
         Ok(())
     }
 
+    pub fn add_variable_from_value<S, V>(&mut self, name: S, value: V)
+    where
+        S: Into<String>,
+        V: Into<Value>,
+    {
+        match self {
+            Context::Root { variables, .. } => {
+                variables.insert(name.into(), value.into());
+            }
+            Context::Child { variables, .. } => {
+                variables.insert(name.into(), value.into());
+            }
+        }
+    }
+
     pub fn get_variable<S>(&self, name: S) -> Result<Value, ExecutionError>
     where
         S: Into<String>,

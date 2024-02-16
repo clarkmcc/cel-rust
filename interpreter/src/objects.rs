@@ -101,12 +101,6 @@ impl<K: Into<Key>, V: Into<Value>> From<HashMap<K, V>> for Map {
     }
 }
 
-impl From<Box<dyn std::error::Error>> for ExecutionError {
-    fn from(value: Box<dyn std::error::Error>) -> Self {
-        ExecutionError::SerializationError(value.to_string())
-    }
-}
-
 pub trait TryIntoValue {
     type Error: std::error::Error + 'static;
     fn try_into_value(self) -> Result<Value, Self::Error>;
@@ -116,6 +110,13 @@ impl TryIntoValue for Value {
     type Error = Infallible;
     fn try_into_value(self) -> Result<Value, Self::Error> {
         Ok(self)
+    }
+}
+
+impl TryIntoValue for Key {
+    type Error = Infallible;
+    fn try_into_value(self) -> Result<Value, Self::Error> {
+        Ok(self.clone().into())
     }
 }
 
@@ -703,7 +704,7 @@ mod tests {
         let mut context = Context::default();
         let mut headers = HashMap::new();
         headers.insert("Content-Type", "application/json".to_string());
-        context.add_variable("headers", headers).unwrap();
+        context.add_variable_from_value("headers", headers);
 
         let program = Program::compile("headers[\"Content-Type\"]").unwrap();
         let value = program.execute(&context).unwrap();
