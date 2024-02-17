@@ -542,7 +542,7 @@ impl<'a> Value {
             Value::Bool(v) => *v,
             Value::Null => false,
             Value::Duration(v) => v.num_nanoseconds().map(|n| n != 0).unwrap_or(false),
-            Value::Timestamp(v) => v.timestamp_nanos_opt() > Some(0),
+            Value::Timestamp(v) => v.timestamp_nanos() > 0,
             Value::Function(_, _) => false,
         }
     }
