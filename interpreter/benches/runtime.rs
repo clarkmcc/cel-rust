@@ -44,7 +44,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         c.bench_function(name, |b| {
             let program = Program::compile(expr).expect("Parsing failed");
             let mut ctx = Context::default();
-            ctx.add_variable("foo", HashMap::from([("bar", 1)]));
+            ctx.add_variable_from_value("foo", HashMap::from([("bar", 1)]));
             b.iter(|| program.execute(&ctx))
         });
     }
@@ -59,7 +59,7 @@ pub fn map_macro_benchmark(c: &mut Criterion) {
             let list = (0..size).collect::<Vec<_>>();
             let program = Program::compile("list.map(x, x * 2)").unwrap();
             let mut ctx = Context::default();
-            ctx.add_variable("list", list);
+            ctx.add_variable_from_value("list", list);
             b.iter(|| program.execute(&ctx).unwrap())
         });
     }

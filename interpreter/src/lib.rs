@@ -17,6 +17,8 @@ mod functions;
 mod magic;
 pub mod objects;
 mod resolvers;
+mod ser;
+pub use ser::to_value;
 mod testing;
 use magic::FromContext;
 
@@ -154,9 +156,9 @@ mod tests {
     fn variables() {
         fn assert_output(script: &str, expected: ResolveResult) {
             let mut ctx = Context::default();
-            ctx.add_variable("foo", HashMap::from([("bar", 1i64)]));
-            ctx.add_variable("arr", vec![1i64, 2, 3]);
-            ctx.add_variable("str", "foobar".to_string());
+            ctx.add_variable_from_value("foo", HashMap::from([("bar", 1i64)]));
+            ctx.add_variable_from_value("arr", vec![1i64, 2, 3]);
+            ctx.add_variable_from_value("str", "foobar".to_string());
             assert_eq!(test_script(script, Some(ctx)), expected);
         }
 
@@ -216,7 +218,7 @@ mod tests {
 
         for (name, script, error) in tests {
             let mut ctx = Context::default();
-            ctx.add_variable("foo", HashMap::from([("bar", 1)]));
+            ctx.add_variable_from_value("foo", HashMap::from([("bar", 1)]));
             let res = test_script(script, Some(ctx));
             assert_eq!(res, error.into(), "{}", name);
         }

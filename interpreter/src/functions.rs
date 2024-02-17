@@ -222,7 +222,7 @@ pub fn map(
             let mut values = Vec::with_capacity(items.len());
             let mut ptx = ftx.ptx.clone();
             for item in items.iter() {
-                ptx.add_variable(ident.clone(), item.clone());
+                ptx.add_variable_from_value(ident.clone(), item.clone());
                 let value = ptx.resolve(&expr)?;
                 values.push(value);
             }
@@ -255,7 +255,7 @@ pub fn filter(
             let mut values = Vec::with_capacity(items.len());
             let mut ptx = ftx.ptx.clone();
             for item in items.iter() {
-                ptx.add_variable(ident.clone(), item.clone());
+                ptx.add_variable_from_value(ident.clone(), item.clone());
                 if let Value::Bool(true) = ptx.resolve(&expr)? {
                     values.push(item.clone());
                 }
@@ -289,7 +289,7 @@ pub fn all(
         Value::List(items) => {
             let mut ptx = ftx.ptx.clone();
             for item in items.iter() {
-                ptx.add_variable(&ident, item);
+                ptx.add_variable_from_value(&ident, item);
                 if let Value::Bool(false) = ptx.resolve(&expr)? {
                     return Ok(false);
                 }
@@ -299,7 +299,7 @@ pub fn all(
         Value::Map(value) => {
             let mut ptx = ftx.ptx.clone();
             for key in value.map.keys() {
-                ptx.add_variable(&ident, key);
+                ptx.add_variable_from_value(&ident, key);
                 if let Value::Bool(false) = ptx.resolve(&expr)? {
                     return Ok(false);
                 }
@@ -308,6 +308,101 @@ pub fn all(
         }
         _ => return Err(this.error_expected_type(ValueType::List)),
     };
+}
+
+/// Returns a boolean value indicating whether a or more values in the provided
+/// list or map meet the predicate defined by the provided expression. If
+/// called on a map, the predicate is applied to the map keys.
+///
+/// This function is intended to be used like the CEL-go `exists` macro:
+/// https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros
+///
+/// # Example
+/// ```cel
+/// [1, 2, 3].exists(x, x > 0) == true
+/// [{1:true, 2:true, 3:false}].exists(x, x > 0) == true
+/// ```
+pub fn exists(
+    ftx: &FunctionContext,
+    This(this): This<Value>,
+    ident: Identifier,
+    expr: Expression,
+) -> Result<bool> {
+    match this {
+        Value::List(items) => {
+            let mut ptx = ftx.ptx.clone();
+            for item in items.iter() {
+                ptx.add_variable_from_value(&ident, item);
+                if let Value::Bool(true) = ptx.resolve(&expr)? {
+                    return Ok(true);
+                }
+            }
+            Ok(false)
+        }
+        Value::Map(value) => {
+            let mut ptx = ftx.ptx.clone();
+            for key in value.map.keys() {
+                ptx.add_variable_from_value(&ident, key);
+                if let Value::Bool(true) = ptx.resolve(&expr)? {
+                    return Ok(true);
+                }
+            }
+            Ok(false)
+        }
+        _ => Err(this.error_expected_type(ValueType::List)),
+    }
+}
+
+/// Returns a boolean value indicating whether only one value in the provided
+/// list or map meets the predicate defined by the provided expression. If
+/// called on a map, the predicate is applied to the map keys.
+///
+/// This function is intended to be used like the CEL-go `exists` macro:
+/// https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros
+///
+/// # Example
+/// ```cel
+/// [1, 2, 3].exists_one(x, x > 0) == false
+/// [1, 2, 3].exists_one(x, x == 1) == true
+/// [{1:true, 2:true, 3:false}].exists_one(x, x > 0) == false
+/// ```
+pub fn exists_one(
+    ftx: &FunctionContext,
+    This(this): This<Value>,
+    ident: Identifier,
+    expr: Expression,
+) -> Result<bool> {
+    match this {
+        Value::List(items) => {
+            let mut ptx = ftx.ptx.clone();
+            let mut exists = false;
+            for item in items.iter() {
+                ptx.add_variable_from_value(&ident, item);
+                if let Value::Bool(true) = ptx.resolve(&expr)? {
+                    if exists {
+                        return Ok(false);
+                    }
+                    exists = true;
+                }
+            }
+            Ok(exists)
+        }
+        Value::Map(value) => {
+            let mut ptx = ftx.ptx.clone();
+            let mut exists = false;
+            for key in value.map.keys() {
+                ptx.add_variable_from_value(&ident, key);
+                if let Value::Bool(true) = ptx.resolve(&expr)? {
+                    if exists {
+                        return Ok(false);
+                    }
+                    exists = true;
+                }
+            }
+            Ok(exists)
+        }
+        _ => Err(this.error_expected_type(ValueType::List)),
+    }
 }
 
 /// Duration parses the provided argument into a [`Value::Duration`] value.
@@ -394,7 +489,7 @@ mod tests {
 
         for (name, script) in tests {
             let mut ctx = Context::default();
-            ctx.add_variable("foo", HashMap::from([("bar", 1)]));
+            ctx.add_variable_from_value("foo", HashMap::from([("bar", 1)]));
             assert_eq!(test_script(script, Some(ctx)), Ok(true.into()), "{}", name);
         }
     }
@@ -426,6 +521,29 @@ mod tests {
             ("all list #1", "[0, 1, 2].all(x, x >= 0)"),
             ("all list #2", "[0, 1, 2].all(x, x > 0) == false"),
             ("all map", "{0: 0, 1:1, 2:2}.all(x, x >= 0) == true"),
+        ]
+        .iter()
+        .for_each(assert_script);
+    }
+
+    #[test]
+    fn test_exists() {
+        [
+            ("exist list #1", "[0, 1, 2].exists(x, x > 0)"),
+            ("exist list #2", "[0, 1, 2].exists(x, x == 3) == false"),
+            ("exist list #3", "[0, 1, 2, 2].exists(x, x == 2)"),
+            ("exist map", "{0: 0, 1:1, 2:2}.exists(x, x > 0)"),
+        ]
+        .iter()
+        .for_each(assert_script);
+    }
+
+    #[test]
+    fn test_exists_one() {
+        [
+            ("exist list #1", "[0, 1, 2].exists_one(x, x > 0) == false"),
+            ("exist list #2", "[0, 1, 2].exists_one(x, x == 0)"),
+            ("exist map", "{0: 0, 1:1, 2:2}.exists_one(x, x == 2)"),
         ]
         .iter()
         .for_each(assert_script);

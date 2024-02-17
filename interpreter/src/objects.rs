@@ -1,13 +1,15 @@
 use crate::context::Context;
 use crate::functions::FunctionContext;
-use crate::ExecutionError;
+use crate::ser::SerializationError;
 use crate::ExecutionError::NoSuchKey;
+use crate::{to_value, ExecutionError};
 use cel_parser::{ArithmeticOp, Atom, Expression, Member, RelationOp, UnaryOp};
 use chrono::{DateTime, Duration, FixedOffset};
 use core::ops;
+use serde::Serialize;
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::convert::TryInto;
+use std::convert::{Infallible, TryInto};
 use std::fmt::{Display, Formatter};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -96,6 +98,46 @@ impl<K: Into<Key>, V: Into<Value>> From<HashMap<K, V>> for Map {
         Map {
             map: Rc::new(new_map),
         }
+    }
+}
+
+pub trait TryIntoValue {
+    type Error: std::error::Error + 'static;
+    fn try_into_value(self) -> Result<Value, Self::Error>;
+}
+
+impl TryIntoValue for Value {
+    type Error = Infallible;
+    fn try_into_value(self) -> Result<Value, Self::Error> {
+        Ok(self)
+    }
+}
+
+impl TryIntoValue for Key {
+    type Error = Infallible;
+    fn try_into_value(self) -> Result<Value, Self::Error> {
+        Ok(self.clone().into())
+    }
+}
+
+impl<T: Serialize> TryIntoValue for T {
+    type Error = SerializationError;
+    fn try_into_value(self) -> Result<Value, Self::Error> {
+        to_value(self)
+    }
+}
+
+impl TryIntoValue for &Value {
+    type Error = Infallible;
+    fn try_into_value(self) -> Result<Value, Self::Error> {
+        Ok(self.clone())
+    }
+}
+
+impl TryIntoValue for &Key {
+    type Error = Infallible;
+    fn try_into_value(self) -> Result<Value, Self::Error> {
+        Ok(self.clone().into())
     }
 }
 
@@ -500,7 +542,7 @@ impl<'a> Value {
             Value::Bool(v) => *v,
             Value::Null => false,
             Value::Duration(v) => v.num_nanoseconds().map(|n| n != 0).unwrap_or(false),
-            Value::Timestamp(v) => v.timestamp_nanos() > 0,
+            Value::Timestamp(v) => v.timestamp_nanos_opt() > Some(0),
             Value::Function(_, _) => false,
         }
     }
@@ -662,7 +704,7 @@ mod tests {
         let mut context = Context::default();
         let mut headers = HashMap::new();
         headers.insert("Content-Type", "application/json".to_string());
-        context.add_variable("headers", headers);
+        context.add_variable_from_value("headers", headers);
 
         let program = Program::compile("headers[\"Content-Type\"]").unwrap();
         let value = program.execute(&context).unwrap();
