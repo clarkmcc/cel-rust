@@ -746,12 +746,12 @@ mod tests {
     #[test]
     fn test_numeric_map_access() {
         let mut context = Context::default();
-        let mut headers = HashMap::new();
-        headers.insert(Key::Uint(0), "zero".to_string());
-        context.add_variable_from_value("headers", headers);
+        let mut numbers = HashMap::new();
+        numbers.insert(Key::Uint(1), "one".to_string());
+        context.add_variable_from_value("numbers", numbers);
 
-        let program = Program::compile("headers[0]").unwrap();
+        let program = Program::compile("numbers[1]").unwrap();
         let value = program.execute(&context).unwrap();
-        assert_eq!(value, "zero".into());
+        assert_eq!(value, "one".into());
     }
 }
