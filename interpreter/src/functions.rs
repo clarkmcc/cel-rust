@@ -477,7 +477,7 @@ pub fn timestamp(value: Arc<String>) -> Result<Value> {
     ))
 }
 
-pub fn max(ftx: &FunctionContext, Arguments(args): Arguments) -> Result<Value> {
+pub fn max(Arguments(args): Arguments) -> Result<Value> {
     // If items is a list of values, then operate on the list
     if args.len() == 1 {
         return Ok(match args[0] {
@@ -488,7 +488,7 @@ pub fn max(ftx: &FunctionContext, Arguments(args): Arguments) -> Result<Value> {
                     match acc.partial_cmp(x) {
                         Some(Ordering::Less) => Ok(x),
                         Some(_) => Ok(acc),
-                        None => Err(ftx.error("NaN values cannot be ordered")),
+                        None => Err(ExecutionError::ValuesNotComparable(acc.clone(), x.clone())),
                     }
                 })?
                 .to_owned(),
@@ -501,7 +501,7 @@ pub fn max(ftx: &FunctionContext, Arguments(args): Arguments) -> Result<Value> {
             match acc.partial_cmp(x) {
                 Some(Ordering::Less) => Ok(x),
                 Some(_) => Ok(acc),
-                None => Err(ftx.error("NaN values cannot be ordered")),
+                None => Err(ExecutionError::ValuesNotComparable(acc.clone(), x.clone())),
             }
         })?
         .to_owned())
