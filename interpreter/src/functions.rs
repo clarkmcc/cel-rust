@@ -497,6 +497,7 @@ pub fn max(Arguments(args): Arguments) -> Result<Value> {
     }
     Ok(args
         .iter()
+        .skip(1)
         .try_fold(args.first().unwrap_or(&Value::Null), |acc, x| {
             match acc.partial_cmp(x) {
                 Some(Ordering::Less) => Ok(x),
@@ -621,6 +622,8 @@ mod tests {
             ("max negative", "max(-1, 0) == 0"),
             ("max float", "max(-1.0, 0.0) == 0.0"),
             ("max list", "max([1, 2, 3]) == 3"),
+            ("max empty list", "max([]) == null"),
+            ("max no args", "max() == null"),
         ]
         .iter()
         .for_each(assert_script);
