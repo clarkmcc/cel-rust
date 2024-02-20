@@ -265,44 +265,34 @@ impl Eq for Value {}
 
 impl PartialOrd for Value {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for Value {
-    fn cmp(&self, other: &Self) -> Ordering {
         match (self, other) {
-            (Value::Int(a), Value::Int(b)) => a.cmp(b),
-            (Value::UInt(a), Value::UInt(b)) => a.cmp(b),
-            (Value::Float(a), Value::Float(b)) => a.partial_cmp(b).unwrap_or(Ordering::Equal),
-            (Value::String(a), Value::String(b)) => a.cmp(b),
-            (Value::Bool(a), Value::Bool(b)) => a.cmp(b),
-            (Value::Null, Value::Null) => Ordering::Equal,
-            (Value::Duration(a), Value::Duration(b)) => a.cmp(b),
-            (Value::Timestamp(a), Value::Timestamp(b)) => a.cmp(b),
+            (Value::Int(a), Value::Int(b)) => Some(a.cmp(b)),
+            (Value::UInt(a), Value::UInt(b)) => Some(a.cmp(b)),
+            (Value::Float(a), Value::Float(b)) => a.partial_cmp(b),
+            (Value::String(a), Value::String(b)) => Some(a.cmp(b)),
+            (Value::Bool(a), Value::Bool(b)) => Some(a.cmp(b)),
+            (Value::Null, Value::Null) => Some(Ordering::Equal),
+            (Value::Duration(a), Value::Duration(b)) => Some(a.cmp(b)),
+            (Value::Timestamp(a), Value::Timestamp(b)) => Some(a.cmp(b)),
             // Allow different numeric types to be compared without explicit casting.
-            (Value::Int(a), Value::UInt(b)) => a
-                .to_owned()
-                .try_into()
-                .and_then(|a: u64| Ok(a.cmp(b)))
-                .unwrap_or(Ordering::Greater),
-            (Value::Int(a), Value::Float(b)) => {
-                (*a as f64).partial_cmp(b).unwrap_or(Ordering::Equal)
-            }
-            (Value::UInt(a), Value::Int(b)) => a
-                .to_owned()
-                .try_into()
-                .and_then(|a: i64| Ok(a.cmp(b)))
-                .unwrap_or(Ordering::Less),
-            (Value::UInt(a), Value::Float(b)) => {
-                (*a as f64).partial_cmp(b).unwrap_or(Ordering::Equal)
-            }
-            (Value::Float(a), Value::Int(b)) => {
-                a.partial_cmp(&(*b as f64)).unwrap_or(Ordering::Equal)
-            }
-            (Value::Float(a), Value::UInt(b)) => {
-                a.partial_cmp(&(*b as f64)).unwrap_or(Ordering::Equal)
-            }
+            (Value::Int(a), Value::UInt(b)) => Some(
+                a.to_owned()
+                    .try_into()
+                    .and_then(|a: u64| Ok(a.cmp(b)))
+                    // If the i64 doesn't fit into a u64 it must be less than 0.
+                    .unwrap_or(Ordering::Less),
+            ),
+            (Value::Int(a), Value::Float(b)) => (*a as f64).partial_cmp(b),
+            (Value::UInt(a), Value::Int(b)) => Some(
+                a.to_owned()
+                    .try_into()
+                    .and_then(|a: i64| Ok(a.cmp(b)))
+                    // If the u64 doesn't fit into a i64 it must be greater than i64::MAX.
+                    .unwrap_or(Ordering::Greater),
+            ),
+            (Value::UInt(a), Value::Float(b)) => (*a as f64).partial_cmp(b),
+            (Value::Float(a), Value::Int(b)) => a.partial_cmp(&(*b as f64)),
+            (Value::Float(a), Value::UInt(b)) => a.partial_cmp(&(*b as f64)),
             (a, b) => panic!("unable to compare {:?} with {:?}", a, b),
         }
     }
@@ -424,10 +414,26 @@ impl<'a> Value {
                 let left = Value::resolve(left, ctx)?;
                 let right = Value::resolve(right, ctx)?;
                 let res = match op {
-                    RelationOp::LessThan => left < right,
-                    RelationOp::LessThanEq => left <= right,
-                    RelationOp::GreaterThan => left > right,
-                    RelationOp::GreaterThanEq => left >= right,
+                    RelationOp::LessThan => {
+                        left.partial_cmp(&right)
+                            .ok_or(ExecutionError::ValuesNotComparable(left, right))?
+                            == Ordering::Less
+                    }
+                    RelationOp::LessThanEq => {
+                        left.partial_cmp(&right)
+                            .ok_or(ExecutionError::ValuesNotComparable(left, right))?
+                            != Ordering::Greater
+                    }
+                    RelationOp::GreaterThan => {
+                        left.partial_cmp(&right)
+                            .ok_or(ExecutionError::ValuesNotComparable(left, right))?
+                            == Ordering::Greater
+                    }
+                    RelationOp::GreaterThanEq => {
+                        left.partial_cmp(&right)
+                            .ok_or(ExecutionError::ValuesNotComparable(left, right))?
+                            != Ordering::Less
+                    }
                     RelationOp::Equals => right.eq(&left),
                     RelationOp::NotEquals => right.ne(&left),
                     RelationOp::In => match (left, right) {
@@ -780,5 +786,25 @@ mod tests {
         let program = Program::compile("1 < 1.1").unwrap();
         let value = program.execute(&context).unwrap();
         assert_eq!(value, true.into());
+    }
+
+    #[test]
+    fn test_float_compare() {
+        let context = Context::default();
+
+        let program = Program::compile("1.0 > 0.0").unwrap();
+        let value = program.execute(&context).unwrap();
+        assert_eq!(value, true.into());
+
+        let program = Program::compile("double('NaN') == double('NaN')").unwrap();
+        let value = program.execute(&context).unwrap();
+        assert_eq!(value, false.into(), "NaN should not equal itself");
+
+        let program = Program::compile("1.0 > double('NaN')").unwrap();
+        let result = program.execute(&context);
+        assert!(
+            result.is_err(),
+            "NaN should not be comparable with inequality operators"
+        );
     }
 }

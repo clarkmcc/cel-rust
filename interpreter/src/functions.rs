@@ -6,6 +6,7 @@ use crate::resolvers::{Argument, Resolver};
 use crate::ExecutionError;
 use cel_parser::Expression;
 use chrono::{DateTime, Duration, FixedOffset};
+use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::sync::Arc;
 
@@ -49,7 +50,7 @@ impl<'context> FunctionContext<'context> {
     }
 
     /// Returns an execution error for the currently execution function.
-    pub fn error(&self, message: &str) -> ExecutionError {
+    pub fn error<M: ToString>(&self, message: M) -> ExecutionError {
         ExecutionError::function_error(self.name.as_str(), message)
     }
 }
@@ -74,7 +75,7 @@ pub fn size(ftx: &FunctionContext, value: Value) -> Result<i64> {
         Value::Map(m) => m.map.len(),
         Value::String(s) => s.len(),
         Value::Bytes(b) => b.len(),
-        value => return Err(ftx.error(&format!("cannot determine the size of {:?}", value))),
+        value => return Err(ftx.error(format!("cannot determine the size of {:?}", value))),
     };
     Ok(size as i64)
 }
@@ -153,25 +154,31 @@ pub fn string(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
         Value::UInt(v) => Value::String(v.to_string().into()),
         Value::Float(v) => Value::String(v.to_string().into()),
         Value::Bytes(v) => Value::String(Arc::new(String::from_utf8_lossy(v.as_slice()).into())),
-        v => return Err(ftx.error(&format!("cannot convert {:?} to string", v))),
+        v => return Err(ftx.error(format!("cannot convert {:?} to string", v))),
     })
 }
 
 // Performs a type conversion on the target.
 pub fn double(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
     Ok(match this {
-        Value::String(v) => v.parse::<f64>().map(Value::Float).unwrap(),
+        Value::String(v) => v
+            .parse::<f64>()
+            .map(Value::Float)
+            .map_err(|e| ftx.error(format!("string parse error: {e}")))?,
         Value::Float(v) => Value::Float(v),
         Value::Int(v) => Value::Float(v as f64),
         Value::UInt(v) => Value::Float(v as f64),
-        v => return Err(ftx.error(&format!("cannot convert {:?} to double", v))),
+        v => return Err(ftx.error(format!("cannot convert {:?} to double", v))),
     })
 }
 
 // Performs a type conversion on the target.
 pub fn uint(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
     Ok(match this {
-        Value::String(v) => v.parse::<u64>().map(Value::UInt).unwrap(),
+        Value::String(v) => v
+            .parse::<u64>()
+            .map(Value::UInt)
+            .map_err(|e| ftx.error(format!("string parse error: {e}")))?,
         Value::Float(v) => {
             if v > u64::MAX as f64 || v < u64::MIN as f64 {
                 return Err(ftx.error("unsigned integer overflow"));
@@ -183,14 +190,17 @@ pub fn uint(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
                 .map_err(|_| ftx.error("unsigned integer overflow"))?,
         ),
         Value::UInt(v) => Value::UInt(v),
-        v => return Err(ftx.error(&format!("cannot convert {:?} to uint", v))),
+        v => return Err(ftx.error(format!("cannot convert {:?} to uint", v))),
     })
 }
 
 // Performs a type conversion on the target.
 pub fn int(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
     Ok(match this {
-        Value::String(v) => v.parse::<i64>().map(Value::Int).unwrap(),
+        Value::String(v) => v
+            .parse::<i64>()
+            .map(Value::Int)
+            .map_err(|e| ftx.error(format!("string parse error: {e}")))?,
         Value::Float(v) => {
             if v > i64::MAX as f64 || v < i64::MIN as f64 {
                 return Err(ftx.error("integer overflow"));
@@ -199,7 +209,7 @@ pub fn int(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
         }
         Value::Int(v) => Value::Int(v),
         Value::UInt(v) => Value::Int(v.try_into().map_err(|_| ftx.error("integer overflow"))?),
-        v => return Err(ftx.error(&format!("cannot convert {:?} to int", v))),
+        v => return Err(ftx.error(format!("cannot convert {:?} to int", v))),
     })
 }
 
@@ -467,15 +477,34 @@ pub fn timestamp(value: Arc<String>) -> Result<Value> {
     ))
 }
 
-pub fn max(Arguments(args): Arguments) -> Result<Value> {
+pub fn max(ftx: &FunctionContext, Arguments(args): Arguments) -> Result<Value> {
     // If items is a list of values, then operate on the list
     if args.len() == 1 {
         return Ok(match args[0] {
-            Value::List(ref values) => values.iter().max().cloned().unwrap_or(Value::Null),
+            Value::List(ref values) => values
+                .iter()
+                .skip(1)
+                .try_fold(values.first().unwrap_or(&Value::Null), |acc, x| {
+                    match acc.partial_cmp(x) {
+                        Some(Ordering::Less) => Ok(x),
+                        Some(_) => Ok(acc),
+                        None => Err(ftx.error("NaN values cannot be ordered")),
+                    }
+                })?
+                .to_owned(),
             _ => args[0].clone(),
         });
     }
-    args.iter().max().cloned().unwrap_or(Value::Null).into()
+    Ok(args
+        .iter()
+        .try_fold(args.first().unwrap_or(&Value::Null), |acc, x| {
+            match acc.partial_cmp(x) {
+                Some(Ordering::Less) => Ok(x),
+                Some(_) => Ok(acc),
+                None => Err(ftx.error("NaN values cannot be ordered")),
+            }
+        })?
+        .to_owned())
 }
 
 /// A wrapper around [`parse_duration`] that converts errors into [`ExecutionError`].
