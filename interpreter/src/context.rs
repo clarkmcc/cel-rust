@@ -160,6 +160,8 @@ impl<'a> Default for Context<'a> {
         ctx.add_function("double", functions::double);
         ctx.add_function("exists", functions::exists);
         ctx.add_function("exists_one", functions::exists_one);
+        ctx.add_function("int", functions::int);
+        ctx.add_function("uint", functions::uint);
         ctx
     }
 }

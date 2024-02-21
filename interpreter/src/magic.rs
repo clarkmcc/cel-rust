@@ -217,19 +217,24 @@ impl FromValue for List {
 
 /// An argument extractor that extracts all the arguments passed to a function, resolves their
 /// expressions and returns a vector of [`Value`]. This is useful for functions that accept a
-/// variable number of arguments rather than known arguments and types (for example the `max`
+/// variable number of arguments rather than known arguments and types (for example a `sum`
 /// function).
 ///
 /// # Example
 /// ```javascript
-/// max(1, 2, 3) == 3
+/// sum(1, 2.0, uint(3)) == 5.0
 /// ```
 ///
 /// ```rust
 /// # use cel_interpreter::{Value};
 /// use cel_interpreter::extractors::Arguments;
-/// pub fn max(Arguments(args): Arguments) -> Value {
-///     args.iter().max().cloned().unwrap_or(Value::Null).into()
+/// pub fn sum(Arguments(args): Arguments) -> Value {
+///     args.iter().fold(0.0, |acc, val| match val {
+///         Value::Int(x) => *x as f64 + acc,
+///         Value::UInt(x) => *x as f64 + acc,
+///         Value::Float(x) => *x + acc,
+///         _ => acc,
+///     }).into()
 /// }
 /// ```
 #[derive(Clone)]
