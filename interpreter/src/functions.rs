@@ -479,33 +479,26 @@ pub fn timestamp(value: Arc<String>) -> Result<Value> {
 
 pub fn max(Arguments(args): Arguments) -> Result<Value> {
     // If items is a list of values, then operate on the list
-    if args.len() == 1 {
-        return Ok(match args[0] {
-            Value::List(ref values) => values
-                .iter()
-                .skip(1)
-                .try_fold(values.first().unwrap_or(&Value::Null), |acc, x| {
-                    match acc.partial_cmp(x) {
-                        Some(Ordering::Less) => Ok(x),
-                        Some(_) => Ok(acc),
-                        None => Err(ExecutionError::ValuesNotComparable(acc.clone(), x.clone())),
-                    }
-                })?
-                .to_owned(),
-            _ => args[0].clone(),
-        });
-    }
-    Ok(args
+    let items = if args.len() == 1 {
+        match &args[0] {
+            Value::List(values) => values,
+            _ => return Ok(args[0].clone()),
+        }
+    } else {
+        &args
+    };
+
+    items
         .iter()
         .skip(1)
-        .try_fold(args.first().unwrap_or(&Value::Null), |acc, x| {
+        .try_fold(items.first().unwrap_or(&Value::Null), |acc, x| {
             match acc.partial_cmp(x) {
-                Some(Ordering::Less) => Ok(x),
-                Some(_) => Ok(acc),
+                Some(Ordering::Greater) => Ok(acc),
+                Some(_) => Ok(x),
                 None => Err(ExecutionError::ValuesNotComparable(acc.clone(), x.clone())),
             }
-        })?
-        .to_owned())
+        })
+        .map(|v| v.clone())
 }
 
 /// A wrapper around [`parse_duration`] that converts errors into [`ExecutionError`].
