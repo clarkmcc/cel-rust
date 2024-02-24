@@ -25,6 +25,22 @@ impl PartialOrd for Map {
     }
 }
 
+impl Map {
+    /// Returns a reference to the value corresponding to the key. Implicitly converts between int
+    /// and uint keys.
+    pub fn get(&self, key: &Key) -> Option<&Value> {
+        self.map.get(key).or_else(|| {
+            // Also check keys that are cross type comparable.
+            let converted = match key {
+                Key::Int(k) => Key::Uint(u64::try_from(*k).ok()?),
+                Key::Uint(k) => Key::Int(i64::try_from(*k).ok()?),
+                _ => return None,
+            };
+            self.map.get(&converted)
+        })
+    }
+}
+
 #[derive(Debug, Eq, PartialEq, Hash, Ord, Clone, PartialOrd)]
 pub enum Key {
     Int(i64),
@@ -477,41 +493,23 @@ impl<'a> Value {
                         .into()
                     }
                     (Value::Map(map), Value::String(property)) => map
-                        .map
                         .get(&property.into())
                         .cloned()
                         .unwrap_or(Value::Null)
                         .into(),
                     (Value::Map(map), Value::Bool(property)) => map
-                        .map
                         .get(&property.into())
                         .cloned()
                         .unwrap_or(Value::Null)
                         .into(),
                     (Value::Map(map), Value::Int(property)) => map
-                        .map
                         .get(&property.into())
                         .cloned()
-                        .or_else(|| {
-                            // Check for matching unsinged int indexes too.
-                            let Ok(index) = u64::try_from(property) else {
-                                return None;
-                            };
-                            map.map.get(&index.into()).cloned()
-                        })
                         .unwrap_or(Value::Null)
                         .into(),
                     (Value::Map(map), Value::UInt(property)) => map
-                        .map
                         .get(&property.into())
                         .cloned()
-                        .or_else(|| {
-                            // Check for matching singed int indexes too.
-                            let Ok(index) = i64::try_from(property) else {
-                                return None;
-                            };
-                            map.map.get(&index.into()).cloned()
-                        })
                         .unwrap_or(Value::Null)
                         .into(),
                     _ => unimplemented!(),
