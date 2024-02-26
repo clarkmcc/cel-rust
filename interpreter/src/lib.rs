@@ -58,6 +58,9 @@ pub enum ExecutionError {
     /// called with at least one parameter.
     #[error("Missing argument or target")]
     MissingArgumentOrTarget,
+    /// Indicates that a comparison could not be performed.
+    #[error("{0:?} can not be compared to {1:?}")]
+    ValuesNotComparable(Value, Value),
     /// Indicates that a function had an error during execution.
     #[error("Error executing function '{function}': {message}")]
     FunctionError { function: String, message: String },
@@ -76,7 +79,7 @@ impl ExecutionError {
         ExecutionError::InvalidArgumentCount { expected, actual }
     }
 
-    pub fn function_error(function: &str, error: &str) -> Self {
+    pub fn function_error<E: ToString>(function: &str, error: E) -> Self {
         ExecutionError::FunctionError {
             function: function.to_string(),
             message: error.to_string(),
