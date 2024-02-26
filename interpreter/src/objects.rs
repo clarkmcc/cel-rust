@@ -9,7 +9,7 @@ use core::ops;
 use serde::Serialize;
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::convert::{Infallible, TryInto};
+use std::convert::{Infallible, TryFrom, TryInto};
 use std::fmt::{Display, Formatter};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -22,6 +22,22 @@ pub struct Map {
 impl PartialOrd for Map {
     fn partial_cmp(&self, _: &Self) -> Option<Ordering> {
         None
+    }
+}
+
+impl Map {
+    /// Returns a reference to the value corresponding to the key. Implicitly converts between int
+    /// and uint keys.
+    pub fn get(&self, key: &Key) -> Option<&Value> {
+        self.map.get(key).or_else(|| {
+            // Also check keys that are cross type comparable.
+            let converted = match key {
+                Key::Int(k) => Key::Uint(u64::try_from(*k).ok()?),
+                Key::Uint(k) => Key::Int(i64::try_from(*k).ok()?),
+                _ => return None,
+            };
+            self.map.get(&converted)
+        })
     }
 }
 
@@ -541,7 +557,21 @@ impl<'a> Value {
                         .into()
                     }
                     (Value::Map(map), Value::String(property)) => map
-                        .map
+                        .get(&property.into())
+                        .cloned()
+                        .unwrap_or(Value::Null)
+                        .into(),
+                    (Value::Map(map), Value::Bool(property)) => map
+                        .get(&property.into())
+                        .cloned()
+                        .unwrap_or(Value::Null)
+                        .into(),
+                    (Value::Map(map), Value::Int(property)) => map
+                        .get(&property.into())
+                        .cloned()
+                        .unwrap_or(Value::Null)
+                        .into(),
+                    (Value::Map(map), Value::UInt(property)) => map
                         .get(&property.into())
                         .cloned()
                         .unwrap_or(Value::Null)
@@ -773,6 +803,18 @@ mod tests {
         let program = Program::compile("headers[\"Content-Type\"]").unwrap();
         let value = program.execute(&context).unwrap();
         assert_eq!(value, "application/json".into());
+    }
+
+    #[test]
+    fn test_numeric_map_access() {
+        let mut context = Context::default();
+        let mut numbers = HashMap::new();
+        numbers.insert(Key::Uint(1), "one".to_string());
+        context.add_variable_from_value("numbers", numbers);
+
+        let program = Program::compile("numbers[1]").unwrap();
+        let value = program.execute(&context).unwrap();
+        assert_eq!(value, "one".into());
     }
 
     #[test]
