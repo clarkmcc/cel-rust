@@ -4,9 +4,10 @@
 // also mentioned in the [serde documentation](https://serde.rs/).
 
 use crate::{objects::Key, Value};
+use serde::ser::Error as SerdeError;
 use serde::{
     ser::{self, Impossible},
-    Serialize,
+    Serialize, Serializer as SerdeSerializer,
 };
 use std::{collections::HashMap, fmt::Display, iter::FromIterator, sync::Arc};
 use thiserror::Error;
@@ -560,14 +561,37 @@ impl ser::Serializer for KeySerializer {
     }
 }
 
+impl Serialize for Value {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: SerdeSerializer,
+    {
+        match *self {
+            Value::List(ref vec) => vec.as_ref().serialize(serializer),
+            Value::Map(ref map) => map.serialize(serializer),
+            Value::Int(i) => serializer.serialize_i64(i),
+            Value::UInt(u) => serializer.serialize_u64(u),
+            Value::Float(f) => serializer.serialize_f64(f),
+            Value::String(ref s) => serializer.serialize_str(s),
+            Value::Bool(b) => serializer.serialize_bool(b),
+            Value::Timestamp(ref dt) => serializer.serialize_str(&dt.to_rfc3339()),
+            Value::Bytes(ref b) => serializer.serialize_bytes(b),
+            Value::Null => serializer.serialize_unit(),
+            _ => Err(SerdeError::custom(format!("Unsupported value: {:?}", self))),
+        }
+    }
+}
+
 /*
  * Tests
  */
 
 #[cfg(test)]
 mod tests {
+    use crate::objects::Map;
     use crate::{objects::Key, to_value, Value};
     use crate::{Context, Program};
+    use chrono::Duration;
     use serde::Serialize;
     use serde_bytes::Bytes;
     use std::{collections::HashMap, iter::FromIterator, sync::Arc};
