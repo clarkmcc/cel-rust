@@ -7,6 +7,7 @@ use cel_parser::{ArithmeticOp, Atom, Expression, Member, RelationOp, UnaryOp};
 use chrono::{DateTime, Duration, FixedOffset};
 use core::ops;
 use serde::{Serialize, Serializer};
+use std::any::Any;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
