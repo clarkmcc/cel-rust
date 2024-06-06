@@ -544,8 +544,11 @@ fn _timestamp(i: &str) -> Result<DateTime<FixedOffset>> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use crate::context::Context;
     use crate::testing::test_script;
+    use crate::{ExecutionError, Value};
     use std::collections::HashMap;
 
     fn assert_script(input: &(&str, &str)) {
@@ -769,5 +772,55 @@ mod tests {
         ]
         .iter()
         .for_each(assert_script);
+    }
+
+    #[test]
+    fn test_dynamic_resolver() {
+        // You can resolve dynamic values by providing a custom resolver function.
+        let external_values = Arc::new(HashMap::from([("hello".to_string(), "world".to_string())]));
+
+        let mut ctx = Context::default();
+        ctx.set_dynamic_resolver(move |_, ident| {
+            let name: String = ident.to_string();
+            match external_values.get(name.as_str()) {
+                Some(v) => Ok(Value::String(v.clone().into())),
+                None => Err(ExecutionError::UndeclaredReference(name.into())),
+            }
+        });
+        assert_eq!(test_script("hello == 'world'", Some(ctx)), Ok(true.into()));
+    }
+
+    #[derive(Debug, Clone)]
+    struct Path(String);
+
+    #[test]
+    fn test_deep_dynamic_resolver() {
+        // You can resolve dynamic values by providing a custom resolver function.
+        let external_values = Arc::new(HashMap::from([(
+            "foo.bar.happy".to_string(),
+            "hour".to_string(),
+        )]));
+
+        let mut ctx = Context::default();
+        ctx.set_dynamic_resolver(move |this, identifier| {
+            let name: String = identifier.to_string();
+            match this {
+                Some(Value::Any(value_any)) => match value_any.downcast_ref::<Path>() {
+                    Some(Path(path)) => {
+                        let path = format!("{}.{}", path, name);
+                        match external_values.get(path.as_str()) {
+                            Some(v) => Ok(Value::String(v.clone().into())),
+                            None => Ok(Value::Any(Arc::new(Box::new(Path(path))))),
+                        }
+                    }
+                    None => Err(ExecutionError::UndeclaredReference(name.into())),
+                },
+                _ => Ok(Value::Any(Arc::new(Box::new(Path(name))))),
+            }
+        });
+        assert_eq!(
+            test_script("foo.bar.happy == 'hour'", Some(ctx)),
+            Ok(true.into())
+        );
     }
 }
