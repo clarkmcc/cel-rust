@@ -1,7 +1,8 @@
 use cel_interpreter::context::Context;
-use cel_interpreter::Program;
+use cel_interpreter::{Program, Value};
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     let expressions = vec![
@@ -66,5 +67,47 @@ pub fn map_macro_benchmark(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, criterion_benchmark, map_macro_benchmark);
+pub fn variable_resolution_benchmark(c: &mut Criterion) {
+    let mut group = c.benchmark_group("variable resolution");
+    let sizes = vec![1, 10, 100];
+
+    // flip this bool to compare the performance of dynamic resolver vs static resolvers
+    let use_dynamic_resolver = true;
+
+    for size in sizes {
+        let mut expr = String::new();
+
+        let mut doc = HashMap::new();
+        for i in 0..size {
+            doc.insert(format!("var_{i}", i = i), Value::Null);
+            expr.push_str(&format!("var_{i}", i = i));
+            if i < size - 1 {
+                expr.push_str("||");
+            }
+        }
+
+        let doc = Arc::new(doc);
+        let program = Program::compile(&expr).unwrap();
+        group.bench_function(format!("variable_resolution_{}", size).as_str(), |b| {
+            let mut ctx = Context::default();
+            if use_dynamic_resolver {
+                let doc = doc.clone();
+                ctx.set_dynamic_resolver(move |var| doc.get(var).cloned());
+            } else {
+                doc.iter()
+                    .for_each(|(k, v)| ctx.add_variable_from_value(k.to_string(), v.clone()));
+            }
+            b.iter(|| program.execute(&ctx).unwrap())
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    criterion_benchmark,
+    map_macro_benchmark,
+    variable_resolution_benchmark
+);
+
 criterion_main!(benches);

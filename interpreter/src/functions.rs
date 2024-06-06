@@ -548,6 +548,8 @@ fn _timestamp(i: &str) -> Result<DateTime<FixedOffset>> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use crate::context::Context;
     use crate::testing::test_script;
     use crate::{Program, Value};
@@ -797,5 +799,129 @@ mod tests {
         ]
         .iter()
         .for_each(assert_script);
+    }
+
+    #[test]
+    fn test_dynamic_resolver() {
+        // You can resolve dynamic values by providing a custom resolver function.
+        let external_values = Arc::new(HashMap::from([("hello".to_string(), "world".to_string())]));
+
+        let mut ctx = Context::default();
+        ctx.set_dynamic_resolver(move |ident| {
+            external_values
+                .get(ident)
+                .map(|v| Value::String(v.clone().into()))
+        });
+        assert_eq!(test_script("hello == 'world'", Some(ctx)), Ok(true.into()));
+    }
+
+    #[cfg(feature = "pared")]
+    #[test]
+    fn test_deep_dynamic_resolver() {
+        use crate::objects::{MemberResolver, ParcDynamicCollection};
+        use pared::sync::Parc;
+
+        #[derive(Clone)]
+        struct Species {
+            name: String,
+            language: Option<String>,
+            homeworld: Option<String>,
+        }
+
+        impl ParcDynamicCollection<Species> for Species {
+            fn resolver(receiver: Parc<Species>) -> MemberResolver {
+                MemberResolver::attribute_handler(move |attribute| match attribute.as_str() {
+                    "name" => Some(receiver.name.clone().into()),
+                    "language" => Some(receiver.language.clone().into()),
+                    "homeworld" => Some(receiver.homeworld.clone().into()),
+                    _ => None,
+                })
+            }
+        }
+
+        #[derive(Clone)]
+        struct Character {
+            name: String,
+            gender: Option<String>,
+            species: Species,
+        }
+
+        impl ParcDynamicCollection<Character> for Character {
+            fn resolver(receiver: Parc<Character>) -> MemberResolver {
+                MemberResolver::attribute_handler(move |attribute| match attribute.as_str() {
+                    "name" => Some(receiver.name.clone().into()),
+                    "gender" => Some(receiver.gender.clone().into()),
+                    "species" => Some(receiver.project(|receiver| &receiver.species).into()),
+                    _ => None,
+                })
+            }
+        }
+
+        #[derive(Clone)]
+        struct Film {
+            director: String,
+            title: String,
+            characters: Vec<Character>,
+        }
+
+        impl ParcDynamicCollection<Film> for Film {
+            fn resolver(receiver: Parc<Film>) -> MemberResolver {
+                MemberResolver::attribute_handler(move |attribute| match attribute.as_str() {
+                    "director" => Some(receiver.director.clone().into()),
+                    "title" => Some(receiver.title.clone().into()),
+                    "characters" => Some(receiver.project(|receiver| &receiver.characters).into()),
+                    _ => None,
+                })
+            }
+        }
+
+        let doc = Parc::new(Film {
+            director: "George Lucas".to_string(),
+            title: "A New Hope".to_string(),
+            characters: vec![
+                Character {
+                    name: "Luke Skywalker".to_string(),
+                    gender: Some("male".to_string()),
+                    species: Species {
+                        name: "Human".to_string(),
+                        language: Some("english".to_string()),
+                        homeworld: Some("Earth".to_string()),
+                    },
+                },
+                Character {
+                    name: "C-3PO".to_string(),
+                    gender: None,
+                    species: Species {
+                        name: "Droid".to_string(),
+                        language: None,
+                        homeworld: None,
+                    },
+                },
+                Character {
+                    name: "Chewbacca".to_string(),
+                    gender: Some("male".to_string()),
+                    species: Species {
+                        name: "Wookie".to_string(),
+                        language: None,
+                        homeworld: Some("Kashyyyk".to_string()),
+                    },
+                },
+            ],
+        });
+
+        let mut ctx = Context::default();
+        ctx.set_dynamic_resolver(move |name| match name {
+            "film" => Some(doc.clone().into()),
+            _ => None,
+        });
+        assert_eq!(
+            test_script(
+                "film.title == 'A New Hope' && \
+            film.characters[0].name =='Luke Skywalker' && \
+            film.characters[0].species.name == 'Human'",
+                Some(ctx),
+            ),
+            Ok(true.into())
+        );
     }
 }

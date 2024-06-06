@@ -10,6 +10,7 @@ use serde::{Serialize, Serializer};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::{Infallible, TryFrom, TryInto};
+use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 
@@ -149,8 +150,63 @@ impl TryIntoValue for Value {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum ResolvedMember {
+    Index(Value),
+    Attribute(Arc<String>),
+}
+
+pub type DynamicCollectionResolverFn = Box<dyn Fn(ResolvedMember) -> Option<Value> + Sync + Send>;
+
+// Value's have to implement Debug but Fn's don't, so we
+// create a wrapper that we can implement Debug for.
+#[derive(Clone)]
+pub struct MemberResolver {
+    pub(crate) resolver: Arc<DynamicCollectionResolverFn>,
+}
+
+impl MemberResolver {
+    pub fn new<F>(handler: F) -> Self
+    where
+        F: Fn(ResolvedMember) -> Option<Value> + Sync + Send + 'static,
+    {
+        MemberResolver {
+            resolver: Arc::new(Box::new(handler)),
+        }
+    }
+
+    pub fn attribute_handler<F>(handler: F) -> Self
+    where
+        F: Fn(Arc<String>) -> Option<Value> + Sync + Send + 'static,
+    {
+        MemberResolver::new(move |member| match member {
+            ResolvedMember::Attribute(name) => handler(name),
+            _ => None,
+        })
+    }
+
+    pub fn index_handler<F>(handler: F) -> Self
+    where
+        F: Fn(Value) -> Option<Value> + Sync + Send + 'static,
+    {
+        MemberResolver::new(move |member| match member {
+            ResolvedMember::Index(i) => handler(i),
+            _ => None,
+        })
+    }
+}
+
+impl fmt::Debug for MemberResolver {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DynamicCollection").finish()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Value {
+    // DynamicCollection is a special type that allows for dynamic resolution of members.
+    DynamicCollection(MemberResolver),
+
     List(Arc<Vec<Value>>),
     Map(Map),
 
@@ -181,6 +237,7 @@ pub enum ValueType {
     Duration,
     Timestamp,
     Null,
+    DynamicCollection,
 }
 
 impl Display for ValueType {
@@ -198,6 +255,7 @@ impl Display for ValueType {
             ValueType::Duration => write!(f, "duration"),
             ValueType::Timestamp => write!(f, "timestamp"),
             ValueType::Null => write!(f, "null"),
+            ValueType::DynamicCollection => write!(f, "dynamic_collection"),
         }
     }
 }
@@ -217,6 +275,7 @@ impl Value {
             Value::Duration(_) => ValueType::Duration,
             Value::Timestamp(_) => ValueType::Timestamp,
             Value::Null => ValueType::Null,
+            Value::DynamicCollection(_) => ValueType::DynamicCollection,
         }
     }
 
@@ -560,6 +619,11 @@ impl<'a> Value {
             Member::Index(idx) => {
                 let idx = Value::resolve(idx, ctx)?;
                 match (self, idx) {
+                    (Value::DynamicCollection(dc), idx) => {
+                        (dc.resolver)(ResolvedMember::Index(idx))
+                            .unwrap_or(Value::Null)
+                            .into()
+                    }
                     (Value::List(items), Value::Int(idx)) => {
                         items.get(idx as usize).unwrap().clone().into()
                     }
@@ -598,6 +662,9 @@ impl<'a> Value {
                 // This will always either be because we're trying to access
                 // a property on self, or a method on self.
                 let child = match self {
+                    Value::DynamicCollection(ref dc) => {
+                        (dc.resolver)(ResolvedMember::Attribute(name.clone()))
+                    }
                     Value::Map(ref m) => m.map.get(&name.clone().into()).cloned(),
                     _ => None,
                 };
@@ -629,6 +696,7 @@ impl<'a> Value {
             Value::Duration(v) => v.num_nanoseconds().map(|n| n != 0).unwrap_or(false),
             Value::Timestamp(v) => v.timestamp_nanos_opt().unwrap_or_default() > 0,
             Value::Function(_, _) => false,
+            Value::DynamicCollection(_) => false,
         }
     }
 }
@@ -645,6 +713,84 @@ impl From<&Atom> for Value {
             Atom::Bool(v) => Value::Bool(*v),
             Atom::Null => Value::Null,
         }
+    }
+}
+
+// implementing DynamicCollection makes it easier to covert a user struct to a Value
+pub trait DynamicCollection {
+    fn resolver(&self) -> MemberResolver;
+}
+
+impl<T> From<T> for Value
+where
+    T: DynamicCollection,
+{
+    fn from(item: T) -> Self {
+        Value::DynamicCollection(item.resolver())
+    }
+}
+
+impl<T> From<Arc<T>> for Value
+where
+    T: DynamicCollection,
+{
+    fn from(item: Arc<T>) -> Self {
+        Value::DynamicCollection(item.resolver())
+    }
+}
+
+#[cfg(feature = "pared")]
+pub trait ParcDynamicCollection<T> {
+    fn resolver(item: pared::sync::Parc<T>) -> MemberResolver;
+}
+
+#[cfg(feature = "pared")]
+impl<T> From<pared::sync::Parc<T>> for Value
+where
+    T: ParcDynamicCollection<T>,
+{
+    fn from(item: pared::sync::Parc<T>) -> Self {
+        Value::DynamicCollection(T::resolver(item))
+    }
+}
+
+#[cfg(feature = "pared")]
+impl<T> From<pared::sync::Parc<Vec<T>>> for Value
+where
+    T: ParcDynamicCollection<T> + Send + Sync + 'static,
+{
+    fn from(items: pared::sync::Parc<Vec<T>>) -> Self {
+        let items = items.clone();
+        Value::DynamicCollection(MemberResolver::new(move |member| {
+            let items = items.clone();
+            match member {
+                ResolvedMember::Index(Value::Int(idx)) => items
+                    .try_project(|receiver| receiver.get(idx as usize).ok_or(()))
+                    .ok()
+                    .map(|x| x.into()),
+                _ => None,
+            }
+        }))
+    }
+}
+
+#[cfg(feature = "pared")]
+impl<T> From<pared::sync::Parc<HashMap<String, T>>> for Value
+where
+    T: ParcDynamicCollection<T> + Send + Sync + 'static,
+{
+    fn from(items: pared::sync::Parc<HashMap<String, T>>) -> Self {
+        let items = items.clone();
+        Value::DynamicCollection(MemberResolver::new(move |member| {
+            let items = items.clone();
+            match member {
+                ResolvedMember::Attribute(name) => items
+                    .try_project(|items| items.get(name.as_ref()).ok_or(()))
+                    .ok()
+                    .map(|x| x.into()),
+                _ => None,
+            }
+        }))
     }
 }
 
