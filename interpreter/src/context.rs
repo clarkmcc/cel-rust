@@ -1,8 +1,10 @@
-use crate::magic::{Function, FunctionRegistry, Handler};
-use crate::objects::{TryIntoValue, Value};
-use crate::{functions, ExecutionError};
-use cel_parser::Expression;
 use std::collections::HashMap;
+
+use cel_parser::{Atom, Expression};
+
+use crate::magic::{Function, FunctionRegistry, Handler, HandlerCallable, HandlerFunction};
+use crate::objects::{TryIntoValue, Value};
+use crate::{functions, ExecutionError, FunctionContext};
 
 /// Context is a collection of variables and functions that can be used
 /// by the interpreter to resolve expressions. The context can be either
@@ -32,6 +34,7 @@ pub enum Context<'a> {
     Root {
         functions: FunctionRegistry,
         variables: HashMap<String, Value>,
+        dynamic_resolver: Option<Box<dyn Function>>,
     },
     Child {
         parent: &'a Context<'a>,
@@ -85,12 +88,35 @@ impl<'a> Context<'a> {
                 .get(&name)
                 .cloned()
                 .or_else(|| parent.get_variable(&name).ok())
-                .ok_or(ExecutionError::UndeclaredReference(name.into())),
+                .map_or_else(|| self.get_dynamic_variable(None, name), Ok),
             Context::Root { variables, .. } => variables
                 .get(&name)
                 .cloned()
-                .ok_or(ExecutionError::UndeclaredReference(name.into())),
+                .map_or_else(|| self.get_dynamic_variable(None, name), Ok),
         }
+    }
+
+    pub fn get_dynamic_variable<S>(
+        &self,
+        this: Option<Value>,
+        name: S,
+    ) -> Result<Value, ExecutionError>
+    where
+        S: Into<String>,
+    {
+        let name = name.into();
+        return if let Some(dynamic_resolver) = self.get_dynamic_resolver() {
+            let mut args = Vec::new();
+            args.push(Expression::Atom(Atom::String(name.clone().into())));
+            let mut ctx =
+                FunctionContext::new("dynamic_resolver".to_string().into(), this, &self, args);
+            match dynamic_resolver.call_with_context(&mut ctx) {
+                Ok(value) => Ok(value),
+                Err(e) => Err(ExecutionError::from(e)),
+            }
+        } else {
+            Err(ExecutionError::UndeclaredReference(name.into()))
+        };
     }
 
     pub(crate) fn has_function<S>(&self, name: S) -> bool
@@ -124,6 +150,37 @@ impl<'a> Context<'a> {
         };
     }
 
+    pub fn set_dynamic_resolver<T: 'static, F: 'static>(&mut self, handler: Option<F>)
+    where
+        F: Handler<T> + 'static,
+    {
+        if let Context::Root {
+            dynamic_resolver, ..
+        } = self
+        {
+            match handler {
+                Some(handler) => {
+                    *dynamic_resolver = Some(Box::new(HandlerFunction {
+                        handler,
+                        into_callable: |h, ctx| Box::new(HandlerCallable::new(h, ctx)),
+                    }));
+                }
+                None => {
+                    *dynamic_resolver = None;
+                }
+            }
+        };
+    }
+
+    pub(crate) fn get_dynamic_resolver(&self) -> Option<Box<dyn Function>> {
+        match self {
+            Context::Root {
+                dynamic_resolver, ..
+            } => dynamic_resolver.as_ref().map(|x| x.clone_box()),
+            Context::Child { parent, .. } => parent.get_dynamic_resolver(),
+        }
+    }
+
     pub fn resolve(&self, expr: &Expression) -> Result<Value, ExecutionError> {
         Value::resolve(expr, self)
     }
@@ -145,6 +202,7 @@ impl<'a> Default for Context<'a> {
         let mut ctx = Context::Root {
             variables: Default::default(),
             functions: Default::default(),
+            dynamic_resolver: None,
         };
         ctx.add_function("contains", functions::contains);
         ctx.add_function("size", functions::size);

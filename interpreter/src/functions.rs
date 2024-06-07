@@ -1,14 +1,17 @@
+use std::cmp::Ordering;
+use std::convert::TryInto;
+use std::sync::Arc;
+
+use chrono::{DateTime, Duration, FixedOffset};
+
+use cel_parser::Expression;
+
 use crate::context::Context;
 use crate::duration::{format_duration, parse_duration};
 use crate::magic::{Arguments, Identifier, This};
 use crate::objects::{Value, ValueType};
 use crate::resolvers::{Argument, Resolver};
 use crate::ExecutionError;
-use cel_parser::Expression;
-use chrono::{DateTime, Duration, FixedOffset};
-use std::cmp::Ordering;
-use std::convert::TryInto;
-use std::sync::Arc;
 
 type Result<T> = std::result::Result<T, ExecutionError>;
 
@@ -516,9 +519,16 @@ fn _timestamp(i: &str) -> Result<DateTime<FixedOffset>> {
 
 #[cfg(test)]
 mod tests {
-    use crate::context::Context;
-    use crate::testing::test_script;
+    use cel_parser::Expression;
     use std::collections::HashMap;
+    use std::rc::Rc;
+    use std::sync::Arc;
+
+    use crate::context::Context;
+    use crate::extractors::{Identifier, This};
+    use crate::objects::{Key, Map};
+    use crate::testing::test_script;
+    use crate::{ExecutionError, FunctionContext, Value};
 
     fn assert_script(input: &(&str, &str)) {
         assert_eq!(test_script(input.1, None), Ok(true.into()), "{}", input.0);
@@ -731,5 +741,66 @@ mod tests {
         ]
         .iter()
         .for_each(assert_script);
+    }
+
+    #[test]
+    fn test_dynamic_resolver() {
+        // You can resolve dynamic values by providing a custom resolver function.
+        let external_values = Arc::new(HashMap::from([("hello".to_string(), "world".to_string())]));
+        let resolver = Some(move |ident: Arc<String>| {
+            let name: String = ident.to_string();
+            match external_values.get(name.as_str()) {
+                Some(v) => Ok(Value::String(v.clone().into())),
+                None => Err(ExecutionError::UndeclaredReference(name.into())),
+            }
+        });
+
+        let mut ctx = Context::default();
+        ctx.set_dynamic_resolver(resolver);
+        assert_eq!(test_script("hello == 'world'", Some(ctx)), Ok(true.into()));
+    }
+
+    #[test]
+    fn test_deep_dynamic_resolver() {
+        // You can resolve dynamic values by providing a custom resolver function.
+        let external_values = Arc::new(HashMap::from([(
+            "foo.bar".to_string(),
+            "drinks".to_string(),
+        )]));
+        let resolver = Some(move |ftx: &FunctionContext, identifier: Arc<String>| {
+            let name: String = identifier.to_string();
+            let nameKey = Key::String(Arc::new("".to_string()));
+            match ftx.this.clone() {
+                Some(Value::Map(v)) => match v.get(&nameKey) {
+                    Some(prevName) => {
+                        let prevName: String = match prevName {
+                            Value::String(s) => s.as_str().to_string(),
+                            _ => return Err(ExecutionError::UndeclaredReference(name.into())),
+                        };
+                        let name = format!("{}.{}", prevName, name);
+                        match external_values.get(name.as_str()) {
+                            Some(v) => Ok(Value::String(v.clone().into())),
+                            None => Ok(Value::Map(Map {
+                                map: Rc::new(HashMap::from([(nameKey, name.into())])),
+                            })),
+                        }
+                    }
+                    _ => Err(ExecutionError::UndeclaredReference(name.into())),
+                },
+                _ => match external_values.get(name.as_str()) {
+                    Some(v) => Ok(Value::String(v.clone().into())),
+                    None => Ok(Value::Map(Map {
+                        map: Rc::new(HashMap::from([(nameKey, name.into())])),
+                    })),
+                },
+            }
+        });
+
+        let mut ctx = Context::default();
+        ctx.set_dynamic_resolver(resolver);
+        assert_eq!(
+            test_script("foo.bar == 'drinks'", Some(ctx)),
+            Ok(true.into())
+        );
     }
 }

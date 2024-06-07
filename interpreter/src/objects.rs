@@ -5,13 +5,13 @@ use crate::ExecutionError::NoSuchKey;
 use crate::{to_value, ExecutionError};
 use cel_parser::{ArithmeticOp, Atom, Expression, Member, RelationOp, UnaryOp};
 use chrono::{DateTime, Duration, FixedOffset};
-use core::ops;
+use core::{fmt, ops};
 use serde::{Serialize, Serializer};
 use std::any::Any;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -588,7 +588,9 @@ impl<'a> Value {
                 // give priority to the property. Maybe we can implement lookahead
                 // to see if the next token is a function call?
                 match (child.is_some(), ctx.has_function(&***name)) {
-                    (false, false) => NoSuchKey(name.clone()).into(),
+                    (false, false) => ctx
+                        .get_dynamic_variable(Some(self.into()), name.to_string())
+                        .map_err(|x| NoSuchKey(name.clone()).into()),
                     (true, true) | (true, false) => child.unwrap().into(),
                     (false, true) => Value::Function(name.clone(), Some(self.into())).into(),
                 }
@@ -861,6 +863,5 @@ mod tests {
         let program = Program::compile("size == 50").unwrap();
         let value = program.execute(&context).unwrap();
         assert_eq!(value, false.into());
-
     }
 }
