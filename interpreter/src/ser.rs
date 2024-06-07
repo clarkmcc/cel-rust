@@ -588,10 +588,8 @@ impl Serialize for Value {
 
 #[cfg(test)]
 mod tests {
-    use crate::objects::Map;
     use crate::{objects::Key, to_value, Value};
     use crate::{Context, Program};
-    use chrono::Duration;
     use serde::Serialize;
     use serde_bytes::Bytes;
     use std::{collections::HashMap, iter::FromIterator, sync::Arc};

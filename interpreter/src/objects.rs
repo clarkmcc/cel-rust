@@ -7,7 +7,6 @@ use cel_parser::{ArithmeticOp, Atom, Expression, Member, RelationOp, UnaryOp};
 use chrono::{DateTime, Duration, FixedOffset};
 use core::ops;
 use serde::{Serialize, Serializer};
-use std::any::Any;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
@@ -305,11 +304,7 @@ impl PartialOrd for Value {
             (Value::UInt(a), Value::Float(b)) => (*a as f64).partial_cmp(b),
             (Value::Float(a), Value::Int(b)) => a.partial_cmp(&(*b as f64)),
             (Value::Float(a), Value::UInt(b)) => a.partial_cmp(&(*b as f64)),
-            (a, b) =>
-            // Compare type ids if types are different.
-            {
-                a.type_of().type_id().partial_cmp(&b.type_of().type_id())
-            }
+            _ => None,
         }
     }
 }
