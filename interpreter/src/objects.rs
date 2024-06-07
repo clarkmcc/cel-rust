@@ -267,7 +267,7 @@ impl PartialEq for Value {
             (Value::UInt(a), Value::Float(b)) => (*a as f64) == *b,
             (Value::Float(a), Value::Int(b)) => *a == (*b as f64),
             (Value::Float(a), Value::UInt(b)) => *a == (*b as f64),
-            (a, b) => panic!("unable to compare {:?} with {:?}", a, b),
+            (_, _) => false,
         }
     }
 }
@@ -304,7 +304,7 @@ impl PartialOrd for Value {
             (Value::UInt(a), Value::Float(b)) => (*a as f64).partial_cmp(b),
             (Value::Float(a), Value::Int(b)) => a.partial_cmp(&(*b as f64)),
             (Value::Float(a), Value::UInt(b)) => a.partial_cmp(&(*b as f64)),
-            (a, b) => panic!("unable to compare {:?} with {:?}", a, b),
+            _ => None,
         }
     }
 }
@@ -851,5 +851,15 @@ mod tests {
             result.is_err(),
             "NaN should not be comparable with inequality operators"
         );
+    }
+
+    #[test]
+    fn test_invalid_compare() {
+        let context = Context::default();
+
+        let program = Program::compile("size == 50").unwrap();
+        let value = program.execute(&context).unwrap();
+        assert_eq!(value, false.into());
+
     }
 }
