@@ -760,46 +760,39 @@ mod tests {
         assert_eq!(test_script("hello == 'world'", Some(ctx)), Ok(true.into()));
     }
 
+    #[derive(Debug, Clone)]
+    struct Path(String);
+
     #[test]
     fn test_deep_dynamic_resolver() {
         // You can resolve dynamic values by providing a custom resolver function.
         let external_values = Arc::new(HashMap::from([(
-            "foo.bar".to_string(),
-            "drinks".to_string(),
+            "foo.bar.happy".to_string(),
+            "hour".to_string(),
         )]));
         let resolver = Some(move |ftx: &FunctionContext, identifier: Arc<String>| {
             let name: String = identifier.to_string();
             let nameKey = Key::String(Arc::new("".to_string()));
-            match ftx.this.clone() {
-                Some(Value::Map(v)) => match v.get(&nameKey) {
-                    Some(prevName) => {
-                        let prevName: String = match prevName {
-                            Value::String(s) => s.as_str().to_string(),
-                            _ => return Err(ExecutionError::UndeclaredReference(name.into())),
-                        };
-                        let name = format!("{}.{}", prevName, name);
-                        match external_values.get(name.as_str()) {
+            let x = match ftx.this.clone() {
+                Some(Value::Any(value_any)) => match value_any.downcast_ref::<Path>() {
+                    Some(Path(path)) => {
+                        let path = format!("{}.{}", path, name);
+                        match external_values.get(path.as_str()) {
                             Some(v) => Ok(Value::String(v.clone().into())),
-                            None => Ok(Value::Map(Map {
-                                map: Rc::new(HashMap::from([(nameKey, name.into())])),
-                            })),
+                            None => Ok(Value::Any(Arc::new(Box::new(Path(path))))),
                         }
                     }
-                    _ => Err(ExecutionError::UndeclaredReference(name.into())),
+                    None => Err(ExecutionError::UndeclaredReference(name.into())),
                 },
-                _ => match external_values.get(name.as_str()) {
-                    Some(v) => Ok(Value::String(v.clone().into())),
-                    None => Ok(Value::Map(Map {
-                        map: Rc::new(HashMap::from([(nameKey, name.into())])),
-                    })),
-                },
-            }
+                _ => Ok(Value::Any(Arc::new(Box::new(Path(name))))),
+            };
+            return x;
         });
 
         let mut ctx = Context::default();
         ctx.set_dynamic_resolver(resolver);
         assert_eq!(
-            test_script("foo.bar == 'drinks'", Some(ctx)),
+            test_script("foo.bar.happy == 'hour'", Some(ctx)),
             Ok(true.into())
         );
     }

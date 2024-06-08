@@ -1,12 +1,4 @@
-use crate::context::Context;
-use crate::functions::FunctionContext;
-use crate::ser::SerializationError;
-use crate::ExecutionError::NoSuchKey;
-use crate::{to_value, ExecutionError};
-use cel_parser::{ArithmeticOp, Atom, Expression, Member, RelationOp, UnaryOp};
-use chrono::{DateTime, Duration, FixedOffset};
-use core::{fmt, ops};
-use serde::{Serialize, Serializer};
+use core::ops;
 use std::any::Any;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -14,6 +6,17 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
 use std::sync::Arc;
+
+use chrono::{DateTime, Duration, FixedOffset};
+use serde::{Serialize, Serializer};
+
+use cel_parser::{ArithmeticOp, Atom, Expression, Member, RelationOp, UnaryOp};
+
+use crate::context::Context;
+use crate::functions::FunctionContext;
+use crate::ser::SerializationError;
+use crate::ExecutionError::NoSuchKey;
+use crate::{to_value, ExecutionError};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Map {
@@ -155,6 +158,8 @@ impl<T: Serialize> TryIntoValue for T {
 
 #[derive(Debug, Clone)]
 pub enum Value {
+    Any(Arc<Box<dyn Any>>),
+
     List(Arc<Vec<Value>>),
     Map(Map),
 
@@ -185,6 +190,7 @@ pub enum ValueType {
     Duration,
     Timestamp,
     Null,
+    Any,
 }
 
 impl Display for ValueType {
@@ -202,6 +208,7 @@ impl Display for ValueType {
             ValueType::Duration => write!(f, "duration"),
             ValueType::Timestamp => write!(f, "timestamp"),
             ValueType::Null => write!(f, "null"),
+            ValueType::Any => write!(f, "any"),
         }
     }
 }
@@ -221,6 +228,7 @@ impl Value {
             Value::Duration(_) => ValueType::Duration,
             Value::Timestamp(_) => ValueType::Timestamp,
             Value::Null => ValueType::Null,
+            Value::Any(v) => ValueType::Any,
         }
     }
 
@@ -636,6 +644,7 @@ impl<'a> Value {
             Value::Duration(v) => v.num_nanoseconds().map(|n| n != 0).unwrap_or(false),
             Value::Timestamp(v) => v.timestamp_nanos() > 0,
             Value::Function(_, _) => false,
+            Value::Any(_) => false,
         }
     }
 }
@@ -788,8 +797,9 @@ impl ops::Rem<Value> for Value {
 
 #[cfg(test)]
 mod tests {
-    use crate::{objects::Key, Context, Program};
     use std::collections::HashMap;
+
+    use crate::{objects::Key, Context, Program};
 
     #[test]
     fn test_indexed_map_access() {
