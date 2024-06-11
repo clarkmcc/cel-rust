@@ -13,7 +13,7 @@ pub use context::Context;
 pub use functions::FunctionContext;
 pub use objects::{ResolveResult, Value};
 mod duration;
-mod functions;
+pub mod functions;
 mod magic;
 pub mod objects;
 mod resolvers;
