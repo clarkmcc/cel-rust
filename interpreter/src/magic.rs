@@ -197,24 +197,6 @@ impl From<Identifier> for String {
     }
 }
 
-#[derive(Clone)]
-pub struct List(pub Arc<Vec<Value>>);
-
-impl FromValue for List {
-    fn from_value(value: &Value) -> Result<Self, ExecutionError>
-    where
-        Self: Sized,
-    {
-        match value {
-            Value::List(list) => Ok(List(list.clone())),
-            _ => Err(ExecutionError::UnexpectedType {
-                got: format!("{:?}", value),
-                want: "list".to_string(),
-            }),
-        }
-    }
-}
-
 /// An argument extractor that extracts all the arguments passed to a function, resolves their
 /// expressions and returns a vector of [`Value`]. This is useful for functions that accept a
 /// variable number of arguments rather than known arguments and types (for example a `sum`
