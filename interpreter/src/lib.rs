@@ -1,6 +1,7 @@
 extern crate core;
 
 use cel_parser::parse;
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::sync::Arc;
 use thiserror::Error;
@@ -20,6 +21,7 @@ mod resolvers;
 mod ser;
 pub use ser::to_value;
 mod testing;
+use crate::testing::test_script;
 use magic::FromContext;
 
 pub mod extractors {
@@ -196,6 +198,25 @@ mod tests {
 
         for (name, script) in tests {
             assert_eq!(test_script(script, None), Ok(true.into()), "{}", name);
+        }
+    }
+
+    #[test]
+    fn test_matches() {
+        let tests = vec![
+            ("string", "'foobar'.matches('^[a-zA-Z]*$') == true"),
+            (
+                "map",
+                "{'1': 'abc', '2': 'def', '3': 'ghi'}.all(key, key.matches('^[a-zA-Z]*$')) == false",
+            ),
+        ];
+
+        for (name, script) in tests {
+            assert_eq!(
+                test_script(script, None),
+                Ok(true.into()),
+                ".matches failed for '{name}'"
+            );
         }
     }
 

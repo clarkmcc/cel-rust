@@ -6,6 +6,7 @@ use crate::resolvers::{Argument, Resolver};
 use crate::ExecutionError;
 use cel_parser::Expression;
 use chrono::{DateTime, Duration, FixedOffset};
+use regex::Regex;
 use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::sync::Arc;
@@ -221,6 +222,17 @@ pub fn int(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
 /// ```
 pub fn starts_with(This(this): This<Arc<String>>, prefix: Arc<String>) -> bool {
     this.starts_with(prefix.as_str())
+}
+
+/// Returns true if a string matches the regular expression.
+///
+/// # Example
+/// ```cel
+/// "abc".matches("^[a-z]*$") == true
+/// ```
+pub fn matches(This(this): This<Arc<String>>, regex: Arc<String>) -> bool {
+    let re = Regex::new(&regex).unwrap();
+    re.is_match(&this)
 }
 
 /// Returns true if the provided argument can be resolved. This function is
