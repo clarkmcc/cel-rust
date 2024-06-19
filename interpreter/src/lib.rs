@@ -20,6 +20,7 @@ pub mod objects;
 mod resolvers;
 mod ser;
 pub use ser::to_value;
+#[cfg(test)]
 mod testing;
 use crate::testing::test_script;
 use magic::FromContext;
