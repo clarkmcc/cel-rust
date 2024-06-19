@@ -6,7 +6,7 @@ use crate::resolvers::{Argument, Resolver};
 use crate::ExecutionError;
 use cel_parser::Expression;
 use chrono::{DateTime, Duration, FixedOffset};
-use regex::Regex;
+use regex::{Error, Regex};
 use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::sync::Arc;
@@ -230,9 +230,15 @@ pub fn starts_with(This(this): This<Arc<String>>, prefix: Arc<String>) -> bool {
 /// ```cel
 /// "abc".matches("^[a-z]*$") == true
 /// ```
-pub fn matches(This(this): This<Arc<String>>, regex: Arc<String>) -> bool {
-    let re = Regex::new(&regex).unwrap();
-    re.is_match(&this)
+pub fn matches(
+    ftx: &FunctionContext,
+    This(this): This<Arc<String>>,
+    regex: Arc<String>,
+) -> Result<bool> {
+    match Regex::new(&regex) {
+        Ok(re) => Ok(re.is_match(&this)),
+        Err(err) => Err(ftx.error(format!("'{regex}' not a valid regex:\n{err}"))),
+    }
 }
 
 /// Returns true if the provided argument can be resolved. This function is
