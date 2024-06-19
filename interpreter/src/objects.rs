@@ -255,12 +255,14 @@ impl PartialEq for Value {
             // Allow different numeric types to be compared without explicit casting.
             (Value::Int(a), Value::UInt(b)) => a
                 .to_owned()
-                .try_into().map(|a: u64| a == *b)
+                .try_into()
+                .map(|a: u64| a == *b)
                 .unwrap_or(false),
             (Value::Int(a), Value::Float(b)) => (*a as f64) == *b,
             (Value::UInt(a), Value::Int(b)) => a
                 .to_owned()
-                .try_into().map(|a: i64| a == *b)
+                .try_into()
+                .map(|a: i64| a == *b)
                 .unwrap_or(false),
             (Value::UInt(a), Value::Float(b)) => (*a as f64) == *b,
             (Value::Float(a), Value::Int(b)) => *a == (*b as f64),
@@ -286,14 +288,16 @@ impl PartialOrd for Value {
             // Allow different numeric types to be compared without explicit casting.
             (Value::Int(a), Value::UInt(b)) => Some(
                 a.to_owned()
-                    .try_into().map(|a: u64| a.cmp(b))
+                    .try_into()
+                    .map(|a: u64| a.cmp(b))
                     // If the i64 doesn't fit into a u64 it must be less than 0.
                     .unwrap_or(Ordering::Less),
             ),
             (Value::Int(a), Value::Float(b)) => (*a as f64).partial_cmp(b),
             (Value::UInt(a), Value::Int(b)) => Some(
                 a.to_owned()
-                    .try_into().map(|a: i64| a.cmp(b))
+                    .try_into()
+                    .map(|a: i64| a.cmp(b))
                     // If the u64 doesn't fit into a i64 it must be greater than i64::MAX.
                     .unwrap_or(Ordering::Greater),
             ),
@@ -856,6 +860,5 @@ mod tests {
         let program = Program::compile("size == 50").unwrap();
         let value = program.execute(&context).unwrap();
         assert_eq!(value, false.into());
-
     }
 }
