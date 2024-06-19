@@ -860,6 +860,5 @@ mod tests {
         let program = Program::compile("size == 50").unwrap();
         let value = program.execute(&context).unwrap();
         assert_eq!(value, false.into());
-
     }
 }
