@@ -224,6 +224,16 @@ pub fn starts_with(This(this): This<Arc<String>>, prefix: Arc<String>) -> bool {
     this.starts_with(prefix.as_str())
 }
 
+/// Returns true if a string ends with another string.
+///
+/// # Example
+/// ```cel
+/// "abc".endsWith("c") == true
+/// ```
+pub fn ends_with(This(this): This<Arc<String>>, suffix: Arc<String>) -> bool {
+    this.ends_with(suffix.as_str())
+}
+
 /// Returns true if a string matches the regular expression.
 ///
 /// # Example
@@ -666,6 +676,16 @@ mod tests {
         [
             ("starts with true", "'foobar'.startsWith('foo') == true"),
             ("starts with false", "'foobar'.startsWith('bar') == false"),
+        ]
+        .iter()
+        .for_each(assert_script);
+    }
+
+    #[test]
+    fn test_ends_with() {
+        [
+            ("ends with true", "'foobar'.endsWith('bar') == true"),
+            ("ends with false", "'foobar'.endsWith('foo') == false"),
         ]
         .iter()
         .for_each(assert_script);
