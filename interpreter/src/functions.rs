@@ -6,7 +6,7 @@ use crate::resolvers::{Argument, Resolver};
 use crate::ExecutionError;
 use cel_parser::Expression;
 use chrono::{DateTime, Duration, FixedOffset};
-use regex::{Error, Regex};
+use regex::Regex;
 use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::sync::Arc;
