@@ -115,7 +115,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    pub fn add_function<T: 'static, F: 'static>(&mut self, name: &str, value: F)
+    pub fn add_function<T: 'static, F>(&mut self, name: &str, value: F)
     where
         F: Handler<T> + 'static,
     {
