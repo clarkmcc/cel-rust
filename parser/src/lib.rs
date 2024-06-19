@@ -134,10 +134,7 @@ mod tests {
 
     #[test]
     fn simple_str() {
-        assert_parse_eq(
-            r#"'foobar'"#,
-            Atom(String("foobar".to_string().into())),
-        );
+        assert_parse_eq(r#"'foobar'"#, Atom(String("foobar".to_string().into())));
         println!("{:?}", parse(r#"1 == '1'"#))
     }
 
