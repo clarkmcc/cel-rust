@@ -132,7 +132,7 @@ impl<'a> Context<'a> {
         Value::resolve_all(exprs, self)
     }
 
-    pub fn clone(&self) -> Context {
+    pub fn new_inner_scope(&self) -> Context {
         Context::Child {
             parent: self,
             variables: Default::default(),

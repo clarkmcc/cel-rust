@@ -265,7 +265,7 @@ pub fn map(
     match this {
         Value::List(items) => {
             let mut values = Vec::with_capacity(items.len());
-            let mut ptx = ftx.ptx.clone();
+            let mut ptx = ftx.ptx.new_inner_scope();
             for item in items.iter() {
                 ptx.add_variable_from_value(ident.clone(), item.clone());
                 let value = ptx.resolve(&expr)?;
@@ -298,7 +298,7 @@ pub fn filter(
     match this {
         Value::List(items) => {
             let mut values = Vec::with_capacity(items.len());
-            let mut ptx = ftx.ptx.clone();
+            let mut ptx = ftx.ptx.new_inner_scope();
             for item in items.iter() {
                 ptx.add_variable_from_value(ident.clone(), item.clone());
                 if let Value::Bool(true) = ptx.resolve(&expr)? {
@@ -332,7 +332,7 @@ pub fn all(
 ) -> Result<bool> {
     return match this {
         Value::List(items) => {
-            let mut ptx = ftx.ptx.clone();
+            let mut ptx = ftx.ptx.new_inner_scope();
             for item in items.iter() {
                 ptx.add_variable_from_value(&ident, item);
                 if let Value::Bool(false) = ptx.resolve(&expr)? {
@@ -342,7 +342,7 @@ pub fn all(
             Ok(true)
         }
         Value::Map(value) => {
-            let mut ptx = ftx.ptx.clone();
+            let mut ptx = ftx.ptx.new_inner_scope();
             for key in value.map.keys() {
                 ptx.add_variable_from_value(&ident, key);
                 if let Value::Bool(false) = ptx.resolve(&expr)? {
@@ -375,7 +375,7 @@ pub fn exists(
 ) -> Result<bool> {
     match this {
         Value::List(items) => {
-            let mut ptx = ftx.ptx.clone();
+            let mut ptx = ftx.ptx.new_inner_scope();
             for item in items.iter() {
                 ptx.add_variable_from_value(&ident, item);
                 if let Value::Bool(true) = ptx.resolve(&expr)? {
@@ -385,7 +385,7 @@ pub fn exists(
             Ok(false)
         }
         Value::Map(value) => {
-            let mut ptx = ftx.ptx.clone();
+            let mut ptx = ftx.ptx.new_inner_scope();
             for key in value.map.keys() {
                 ptx.add_variable_from_value(&ident, key);
                 if let Value::Bool(true) = ptx.resolve(&expr)? {
@@ -419,7 +419,7 @@ pub fn exists_one(
 ) -> Result<bool> {
     match this {
         Value::List(items) => {
-            let mut ptx = ftx.ptx.clone();
+            let mut ptx = ftx.ptx.new_inner_scope();
             let mut exists = false;
             for item in items.iter() {
                 ptx.add_variable_from_value(&ident, item);
@@ -433,7 +433,7 @@ pub fn exists_one(
             Ok(exists)
         }
         Value::Map(value) => {
-            let mut ptx = ftx.ptx.clone();
+            let mut ptx = ftx.ptx.new_inner_scope();
             let mut exists = false;
             for key in value.map.keys() {
                 ptx.add_variable_from_value(&ident, key);
