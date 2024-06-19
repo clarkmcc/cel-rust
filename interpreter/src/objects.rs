@@ -11,12 +11,11 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::{Display, Formatter};
-use std::rc::Rc;
 use std::sync::Arc;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Map {
-    pub map: Rc<HashMap<Key, Value>>,
+    pub map: Arc<HashMap<Key, Value>>,
 }
 
 impl PartialOrd for Map {
@@ -126,7 +125,7 @@ impl<K: Into<Key>, V: Into<Value>> From<HashMap<K, V>> for Map {
             new_map.insert(k.into(), v.into());
         }
         Map {
-            map: Rc::new(new_map),
+            map: Arc::new(new_map),
         }
     }
 }
@@ -256,13 +255,13 @@ impl PartialEq for Value {
             (Value::Int(a), Value::UInt(b)) => a
                 .to_owned()
                 .try_into()
-                .and_then(|a: u64| Ok(a == *b))
+                .map(|a: u64| a == *b)
                 .unwrap_or(false),
             (Value::Int(a), Value::Float(b)) => (*a as f64) == *b,
             (Value::UInt(a), Value::Int(b)) => a
                 .to_owned()
                 .try_into()
-                .and_then(|a: i64| Ok(a == *b))
+                .map(|a: i64| a == *b)
                 .unwrap_or(false),
             (Value::UInt(a), Value::Float(b)) => (*a as f64) == *b,
             (Value::Float(a), Value::Int(b)) => *a == (*b as f64),
@@ -289,7 +288,7 @@ impl PartialOrd for Value {
             (Value::Int(a), Value::UInt(b)) => Some(
                 a.to_owned()
                     .try_into()
-                    .and_then(|a: u64| Ok(a.cmp(b)))
+                    .map(|a: u64| a.cmp(b))
                     // If the i64 doesn't fit into a u64 it must be less than 0.
                     .unwrap_or(Ordering::Less),
             ),
@@ -297,7 +296,7 @@ impl PartialOrd for Value {
             (Value::UInt(a), Value::Int(b)) => Some(
                 a.to_owned()
                     .try_into()
-                    .and_then(|a: i64| Ok(a.cmp(b)))
+                    .map(|a: i64| a.cmp(b))
                     // If the u64 doesn't fit into a i64 it must be greater than i64::MAX.
                     .unwrap_or(Ordering::Greater),
             ),
@@ -516,7 +515,10 @@ impl<'a> Value {
                     let value = Value::resolve(v, ctx)?;
                     map.insert(key, value);
                 }
-                Value::Map(Map { map: Rc::from(map) }).into()
+                Value::Map(Map {
+                    map: Arc::from(map),
+                })
+                .into()
             }
             Expression::Ident(name) => {
                 if ctx.has_function(&***name) {
@@ -631,7 +633,7 @@ impl<'a> Value {
             Value::Bool(v) => *v,
             Value::Null => false,
             Value::Duration(v) => v.num_nanoseconds().map(|n| n != 0).unwrap_or(false),
-            Value::Timestamp(v) => v.timestamp_nanos() > 0,
+            Value::Timestamp(v) => v.timestamp_nanos_opt().unwrap_or_default() > 0,
             Value::Function(_, _) => false,
         }
     }
@@ -686,7 +688,7 @@ impl ops::Add<Value> for Value {
                 for (k, v) in r.map.iter() {
                     new.insert(k.clone(), v.clone());
                 }
-                Value::Map(Map { map: Rc::new(new) })
+                Value::Map(Map { map: Arc::new(new) })
             }
             (Value::Duration(l), Value::Duration(r)) => Value::Duration(l + r),
             (Value::Timestamp(l), Value::Duration(r)) => Value::Timestamp(l + r),

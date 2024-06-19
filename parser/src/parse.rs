@@ -88,11 +88,11 @@ pub fn parse_string(s: &str) -> Result<String, ParseError> {
     let mut chars = s.chars().enumerate();
     let res = String::with_capacity(s.len());
 
-    return match chars.next() {
+    match chars.next() {
         Some((_, c)) if c == 'r' || c == 'R' => parse_raw_string(&mut chars, res),
         Some((_, c)) if c == '\'' || c == '"' => parse_quoted_string(s, &mut chars, res, c),
         _ => Err(ParseError::MissingOpeningQuote),
-    };
+    }
 }
 
 fn parse_raw_string(chars: &mut Enumerate<Chars>, mut res: String) -> Result<String, ParseError> {

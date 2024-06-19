@@ -1,7 +1,6 @@
 extern crate core;
 
 use cel_parser::parse;
-use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::sync::Arc;
 use thiserror::Error;
@@ -20,8 +19,8 @@ pub mod objects;
 mod resolvers;
 mod ser;
 pub use ser::to_value;
+#[cfg(test)]
 mod testing;
-use crate::testing::test_script;
 use magic::FromContext;
 
 pub mod extractors {

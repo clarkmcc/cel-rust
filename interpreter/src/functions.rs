@@ -6,7 +6,7 @@ use crate::resolvers::{Argument, Resolver};
 use crate::ExecutionError;
 use cel_parser::Expression;
 use chrono::{DateTime, Duration, FixedOffset};
-use regex::{Error, Regex};
+use regex::Regex;
 use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::sync::Arc;
@@ -283,7 +283,7 @@ pub fn map(
     match this {
         Value::List(items) => {
             let mut values = Vec::with_capacity(items.len());
-            let mut ptx = ftx.ptx.clone();
+            let mut ptx = ftx.ptx.new_inner_scope();
             for item in items.iter() {
                 ptx.add_variable_from_value(ident.clone(), item.clone());
                 let value = ptx.resolve(&expr)?;
@@ -316,7 +316,7 @@ pub fn filter(
     match this {
         Value::List(items) => {
             let mut values = Vec::with_capacity(items.len());
-            let mut ptx = ftx.ptx.clone();
+            let mut ptx = ftx.ptx.new_inner_scope();
             for item in items.iter() {
                 ptx.add_variable_from_value(ident.clone(), item.clone());
                 if let Value::Bool(true) = ptx.resolve(&expr)? {
@@ -350,7 +350,7 @@ pub fn all(
 ) -> Result<bool> {
     return match this {
         Value::List(items) => {
-            let mut ptx = ftx.ptx.clone();
+            let mut ptx = ftx.ptx.new_inner_scope();
             for item in items.iter() {
                 ptx.add_variable_from_value(&ident, item);
                 if let Value::Bool(false) = ptx.resolve(&expr)? {
@@ -360,7 +360,7 @@ pub fn all(
             Ok(true)
         }
         Value::Map(value) => {
-            let mut ptx = ftx.ptx.clone();
+            let mut ptx = ftx.ptx.new_inner_scope();
             for key in value.map.keys() {
                 ptx.add_variable_from_value(&ident, key);
                 if let Value::Bool(false) = ptx.resolve(&expr)? {
@@ -393,7 +393,7 @@ pub fn exists(
 ) -> Result<bool> {
     match this {
         Value::List(items) => {
-            let mut ptx = ftx.ptx.clone();
+            let mut ptx = ftx.ptx.new_inner_scope();
             for item in items.iter() {
                 ptx.add_variable_from_value(&ident, item);
                 if let Value::Bool(true) = ptx.resolve(&expr)? {
@@ -403,7 +403,7 @@ pub fn exists(
             Ok(false)
         }
         Value::Map(value) => {
-            let mut ptx = ftx.ptx.clone();
+            let mut ptx = ftx.ptx.new_inner_scope();
             for key in value.map.keys() {
                 ptx.add_variable_from_value(&ident, key);
                 if let Value::Bool(true) = ptx.resolve(&expr)? {
@@ -437,7 +437,7 @@ pub fn exists_one(
 ) -> Result<bool> {
     match this {
         Value::List(items) => {
-            let mut ptx = ftx.ptx.clone();
+            let mut ptx = ftx.ptx.new_inner_scope();
             let mut exists = false;
             for item in items.iter() {
                 ptx.add_variable_from_value(&ident, item);
@@ -451,7 +451,7 @@ pub fn exists_one(
             Ok(exists)
         }
         Value::Map(value) => {
-            let mut ptx = ftx.ptx.clone();
+            let mut ptx = ftx.ptx.new_inner_scope();
             let mut exists = false;
             for key in value.map.keys() {
                 ptx.add_variable_from_value(&ident, key);
@@ -516,20 +516,20 @@ pub fn max(Arguments(args): Arguments) -> Result<Value> {
                 None => Err(ExecutionError::ValuesNotComparable(acc.clone(), x.clone())),
             }
         })
-        .map(|v| v.clone())
+        .cloned()
 }
 
 /// A wrapper around [`parse_duration`] that converts errors into [`ExecutionError`].
 /// and only returns the duration, rather than returning the remaining input.
 fn _duration(i: &str) -> Result<Duration> {
-    let (_, duration) = parse_duration(i)
-        .map_err(|e| ExecutionError::function_error("duration", &e.to_string()))?;
+    let (_, duration) =
+        parse_duration(i).map_err(|e| ExecutionError::function_error("duration", e.to_string()))?;
     Ok(duration)
 }
 
 fn _timestamp(i: &str) -> Result<DateTime<FixedOffset>> {
     DateTime::parse_from_rfc3339(i)
-        .map_err(|e| ExecutionError::function_error("timestamp", &e.to_string()))
+        .map_err(|e| ExecutionError::function_error("timestamp", e.to_string()))
 }
 
 #[cfg(test)]

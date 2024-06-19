@@ -134,10 +134,7 @@ mod tests {
 
     #[test]
     fn simple_str() {
-        assert_parse_eq(
-            r#"'foobar'"#,
-            Atom(String("foobar".to_string().into()).into()),
-        );
+        assert_parse_eq(r#"'foobar'"#, Atom(String("foobar".to_string().into())));
         println!("{:?}", parse(r#"1 == '1'"#))
     }
 
@@ -317,7 +314,7 @@ mod tests {
                     Expression::Atom(Int(1)),
                 ),
                 (
-                    Expression::Atom(String("b".to_string().into())).into(),
+                    Expression::Atom(String("b".to_string().into())),
                     Expression::Atom(Int(2)),
                 ),
             ]),
@@ -335,7 +332,7 @@ mod tests {
                         Expression::Atom(Int(1)),
                     ),
                     (
-                        Expression::Atom(String("b".to_string().into())).into(),
+                        Expression::Atom(String("b".to_string().into())),
                         Expression::Atom(Int(2)),
                     ),
                 ])),

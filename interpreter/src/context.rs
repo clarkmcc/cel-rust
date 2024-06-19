@@ -115,7 +115,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    pub fn add_function<T: 'static, F: 'static>(&mut self, name: &str, value: F)
+    pub fn add_function<T: 'static, F>(&mut self, name: &str, value: F)
     where
         F: Handler<T> + 'static,
     {
@@ -132,7 +132,7 @@ impl<'a> Context<'a> {
         Value::resolve_all(exprs, self)
     }
 
-    pub fn clone(&self) -> Context {
+    pub fn new_inner_scope(&self) -> Context {
         Context::Child {
             parent: self,
             variables: Default::default(),

@@ -35,13 +35,13 @@ macro_rules! impl_conversions {
                 }
             }
 
-            impl crate::magic::IntoResolveResult for $target_type {
+            impl $crate::magic::IntoResolveResult for $target_type {
                 fn into_resolve_result(self) -> ResolveResult {
                     Ok($value_variant(self))
                 }
             }
 
-            impl crate::magic::IntoResolveResult for Result<$target_type, ExecutionError> {
+            impl $crate::magic::IntoResolveResult for Result<$target_type, ExecutionError> {
                 fn into_resolve_result(self) -> ResolveResult {
                     self.map($value_variant)
                 }
@@ -66,7 +66,7 @@ macro_rules! impl_handler {
             impl<F, $($t,)* R> Handler<($($t,)*)> for F
             where
                 F: Fn($($t,)*) -> R + Clone,
-                $($t: for<'a, 'context> crate::FromContext<'a, 'context>,)*
+                $($t: for<'a, 'context> $crate::FromContext<'a, 'context>,)*
                 R: IntoResolveResult,
             {
                 fn call(self, _ftx: &mut FunctionContext) -> ResolveResult {
@@ -80,7 +80,7 @@ macro_rules! impl_handler {
             impl<F, $($t,)* R> Handler<(WithFunctionContext, $($t,)*)> for F
             where
                 F: Fn(&FunctionContext, $($t,)*) -> R + Clone,
-                $($t: for<'a, 'context> crate::FromContext<'a, 'context>,)*
+                $($t: for<'a, 'context> $crate::FromContext<'a, 'context>,)*
                 R: IntoResolveResult,
             {
                 fn call(self, _ftx: &mut FunctionContext) -> ResolveResult {
