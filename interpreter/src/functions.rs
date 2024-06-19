@@ -515,21 +515,20 @@ pub fn max(Arguments(args): Arguments) -> Result<Value> {
                 Some(_) => Ok(x),
                 None => Err(ExecutionError::ValuesNotComparable(acc.clone(), x.clone())),
             }
-        })
-        .map(|v| v.clone())
+        }).cloned()
 }
 
 /// A wrapper around [`parse_duration`] that converts errors into [`ExecutionError`].
 /// and only returns the duration, rather than returning the remaining input.
 fn _duration(i: &str) -> Result<Duration> {
     let (_, duration) = parse_duration(i)
-        .map_err(|e| ExecutionError::function_error("duration", &e.to_string()))?;
+        .map_err(|e| ExecutionError::function_error("duration", e.to_string()))?;
     Ok(duration)
 }
 
 fn _timestamp(i: &str) -> Result<DateTime<FixedOffset>> {
     DateTime::parse_from_rfc3339(i)
-        .map_err(|e| ExecutionError::function_error("timestamp", &e.to_string()))
+        .map_err(|e| ExecutionError::function_error("timestamp", e.to_string()))
 }
 
 #[cfg(test)]
