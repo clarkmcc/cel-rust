@@ -329,7 +329,7 @@ pub trait Function: Send + Sync {
     fn call_with_context(self: Box<Self>, ctx: &mut FunctionContext) -> ResolveResult;
 }
 
-pub struct HandlerFunction<H: Clone + Send + Sync>{
+pub struct HandlerFunction<H: Clone + Send + Sync> {
     pub handler: H,
     pub into_callable: for<'a> fn(H, &'a mut FunctionContext) -> Box<dyn Callable + 'a>,
 }
