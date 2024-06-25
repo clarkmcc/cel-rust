@@ -11,12 +11,11 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::{Display, Formatter};
-use std::rc::Rc;
 use std::sync::Arc;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Map {
-    pub map: Rc<HashMap<Key, Value>>,
+    pub map: Arc<HashMap<Key, Value>>,
 }
 
 impl PartialOrd for Map {
@@ -126,7 +125,7 @@ impl<K: Into<Key>, V: Into<Value>> From<HashMap<K, V>> for Map {
             new_map.insert(k.into(), v.into());
         }
         Map {
-            map: Rc::new(new_map),
+            map: Arc::new(new_map),
         }
     }
 }
@@ -516,7 +515,7 @@ impl<'a> Value {
                     let value = Value::resolve(v, ctx)?;
                     map.insert(key, value);
                 }
-                Value::Map(Map { map: Rc::from(map) }).into()
+                Value::Map(Map { map: Arc::from(map) }).into()
             }
             Expression::Ident(name) => {
                 if ctx.has_function(&***name) {
@@ -686,7 +685,7 @@ impl ops::Add<Value> for Value {
                 for (k, v) in r.map.iter() {
                     new.insert(k.clone(), v.clone());
                 }
-                Value::Map(Map { map: Rc::new(new) })
+                Value::Map(Map { map: Arc::new(new) })
             }
             (Value::Duration(l), Value::Duration(r)) => Value::Duration(l + r),
             (Value::Timestamp(l), Value::Duration(r)) => Value::Timestamp(l + r),
