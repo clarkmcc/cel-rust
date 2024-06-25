@@ -117,7 +117,7 @@ impl<'a> Context<'a> {
 
     pub fn add_function<T: 'static, F>(&mut self, name: &str, value: F)
     where
-        F: Handler<T> + 'static,
+        F: Handler<T> + 'static + Send + Sync,
     {
         if let Context::Root { functions, .. } = self {
             functions.add(name, value);
