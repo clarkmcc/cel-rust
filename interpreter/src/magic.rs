@@ -302,7 +302,7 @@ pub struct FunctionRegistry {
 impl FunctionRegistry {
     pub(crate) fn add<H, T>(&mut self, name: &str, handler: H)
     where
-        H: Handler<T> + 'static,
+        H: Handler<T> + 'static + Send + Sync,
         T: 'static,
     {
         self.functions.insert(
@@ -323,18 +323,18 @@ impl FunctionRegistry {
     }
 }
 
-pub trait Function {
+pub trait Function: Send + Sync {
     fn clone_box(&self) -> Box<dyn Function>;
     fn into_callable<'a>(self: Box<Self>, ctx: &'a mut FunctionContext) -> Box<dyn Callable + 'a>;
     fn call_with_context(self: Box<Self>, ctx: &mut FunctionContext) -> ResolveResult;
 }
 
-pub struct HandlerFunction<H: Clone> {
+pub struct HandlerFunction<H: Clone + Send + Sync> {
     pub handler: H,
     pub into_callable: for<'a> fn(H, &'a mut FunctionContext) -> Box<dyn Callable + 'a>,
 }
 
-impl<H: Clone> Clone for HandlerFunction<H> {
+impl<H: Clone + Send + Sync> Clone for HandlerFunction<H> {
     fn clone(&self) -> Self {
         Self {
             handler: self.handler.clone(),
@@ -345,7 +345,7 @@ impl<H: Clone> Clone for HandlerFunction<H> {
 
 impl<H> Function for HandlerFunction<H>
 where
-    H: Clone + 'static,
+    H: Clone + Send + Sync + 'static,
 {
     fn clone_box(&self) -> Box<dyn Function> {
         Box::new(self.clone())
