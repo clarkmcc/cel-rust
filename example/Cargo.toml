@@ -3,12 +3,21 @@ name = "example"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
+axum = { version = "0.7.5", default-features = false, features = [
+    "http1",
+    "json",
+    "tokio",
+] }
 cel-interpreter = { path = "../interpreter" }
 chrono = "0.4.26"
 serde = { version = "1.0.196", features = ["derive"] }
+thiserror = { version = "1.0.61", default-features = false }
+tokio = { version = "1.38.0", default-features = false, features = [
+    "macros",
+    "net",
+    "rt-multi-thread",
+] }
 
 [[bin]]
 name = "simple"
@@ -29,3 +38,7 @@ path = "src/threads.rs"
 [[bin]]
 name = "serde"
 path = "src/serde.rs"
+
+[[bin]]
+name = "axum"
+path = "src/axum.rs"
