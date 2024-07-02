@@ -7,6 +7,7 @@ use cel_parser::{ArithmeticOp, Atom, Expression, Member, RelationOp, UnaryOp};
 use chrono::{DateTime, Duration, FixedOffset};
 use core::ops;
 use serde::{Serialize, Serializer};
+use std::any::Any;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
@@ -153,6 +154,8 @@ impl<T: Serialize> TryIntoValue for T {
 
 #[derive(Debug, Clone)]
 pub enum Value {
+    Any(Arc<Box<dyn Any + Sync + Send>>),
+
     List(Arc<Vec<Value>>),
     Map(Map),
 
@@ -183,6 +186,7 @@ pub enum ValueType {
     Duration,
     Timestamp,
     Null,
+    Any,
 }
 
 impl Display for ValueType {
@@ -200,6 +204,7 @@ impl Display for ValueType {
             ValueType::Duration => write!(f, "duration"),
             ValueType::Timestamp => write!(f, "timestamp"),
             ValueType::Null => write!(f, "null"),
+            ValueType::Any => write!(f, "any"),
         }
     }
 }
@@ -219,6 +224,7 @@ impl Value {
             Value::Duration(_) => ValueType::Duration,
             Value::Timestamp(_) => ValueType::Timestamp,
             Value::Null => ValueType::Null,
+            Value::Any(_) => ValueType::Any,
         }
     }
 
@@ -589,7 +595,9 @@ impl<'a> Value {
                 // give priority to the property. Maybe we can implement lookahead
                 // to see if the next token is a function call?
                 match (child.is_some(), ctx.has_function(&***name)) {
-                    (false, false) => NoSuchKey(name.clone()).into(),
+                    (false, false) => ctx
+                        .get_dynamic_variable(Some(self), name.to_string())
+                        .map_err(|_| NoSuchKey(name.clone())),
                     (true, true) | (true, false) => child.unwrap().into(),
                     (false, true) => Value::Function(name.clone(), Some(self.into())).into(),
                 }
@@ -635,6 +643,7 @@ impl<'a> Value {
             Value::Duration(v) => v.num_nanoseconds().map(|n| n != 0).unwrap_or(false),
             Value::Timestamp(v) => v.timestamp_nanos_opt().unwrap_or_default() > 0,
             Value::Function(_, _) => false,
+            Value::Any(_) => false,
         }
     }
 }
