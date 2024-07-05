@@ -142,19 +142,21 @@ mod tests {
     fn test_parse_map_macro() {
         assert_parse_eq(
             "[1, 2, 3].map(x, x * 2)",
-            Member(
-                Box::new(Member(
-                    Box::new(List(vec![Atom(Int(1)), Atom(Int(2)), Atom(Int(3))])),
-                    Box::new(Attribute("map".to_string().into())),
-                )),
-                Box::new(FunctionCall(vec![
+            FunctionCall(
+                Box::new(Ident("map".to_string().into())),
+                Some(Box::new(List(vec![
+                    Atom(Int(1)),
+                    Atom(Int(2)),
+                    Atom(Int(3)),
+                ]))),
+                vec![
                     Ident("x".to_string().into()),
                     Arithmetic(
                         Box::new(Ident("x".to_string().into())),
                         ArithmeticOp::Multiply,
                         Box::new(Atom(Int(2))),
                     ),
-                ])),
+                ],
             ),
         )
     }
@@ -178,10 +180,7 @@ mod tests {
     fn function_call_no_args() {
         assert_parse_eq(
             "a()",
-            Member(
-                Box::new(Ident("a".to_string().into())),
-                Box::new(FunctionCall(vec![])),
-            ),
+            FunctionCall(Box::new(Ident("a".to_string().into())), None, vec![]),
         );
     }
 
