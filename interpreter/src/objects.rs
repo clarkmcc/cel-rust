@@ -864,7 +864,9 @@ mod tests {
         let program = Program::compile("size(requests) + size == 5").unwrap();
         let mut context = Context::default();
         let requests = vec![Value::Int(42), Value::Int(42)];
-        context.add_variable("requests", Value::List(Arc::new(requests))).unwrap();
+        context
+            .add_variable("requests", Value::List(Arc::new(requests)))
+            .unwrap();
         context.add_variable("size", Value::Int(3)).unwrap();
         assert_eq!(program.execute(&context).unwrap(), Value::Bool(true));
     }
