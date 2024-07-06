@@ -520,11 +520,28 @@ impl<'a> Value {
                 })
                 .into()
             }
-            Expression::Ident(name) => {
-                if ctx.has_function(&***name) {
-                    Value::Function(name.clone(), None).into()
+            Expression::Ident(name) => ctx.get_variable(&***name),
+            Expression::FunctionCall(name, target, args) => {
+                if let Expression::Ident(name) = &**name {
+                    let func = ctx.get_function(&**name).unwrap();
+                    match target {
+                        None => {
+                            let mut ctx =
+                                FunctionContext::new(name.clone(), None, ctx, args.clone());
+                            func.call_with_context(&mut ctx)
+                        }
+                        Some(target) => {
+                            let mut ctx = FunctionContext::new(
+                                name.clone(),
+                                Some(Value::resolve(target, ctx)?),
+                                ctx,
+                                args.clone(),
+                            );
+                            func.call_with_context(&mut ctx)
+                        }
+                    }
                 } else {
-                    ctx.get_variable(&***name)
+                    unreachable!("a function name should always be a `Expression::Ident`")
                 }
             }
         }
@@ -592,29 +609,6 @@ impl<'a> Value {
                     (false, false) => NoSuchKey(name.clone()).into(),
                     (true, true) | (true, false) => child.unwrap().into(),
                     (false, true) => Value::Function(name.clone(), Some(self.into())).into(),
-                }
-            }
-            Member::FunctionCall(args) => {
-                if let Value::Function(name, target) = self {
-                    let func = ctx.get_function(&**name).unwrap();
-                    match target {
-                        None => {
-                            let mut ctx =
-                                FunctionContext::new(name.clone(), None, ctx, args.clone());
-                            func.call_with_context(&mut ctx)
-                        }
-                        Some(target) => {
-                            let mut ctx = FunctionContext::new(
-                                name.clone(),
-                                Some(*target),
-                                ctx,
-                                args.clone(),
-                            );
-                            func.call_with_context(&mut ctx)
-                        }
-                    }
-                } else {
-                    unreachable!("FunctionCall without Value::Function - {:?}", self)
                 }
             }
         }
@@ -787,8 +781,9 @@ impl ops::Rem<Value> for Value {
 
 #[cfg(test)]
 mod tests {
-    use crate::{objects::Key, Context, Program};
+    use crate::{objects::Key, Context, Program, Value};
     use std::collections::HashMap;
+    use std::sync::Arc;
 
     #[test]
     fn test_indexed_map_access() {
@@ -859,8 +854,20 @@ mod tests {
     fn test_invalid_compare() {
         let context = Context::default();
 
-        let program = Program::compile("size == 50").unwrap();
+        let program = Program::compile("{} == []").unwrap();
         let value = program.execute(&context).unwrap();
         assert_eq!(value, false.into());
+    }
+
+    #[test]
+    fn test_size_fn_var() {
+        let program = Program::compile("size(requests) + size == 5").unwrap();
+        let mut context = Context::default();
+        let requests = vec![Value::Int(42), Value::Int(42)];
+        context
+            .add_variable("requests", Value::List(Arc::new(requests)))
+            .unwrap();
+        context.add_variable("size", Value::Int(3)).unwrap();
+        assert_eq!(program.execute(&context).unwrap(), Value::Bool(true));
     }
 }
