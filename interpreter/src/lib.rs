@@ -1,6 +1,6 @@
 extern crate core;
 
-use cel_parser::parse;
+use cel_parser::{parse, ExpressionReferences};
 use std::convert::TryFrom;
 use std::sync::Arc;
 use thiserror::Error;
@@ -125,6 +125,21 @@ impl Program {
 
     pub fn execute(&self, context: &Context) -> ResolveResult {
         Value::resolve(&self.expression, context)
+    }
+
+    /// Returns the variables and functions referenced by the CEL program
+    ///
+    /// # Example
+    /// ```rust
+    /// # use cel_interpreter::Program;
+    /// let program = Program::compile("size(foo) > 0").unwrap();
+    /// let references = program.references();
+    ///
+    /// assert!(references.has_function("size"));
+    /// assert!(references.has_variable("foo"));
+    /// ```
+    pub fn references(&self) -> ExpressionReferences {
+        self.expression.references()
     }
 }
 
