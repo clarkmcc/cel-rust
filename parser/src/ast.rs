@@ -110,7 +110,7 @@ impl<'expr> ExpressionReferences<'expr> {
     /// assert_eq!(vec!["foo"], references.variables());
     /// ```
     pub fn variables(&self) -> Vec<&str> {
-        self.variables.iter().cloned().collect()
+        self.variables.iter().copied().collect()
     }
 
     /// Returns a list of all functions referenced in the expression.
@@ -123,7 +123,7 @@ impl<'expr> ExpressionReferences<'expr> {
     /// assert_eq!(vec!["size"], references.functions());
     /// ```
     pub fn functions(&self) -> Vec<&str> {
-        self.functions.iter().cloned().collect()
+        self.functions.iter().copied().collect()
     }
 }
 
