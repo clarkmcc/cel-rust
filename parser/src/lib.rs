@@ -505,4 +505,9 @@ mod tests {
             ),
         );
     }
+
+    #[test]
+    fn test_foobar() {
+        println!("{:?}", parse("foo.bar.baz == 10 && size(requests) == 3"))
+    }
 }
