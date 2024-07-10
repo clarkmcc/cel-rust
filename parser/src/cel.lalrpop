@@ -1,4 +1,4 @@
-use crate::{RelationOp, ArithmeticOp, Expression, UnaryOp, Member, Atom, parse_string};
+use crate::{RelationOp, ArithmeticOp, Expression, UnaryOp, Member, Atom, parse_bytes, parse_string};
 use std::sync::Arc;
 
 grammar;
@@ -155,11 +155,11 @@ Atom: Atom = {
     // r#"'''(\\.|[^'{3}])*'''"# => Atom::String(<>.to_string().into()),
 
     // Double quoted bytes
-    r#"[bB]"(\\.|[^"\n])*""# => Atom::Bytes(Arc::from(<>[2..<>.len()-1].as_bytes().to_vec())),
+    r#"[bB]"(\\.|[^"\n])*""# => Atom::Bytes(parse_bytes(&<>[2..<>.len()-1]).unwrap().into()),
     // r#"[bB]"""(\\.|[^"{3}])*""""# => Atom::Bytes(Vec::from(<>.as_bytes()).into()),
 
     // Single quoted bytes
-    r#"[bB]'(\\.|[^'\n])*'"# => Atom::Bytes(Arc::from(<>[2..<>.len()-1].as_bytes().to_vec())),
+    r#"[bB]'(\\.|[^'\n])*'"# => Atom::Bytes(parse_bytes(&<>[2..<>.len()-1]).unwrap().into()),
     // r#"[bB]'''(\\.|[^'{3}])*'''"# => Atom::Bytes(Vec::from(<>.as_bytes()).into()),
 
     "true" => Atom::Bool(true),

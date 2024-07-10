@@ -47,6 +47,98 @@ pub enum ParseUnicodeError {
     },
 }
 
+pub fn parse_bytes(s: &str) -> Result<Vec<u8>, ParseError> {
+    let mut chars = s.chars().enumerate();
+    let mut res: Vec<u8> = Vec::with_capacity(s.len());
+
+    while let Some((idx, c)) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                None => {
+                    return Err(ParseError::InvalidEscape {
+                        escape: format!("{}", c),
+                        index: idx,
+                        string: String::from(s),
+                    });
+                }
+                Some((idx, c2)) => {
+                    let byte: u8 = match c2 {
+                        'x' => {
+                            let hex: String = [
+                                chars
+                                    .next()
+                                    .ok_or(ParseError::InvalidEscape {
+                                        escape: "\\x".to_string(),
+                                        index: idx,
+                                        string: s.to_string(),
+                                    })?
+                                    .1,
+                                chars
+                                    .next()
+                                    .ok_or(ParseError::InvalidEscape {
+                                        escape: "\\x".to_string(),
+                                        index: idx,
+                                        string: s.to_string(),
+                                    })?
+                                    .1,
+                            ]
+                            .iter()
+                            .collect();
+                            u8::from_str_radix(&hex, 16).map_err(|_| ParseError::InvalidEscape {
+                                escape: hex,
+                                index: idx,
+                                string: s.to_string(),
+                            })?
+                        }
+                        n if ('0'..='3').contains(&n) => {
+                            let octal: String = [
+                                n,
+                                chars
+                                    .next()
+                                    .ok_or(ParseError::InvalidEscape {
+                                        escape: format!("\\{n}"),
+                                        index: idx,
+                                        string: s.to_string(),
+                                    })?
+                                    .1,
+                                chars
+                                    .next()
+                                    .ok_or(ParseError::InvalidEscape {
+                                        escape: format!("\\{n}"),
+                                        index: idx,
+                                        string: s.to_string(),
+                                    })?
+                                    .1,
+                            ]
+                            .iter()
+                            .collect();
+                            u8::from_str_radix(&octal, 8).map_err(|_| {
+                                ParseError::InvalidEscape {
+                                    escape: octal,
+                                    index: idx,
+                                    string: s.to_string(),
+                                }
+                            })?
+                        }
+                        _ => {
+                            return Err(ParseError::InvalidEscape {
+                                escape: format!("{}{}", c, c2),
+                                index: idx,
+                                string: String::from(s),
+                            });
+                        }
+                    };
+
+                    res.push(byte);
+                    continue;
+                }
+            };
+        }
+        res.extend(c.to_string().as_bytes());
+    }
+    Ok(res)
+}
+
 /// Parse the provided quoted string.
 /// This function was adopted from [snailquote](https://docs.rs/snailquote/latest/snailquote/).
 ///
