@@ -85,11 +85,11 @@ impl<'a> Context<'a> {
                 .get(&name)
                 .cloned()
                 .or_else(|| parent.get_variable(&name).ok())
-                .ok_or(ExecutionError::UndeclaredReference(name.into())),
+                .ok_or_else(|| ExecutionError::UndeclaredReference(name.into())),
             Context::Root { variables, .. } => variables
                 .get(&name)
                 .cloned()
-                .ok_or(ExecutionError::UndeclaredReference(name.into())),
+                .ok_or_else(|| ExecutionError::UndeclaredReference(name.into())),
         }
     }
 

@@ -263,6 +263,16 @@ mod tests {
                 ExecutionError::undeclared_reference("missing"),
             ),
             (
+                "undeclared method",
+                "1.missing()",
+                ExecutionError::undeclared_reference("missing"),
+            ),
+            (
+                "undeclared function",
+                "missing(1)",
+                ExecutionError::undeclared_reference("missing"),
+            ),
+            (
                 "unsupported key type",
                 "{null: true}",
                 ExecutionError::unsupported_key_type(Value::Null),

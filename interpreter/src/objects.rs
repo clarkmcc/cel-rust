@@ -523,7 +523,9 @@ impl<'a> Value {
             Expression::Ident(name) => ctx.get_variable(&***name),
             Expression::FunctionCall(name, target, args) => {
                 if let Expression::Ident(name) = &**name {
-                    let func = ctx.get_function(&**name).unwrap();
+                    let func = ctx
+                        .get_function(&**name)
+                        .ok_or_else(|| ExecutionError::UndeclaredReference(Arc::clone(name)))?;
                     match target {
                         None => {
                             let mut ctx =
