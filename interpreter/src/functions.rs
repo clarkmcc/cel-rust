@@ -159,6 +159,10 @@ pub fn string(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
     })
 }
 
+pub fn bytes(value: Arc<String>) -> Result<Value> {
+    Ok(Value::Bytes(value.as_bytes().to_vec().into()))
+}
+
 // Performs a type conversion on the target.
 pub fn double(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
     Ok(match this {
@@ -747,6 +751,16 @@ mod tests {
             ("int", "10.string() == '10'"),
             ("float", "10.5.string() == '10.5'"),
             ("bytes", "b'foo'.string() == 'foo'"),
+        ]
+        .iter()
+        .for_each(assert_script);
+    }
+
+    #[test]
+    fn test_bytes() {
+        [
+            ("string", "bytes('abc') == b'abc'"),
+            ("bytes", "bytes('abc') == b'\\x61b\\x63'"),
         ]
         .iter()
         .for_each(assert_script);
