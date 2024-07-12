@@ -4,10 +4,9 @@
 // also mentioned in the [serde documentation](https://serde.rs/).
 
 use crate::{objects::Key, Value};
-use serde::ser::Error as SerdeError;
 use serde::{
     ser::{self, Impossible},
-    Serialize, Serializer as SerdeSerializer,
+    Serialize,
 };
 use std::{collections::HashMap, fmt::Display, iter::FromIterator, sync::Arc};
 use thiserror::Error;
