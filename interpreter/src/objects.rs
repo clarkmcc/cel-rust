@@ -9,7 +9,7 @@ use core::ops;
 use serde::{Serialize, Serializer};
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::convert::{TryFrom, TryInto};
+use std::convert::{Infallible, TryFrom, TryInto};
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 
@@ -130,15 +130,6 @@ impl<K: Into<Key>, V: Into<Value>> From<HashMap<K, V>> for Map {
     }
 }
 
-impl Serialize for &Map {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        self.map.as_ref().serialize(serializer)
-    }
-}
-
 pub trait TryIntoValue {
     type Error: std::error::Error + 'static;
     fn try_into_value(self) -> Result<Value, Self::Error>;
@@ -148,6 +139,13 @@ impl<T: Serialize> TryIntoValue for T {
     type Error = SerializationError;
     fn try_into_value(self) -> Result<Value, Self::Error> {
         to_value(self)
+    }
+}
+
+impl TryIntoValue for Value {
+    type Error = Infallible;
+    fn try_into_value(self) -> Result<Value, Self::Error> {
+        Ok(self)
     }
 }
 

@@ -546,6 +546,8 @@ fn _timestamp(i: &str) -> Result<DateTime<FixedOffset>> {
 mod tests {
     use crate::context::Context;
     use crate::testing::test_script;
+    use crate::{Program, Value};
+    use chrono::{DateTime, FixedOffset};
     use std::collections::HashMap;
 
     fn assert_script(input: &(&str, &str)) {
@@ -719,6 +721,18 @@ mod tests {
             )]
         .iter()
         .for_each(assert_script);
+    }
+
+    #[test]
+    fn test_timestamp_variable() {
+        let mut context = Context::default();
+        let ts: DateTime<FixedOffset> =
+            DateTime::parse_from_rfc3339("2023-05-29T00:00:00Z").unwrap();
+        context.add_variable("ts", Value::Timestamp(ts)).unwrap();
+
+        let program = Program::compile("ts == timestamp('2023-05-29T00:00:00Z')").unwrap();
+        let result = program.execute(&context).unwrap();
+        assert_eq!(result, true.into());
     }
 
     #[test]
