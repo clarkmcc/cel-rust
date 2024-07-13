@@ -13,8 +13,8 @@ use std::sync::Arc;
 
 type Result<T> = std::result::Result<T, ExecutionError>;
 
-/// FunctionCtx is a context object passed to functions when they are called.
-/// It contains references ot the target object (if the function is called as
+/// `FunctionContext` is a context object passed to functions when they are called.
+/// It contains references to the target object (if the function is called as
 /// a method), the program context ([`Context`]) which gives functions access
 /// to variables, and the arguments to the function call.
 #[derive(Clone)]
