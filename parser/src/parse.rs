@@ -134,7 +134,10 @@ pub fn parse_bytes(s: &str) -> Result<Vec<u8>, ParseError> {
                 }
             };
         }
-        res.extend(c.to_string().as_bytes());
+        let size = c.len_utf8();
+        let mut buffer = [0; 4];
+        c.encode_utf8(&mut buffer);
+        res.extend_from_slice(&buffer[..size]);
     }
     Ok(res)
 }
