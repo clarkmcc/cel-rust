@@ -261,7 +261,7 @@ pub fn matches(
 /// [`ExecutionError::NoSuchKey`] error.
 ///
 /// Operates similar to the `has` macro describe in the Go CEL implementation
-/// spec: https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros.
+/// spec: <https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros>.
 ///
 /// # Examples
 /// ```cel
@@ -282,7 +282,7 @@ pub fn has(ftx: &FunctionContext) -> Result<Value> {
 
 /// Maps the provided list to a new list by applying an expression to each
 /// input item. This function is intended to be used like the CEL-go `map`
-/// macro: https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros
+/// macro: <https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros>
 ///
 /// # Examples
 /// ```cel
@@ -315,7 +315,7 @@ pub fn map(
 /// returned true.
 ///
 /// This function is intended to be used like the CEL-go `filter` macro:
-/// https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros
+/// <https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros>
 ///
 /// # Example
 /// ```cel
@@ -349,7 +349,7 @@ pub fn filter(
 /// called on a map, the predicate is applied to the map keys.
 ///
 /// This function is intended to be used like the CEL-go `all` macro:
-/// https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros
+/// <https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros>
 ///
 /// # Example
 /// ```cel
@@ -392,7 +392,7 @@ pub fn all(
 /// called on a map, the predicate is applied to the map keys.
 ///
 /// This function is intended to be used like the CEL-go `exists` macro:
-/// https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros
+/// <https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros>
 ///
 /// # Example
 /// ```cel
@@ -435,7 +435,7 @@ pub fn exists(
 /// called on a map, the predicate is applied to the map keys.
 ///
 /// This function is intended to be used like the CEL-go `exists` macro:
-/// https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros
+/// <https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros>
 ///
 /// # Example
 /// ```cel
