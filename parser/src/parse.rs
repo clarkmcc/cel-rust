@@ -402,7 +402,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::parse::ParseError;
-    use crate::parse_string;
+    use crate::{parse_bytes, parse_string};
 
     #[test]
     fn single_quotes_interprets_escapes() {
@@ -524,5 +524,11 @@ mod tests {
             let result = parse_string(s);
             assert_eq!(result, expected, "Testing {}", s);
         }
+    }
+
+    #[test]
+    fn parses_bytes() {
+        let bytes = parse_bytes("abc💖\\xFF\\376").expect("Must parse!");
+        assert_eq!([97, 98, 99, 240, 159, 146, 150, 255, 254], *bytes)
     }
 }
