@@ -32,12 +32,15 @@ pub enum Context<'a> {
     Root {
         functions: FunctionRegistry,
         variables: HashMap<String, Value>,
+        dynamic_resolver: Option<DynamicResolverFn>,
     },
     Child {
         parent: &'a Context<'a>,
         variables: HashMap<String, Value>,
     },
 }
+
+type DynamicResolverFn = Box<dyn Fn(&str) -> Option<Value> + Sync + Send>;
 
 impl<'a> Context<'a> {
     pub fn add_variable<S, V>(
@@ -85,12 +88,25 @@ impl<'a> Context<'a> {
                 .get(&name)
                 .cloned()
                 .or_else(|| parent.get_variable(&name).ok())
-                .ok_or_else(|| ExecutionError::UndeclaredReference(name.into())),
+                .map_or_else(|| self.get_dynamic_variable(name), Ok),
             Context::Root { variables, .. } => variables
                 .get(&name)
                 .cloned()
-                .ok_or_else(|| ExecutionError::UndeclaredReference(name.into())),
+                .map_or_else(|| self.get_dynamic_variable(name), Ok),
         }
+    }
+
+    pub fn get_dynamic_variable<S>(&self, name: S) -> Result<Value, ExecutionError>
+    where
+        S: Into<String>,
+    {
+        let name = name.into();
+        return if let Some(dynamic_resolver) = self.get_dynamic_resolver() {
+            (dynamic_resolver)(name.as_str())
+                .ok_or_else(|| ExecutionError::UndeclaredReference(name.into()))
+        } else {
+            Err(ExecutionError::UndeclaredReference(name.into()))
+        };
     }
 
     pub(crate) fn has_function<S>(&self, name: S) -> bool
@@ -124,6 +140,27 @@ impl<'a> Context<'a> {
         };
     }
 
+    pub fn set_dynamic_resolver<F>(&mut self, handler: F)
+    where
+        F: Fn(&str) -> Option<Value> + Sync + Send + 'static,
+    {
+        if let Context::Root {
+            dynamic_resolver, ..
+        } = self
+        {
+            *dynamic_resolver = Some(Box::new(handler));
+        };
+    }
+
+    pub(crate) fn get_dynamic_resolver(&self) -> &Option<DynamicResolverFn> {
+        match self {
+            Context::Root {
+                dynamic_resolver, ..
+            } => dynamic_resolver,
+            Context::Child { parent, .. } => parent.get_dynamic_resolver(),
+        }
+    }
+
     pub fn resolve(&self, expr: &Expression) -> Result<Value, ExecutionError> {
         Value::resolve(expr, self)
     }
@@ -145,6 +182,7 @@ impl<'a> Default for Context<'a> {
         let mut ctx = Context::Root {
             variables: Default::default(),
             functions: Default::default(),
+            dynamic_resolver: None,
         };
         ctx.add_function("contains", functions::contains);
         ctx.add_function("size", functions::size);
