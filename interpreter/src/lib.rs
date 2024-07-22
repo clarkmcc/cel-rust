@@ -1,6 +1,6 @@
 extern crate core;
 
-use cel_parser::{parse, ExpressionReferences};
+use cel_parser::{parse, ExpressionReferences, Member};
 use std::convert::TryFrom;
 use std::sync::Arc;
 use thiserror::Error;
@@ -62,6 +62,30 @@ pub enum ExecutionError {
     /// Indicates that a comparison could not be performed.
     #[error("{0:?} can not be compared to {1:?}")]
     ValuesNotComparable(Value, Value),
+    /// Indicates that an operator was used on a type that does not support it.
+    #[error("Unsupported unary operator '{0}': {1:?}")]
+    UnsupportedUnaryOperator(&'static str, Value),
+    /// Indicates that an unsupported binary operator was applied on two values
+    /// where it's unsupported, for example list + map.
+    #[error("Unsupported binary operator '{0}': {1:?}, {2:?}")]
+    UnsupportedBinaryOperator(&'static str, Value, Value),
+    /// Indicates that an unsupported type was used to index a map
+    #[error("Cannot use value as map index: {0:?}")]
+    UnsupportedMapIndex(Value),
+    /// Indicates that an unsupported type was used to index a list
+    #[error("Cannot use value as list index: {0:?}")]
+    UnsupportedListIndex(Value),
+    /// Indicates that an unsupported type was used to index a list
+    #[error("Cannot use value {0:?} to index {1:?}")]
+    UnsupportedIndex(Value, Value),
+    /// Indicates that a function call occurred without an [`Expression::Ident`]
+    /// as the function identifier.
+    #[error("Unsupported function call identifier type: {0:?}")]
+    UnsupportedFunctionCallIdentifierType(Expression),
+    /// Indicates that a [`Member::Fields`] construction was attempted
+    /// which is not yet supported.
+    #[error("Unsupported fields construction: {0:?}")]
+    UnsupportedFieldsConstruction(Member),
     /// Indicates that a function had an error during execution.
     #[error("Error executing function '{function}': {message}")]
     FunctionError { function: String, message: String },
