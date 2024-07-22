@@ -416,7 +416,6 @@ impl<'a> Value {
                     ArithmeticOp::Multiply => left * right,
                     ArithmeticOp::Modulus => left % right,
                 }
-                .into()
             }
             Expression::Relation(left, op, right) => {
                 let left = Value::resolve(left, ctx)?;
@@ -447,8 +446,11 @@ impl<'a> Value {
                     RelationOp::In => match (left, right) {
                         (Value::String(l), Value::String(r)) => r.contains(&*l),
                         (any, Value::List(v)) => v.contains(&any),
-                        (any, Value::Map(m)) => m.map.contains_key(&any.try_into().unwrap()),
-                        _ => unimplemented!(),
+                        (any, Value::Map(m)) => match any.try_into() {
+                            Ok(key) => m.map.contains_key(&key),
+                            Err(_) => false,
+                        },
+                        (left, right) => Err(ExecutionError::ValuesNotComparable(left, right))?,
                     },
                 };
                 Value::Bool(res).into()
@@ -477,21 +479,20 @@ impl<'a> Value {
             Expression::Unary(op, expr) => {
                 let expr = Value::resolve(expr, ctx)?;
                 match op {
-                    UnaryOp::Not => Value::Bool(!expr.to_bool()),
-                    UnaryOp::DoubleNot => Value::Bool(expr.to_bool()),
+                    UnaryOp::Not => Ok(Value::Bool(!expr.to_bool())),
+                    UnaryOp::DoubleNot => Ok(Value::Bool(expr.to_bool())),
                     UnaryOp::Minus => match expr {
-                        Value::Int(i) => Value::Int(-i),
-                        Value::Float(i) => Value::Float(-i),
-                        _ => unimplemented!(),
+                        Value::Int(i) => Ok(Value::Int(-i)),
+                        Value::Float(i) => Ok(Value::Float(-i)),
+                        value => Err(ExecutionError::UnsupportedUnaryOperator("minus", value)),
                     },
                     UnaryOp::DoubleMinus => match expr {
-                        Value::Int(_) => expr,
-                        Value::UInt(_) => expr,
-                        Value::Float(_) => expr,
-                        _ => unimplemented!(),
+                        Value::Int(_) => Ok(expr),
+                        Value::UInt(_) => Ok(expr),
+                        Value::Float(_) => Ok(expr),
+                        value => Err(ExecutionError::UnsupportedUnaryOperator("negate", value)),
                     },
                 }
-                .into()
             }
             Expression::Member(left, right) => {
                 let left = Value::resolve(left, ctx)?;
@@ -541,7 +542,9 @@ impl<'a> Value {
                         }
                     }
                 } else {
-                    unreachable!("a function name should always be a `Expression::Ident`")
+                    Err(ExecutionError::UnsupportedFunctionCallIdentifierType(
+                        (**name).clone(),
+                    ))
                 }
             }
         }
@@ -560,9 +563,11 @@ impl<'a> Value {
             Member::Index(idx) => {
                 let idx = Value::resolve(idx, ctx)?;
                 match (self, idx) {
-                    (Value::List(items), Value::Int(idx)) => {
-                        items.get(idx as usize).unwrap().clone().into()
-                    }
+                    (Value::List(items), Value::Int(idx)) => items
+                        .get(idx as usize)
+                        .cloned()
+                        .unwrap_or(Value::Null)
+                        .into(),
                     (Value::String(str), Value::Int(idx)) => {
                         match str.get(idx as usize..(idx + 1) as usize) {
                             None => Value::Null,
@@ -590,10 +595,14 @@ impl<'a> Value {
                         .cloned()
                         .unwrap_or(Value::Null)
                         .into(),
-                    _ => unimplemented!(),
+                    (Value::Map(_), index) => Err(ExecutionError::UnsupportedMapIndex(index)),
+                    (Value::List(_), index) => Err(ExecutionError::UnsupportedListIndex(index)),
+                    (value, index) => Err(ExecutionError::UnsupportedIndex(value, index)),
                 }
             }
-            Member::Fields(_) => unimplemented!(),
+            Member::Fields(_) => Err(ExecutionError::UnsupportedFieldsConstruction(
+                member.clone(),
+            )),
             Member::Attribute(name) => {
                 // This will always either be because we're trying to access
                 // a property on self, or a method on self.
@@ -605,10 +614,10 @@ impl<'a> Value {
                 // If the property is both an attribute and a method, then we
                 // give priority to the property. Maybe we can implement lookahead
                 // to see if the next token is a function call?
-                match (child.is_some(), ctx.has_function(&***name)) {
-                    (false, false) => NoSuchKey(name.clone()).into(),
-                    (true, true) | (true, false) => child.unwrap().into(),
-                    (false, true) => Value::Function(name.clone(), Some(self.into())).into(),
+                match (child, ctx.has_function(&***name)) {
+                    (None, false) => NoSuchKey(name.clone()).into(),
+                    (Some(child), _) => child.into(),
+                    (None, true) => Value::Function(name.clone(), Some(self.into())).into(),
                 }
             }
         }
@@ -649,29 +658,29 @@ impl From<&Atom> for Value {
 }
 
 impl ops::Add<Value> for Value {
-    type Output = Value;
+    type Output = ResolveResult;
 
     #[inline(always)]
     fn add(self, rhs: Value) -> Self::Output {
         match (self, rhs) {
-            (Value::Int(l), Value::Int(r)) => Value::Int(l + r),
-            (Value::UInt(l), Value::UInt(r)) => Value::UInt(l + r),
+            (Value::Int(l), Value::Int(r)) => Value::Int(l + r).into(),
+            (Value::UInt(l), Value::UInt(r)) => Value::UInt(l + r).into(),
 
             // Float matrix
-            (Value::Float(l), Value::Float(r)) => Value::Float(l + r),
-            (Value::Int(l), Value::Float(r)) => Value::Float(l as f64 + r),
-            (Value::Float(l), Value::Int(r)) => Value::Float(l + r as f64),
-            (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 + r),
-            (Value::Float(l), Value::UInt(r)) => Value::Float(l + r as f64),
+            (Value::Float(l), Value::Float(r)) => Value::Float(l + r).into(),
+            (Value::Int(l), Value::Float(r)) => Value::Float(l as f64 + r).into(),
+            (Value::Float(l), Value::Int(r)) => Value::Float(l + r as f64).into(),
+            (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 + r).into(),
+            (Value::Float(l), Value::UInt(r)) => Value::Float(l + r as f64).into(),
 
             (Value::List(l), Value::List(r)) => {
-                Value::List(l.iter().chain(r.iter()).cloned().collect::<Vec<_>>().into())
+                Value::List(l.iter().chain(r.iter()).cloned().collect::<Vec<_>>().into()).into()
             }
             (Value::String(l), Value::String(r)) => {
                 let mut new = String::with_capacity(l.len() + r.len());
                 new.push_str(&l);
                 new.push_str(&r);
-                Value::String(new.into())
+                Value::String(new.into()).into()
             }
             // Merge two maps should overwrite keys in the left map with the right map
             (Value::Map(l), Value::Map(r)) => {
@@ -682,106 +691,116 @@ impl ops::Add<Value> for Value {
                 for (k, v) in r.map.iter() {
                     new.insert(k.clone(), v.clone());
                 }
-                Value::Map(Map { map: Arc::new(new) })
+                Value::Map(Map { map: Arc::new(new) }).into()
             }
-            (Value::Duration(l), Value::Duration(r)) => Value::Duration(l + r),
-            (Value::Timestamp(l), Value::Duration(r)) => Value::Timestamp(l + r),
-            (Value::Duration(l), Value::Timestamp(r)) => Value::Timestamp(r + l),
-            _ => unimplemented!(),
+            (Value::Duration(l), Value::Duration(r)) => Value::Duration(l + r).into(),
+            (Value::Timestamp(l), Value::Duration(r)) => Value::Timestamp(l + r).into(),
+            (Value::Duration(l), Value::Timestamp(r)) => Value::Timestamp(r + l).into(),
+            (left, right) => Err(ExecutionError::UnsupportedBinaryOperator(
+                "add", left, right,
+            )),
         }
     }
 }
 
 impl ops::Sub<Value> for Value {
-    type Output = Value;
+    type Output = ResolveResult;
 
     #[inline(always)]
     fn sub(self, rhs: Value) -> Self::Output {
         match (self, rhs) {
-            (Value::Int(l), Value::Int(r)) => Value::Int(l - r),
-            (Value::UInt(l), Value::UInt(r)) => Value::UInt(l - r),
+            (Value::Int(l), Value::Int(r)) => Value::Int(l - r).into(),
+            (Value::UInt(l), Value::UInt(r)) => Value::UInt(l - r).into(),
 
             // Float matrix
-            (Value::Float(l), Value::Float(r)) => Value::Float(l - r),
-            (Value::Int(l), Value::Float(r)) => Value::Float(l as f64 - r),
-            (Value::Float(l), Value::Int(r)) => Value::Float(l - r as f64),
-            (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 - r),
-            (Value::Float(l), Value::UInt(r)) => Value::Float(l - r as f64),
+            (Value::Float(l), Value::Float(r)) => Value::Float(l - r).into(),
+            (Value::Int(l), Value::Float(r)) => Value::Float(l as f64 - r).into(),
+            (Value::Float(l), Value::Int(r)) => Value::Float(l - r as f64).into(),
+            (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 - r).into(),
+            (Value::Float(l), Value::UInt(r)) => Value::Float(l - r as f64).into(),
             // todo: implement checked sub for these over-flowable operations
-            (Value::Duration(l), Value::Duration(r)) => Value::Duration(l - r),
-            (Value::Timestamp(l), Value::Duration(r)) => Value::Timestamp(l - r),
-            (Value::Timestamp(l), Value::Timestamp(r)) => Value::Duration(l - r),
-            _ => unimplemented!(),
+            (Value::Duration(l), Value::Duration(r)) => Value::Duration(l - r).into(),
+            (Value::Timestamp(l), Value::Duration(r)) => Value::Timestamp(l - r).into(),
+            (Value::Timestamp(l), Value::Timestamp(r)) => Value::Duration(l - r).into(),
+            (left, right) => Err(ExecutionError::UnsupportedBinaryOperator(
+                "sub", left, right,
+            )),
         }
     }
 }
 
 impl ops::Div<Value> for Value {
-    type Output = Value;
+    type Output = ResolveResult;
 
     #[inline(always)]
     fn div(self, rhs: Value) -> Self::Output {
         match (self, rhs) {
-            (Value::Int(l), Value::Int(r)) => Value::Int(l / r),
-            (Value::UInt(l), Value::UInt(r)) => Value::UInt(l / r),
+            (Value::Int(l), Value::Int(r)) => Value::Int(l / r).into(),
+            (Value::UInt(l), Value::UInt(r)) => Value::UInt(l / r).into(),
 
             // Float matrix
-            (Value::Float(l), Value::Float(r)) => Value::Float(l / r),
-            (Value::Int(l), Value::Float(r)) => Value::Float(l as f64 / r),
-            (Value::Float(l), Value::Int(r)) => Value::Float(l / r as f64),
-            (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 / r),
-            (Value::Float(l), Value::UInt(r)) => Value::Float(l / r as f64),
+            (Value::Float(l), Value::Float(r)) => Value::Float(l / r).into(),
+            (Value::Int(l), Value::Float(r)) => Value::Float(l as f64 / r).into(),
+            (Value::Float(l), Value::Int(r)) => Value::Float(l / r as f64).into(),
+            (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 / r).into(),
+            (Value::Float(l), Value::UInt(r)) => Value::Float(l / r as f64).into(),
 
-            _ => unimplemented!(),
+            (left, right) => Err(ExecutionError::UnsupportedBinaryOperator(
+                "div", left, right,
+            )),
         }
     }
 }
 
 impl ops::Mul<Value> for Value {
-    type Output = Value;
+    type Output = ResolveResult;
 
     #[inline(always)]
     fn mul(self, rhs: Value) -> Self::Output {
         match (self, rhs) {
-            (Value::Int(l), Value::Int(r)) => Value::Int(l * r),
-            (Value::UInt(l), Value::UInt(r)) => Value::UInt(l * r),
+            (Value::Int(l), Value::Int(r)) => Value::Int(l * r).into(),
+            (Value::UInt(l), Value::UInt(r)) => Value::UInt(l * r).into(),
 
             // Float matrix
-            (Value::Float(l), Value::Float(r)) => Value::Float(l * r),
-            (Value::Int(l), Value::Float(r)) => Value::Float(l as f64 * r),
-            (Value::Float(l), Value::Int(r)) => Value::Float(l * r as f64),
-            (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 * r),
-            (Value::Float(l), Value::UInt(r)) => Value::Float(l * r as f64),
+            (Value::Float(l), Value::Float(r)) => Value::Float(l * r).into(),
+            (Value::Int(l), Value::Float(r)) => Value::Float(l as f64 * r).into(),
+            (Value::Float(l), Value::Int(r)) => Value::Float(l * r as f64).into(),
+            (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 * r).into(),
+            (Value::Float(l), Value::UInt(r)) => Value::Float(l * r as f64).into(),
 
-            _ => unimplemented!(),
+            (left, right) => Err(ExecutionError::UnsupportedBinaryOperator(
+                "mul", left, right,
+            )),
         }
     }
 }
 
 impl ops::Rem<Value> for Value {
-    type Output = Value;
+    type Output = ResolveResult;
 
     #[inline(always)]
     fn rem(self, rhs: Value) -> Self::Output {
         match (self, rhs) {
-            (Value::Int(l), Value::Int(r)) => Value::Int(l % r),
-            (Value::UInt(l), Value::UInt(r)) => Value::UInt(l % r),
+            (Value::Int(l), Value::Int(r)) => Value::Int(l % r).into(),
+            (Value::UInt(l), Value::UInt(r)) => Value::UInt(l % r).into(),
 
             // Float matrix
-            (Value::Float(l), Value::Float(r)) => Value::Float(l % r),
-            (Value::Int(l), Value::Float(r)) => Value::Float(l as f64 % r),
-            (Value::Float(l), Value::Int(r)) => Value::Float(l % r as f64),
-            (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 % r),
-            (Value::Float(l), Value::UInt(r)) => Value::Float(l % r as f64),
+            (Value::Float(l), Value::Float(r)) => Value::Float(l % r).into(),
+            (Value::Int(l), Value::Float(r)) => Value::Float(l as f64 % r).into(),
+            (Value::Float(l), Value::Int(r)) => Value::Float(l % r as f64).into(),
+            (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 % r).into(),
+            (Value::Float(l), Value::UInt(r)) => Value::Float(l % r as f64).into(),
 
-            _ => unimplemented!(),
+            (left, right) => Err(ExecutionError::UnsupportedBinaryOperator(
+                "rem", left, right,
+            )),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{objects::Key, Context, Program, Value};
+    use crate::{objects::Key, Context, ExecutionError, Program, Value};
     use std::collections::HashMap;
     use std::sync::Arc;
 
@@ -869,5 +888,54 @@ mod tests {
             .unwrap();
         context.add_variable("size", Value::Int(3)).unwrap();
         assert_eq!(program.execute(&context).unwrap(), Value::Bool(true));
+    }
+
+    fn test_execution_error(program: &str, expected: ExecutionError) {
+        let program = Program::compile(program).unwrap();
+        let result = program.execute(&Context::default());
+        assert_eq!(result.unwrap_err(), expected);
+    }
+
+    #[test]
+    fn test_invalid_sub() {
+        test_execution_error(
+            "'foo' - 10",
+            ExecutionError::UnsupportedBinaryOperator("sub", "foo".into(), Value::Int(10)),
+        );
+    }
+
+    #[test]
+    fn test_invalid_add() {
+        test_execution_error(
+            "'foo' + 10",
+            ExecutionError::UnsupportedBinaryOperator("add", "foo".into(), Value::Int(10)),
+        );
+    }
+
+    #[test]
+    fn test_invalid_div() {
+        test_execution_error(
+            "'foo' / 10",
+            ExecutionError::UnsupportedBinaryOperator("div", "foo".into(), Value::Int(10)),
+        );
+    }
+
+    #[test]
+    fn test_invalid_rem() {
+        test_execution_error(
+            "'foo' % 10",
+            ExecutionError::UnsupportedBinaryOperator("rem", "foo".into(), Value::Int(10)),
+        );
+    }
+
+    #[test]
+    fn out_of_bound_list_access() {
+        let program = Program::compile("list[10]").unwrap();
+        let mut context = Context::default();
+        context
+            .add_variable("list", Value::List(Arc::new(vec![])))
+            .unwrap();
+        let result = program.execute(&context);
+        assert_eq!(result.unwrap(), Value::Null);
     }
 }
