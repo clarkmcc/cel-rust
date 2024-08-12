@@ -9,7 +9,7 @@ axum = { version = "0.7.5", default-features = false, features = [
     "json",
     "tokio",
 ] }
-cel-interpreter = { path = "../interpreter" }
+cel-interpreter = { path = "../interpreter", features = ["json"] }
 chrono = "0.4.26"
 serde = { version = "1.0.196", features = ["derive"] }
 thiserror = { version = "1.0.61", default-features = false }
@@ -42,3 +42,8 @@ path = "src/serde.rs"
 [[bin]]
 name = "axum"
 path = "src/axum.rs"
+
+[[bin]]
+name = "json"
+path = "src/json.rs"
+
