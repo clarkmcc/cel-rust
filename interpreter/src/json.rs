@@ -51,36 +51,23 @@ impl Value {
 mod tests {
     use crate::objects::Map;
     use crate::Value as CelValue;
-    use serde_json::Value as SerdeValue;
+    use serde_json::json;
     use std::collections::HashMap;
 
     #[test]
     fn test_cel_value_to_json() {
         let tests = [
+            (json!("hello"), CelValue::String("hello".to_string().into())),
+            (json!(42), CelValue::Int(42)),
+            (json!(42.0), CelValue::Float(42.0)),
+            (json!(true), CelValue::Bool(true)),
+            (json!(null), CelValue::Null),
             (
-                SerdeValue::String("hello".to_string()),
-                CelValue::String("hello".to_string().into()),
-            ),
-            (
-                SerdeValue::Number(serde_json::Number::from(42)),
-                CelValue::Int(42),
-            ),
-            (
-                SerdeValue::Number(serde_json::Number::from_f64(42.0).unwrap()),
-                CelValue::Float(42.0),
-            ),
-            (SerdeValue::Bool(true), CelValue::Bool(true)),
-            (SerdeValue::Null, CelValue::Null),
-            (
-                SerdeValue::Array(vec![SerdeValue::Bool(true), SerdeValue::Null]),
+                json!([true, null]),
                 CelValue::List(vec![CelValue::Bool(true), CelValue::Null].into()),
             ),
             (
-                SerdeValue::Object({
-                    let mut obj = serde_json::Map::new();
-                    obj.insert("hello".to_string(), SerdeValue::String("world".to_string()));
-                    obj
-                }),
+                json!({"hello": "world"}),
                 CelValue::Map(Map::from(HashMap::from([(
                     "hello".to_string(),
                     CelValue::String("world".to_string().into()),
