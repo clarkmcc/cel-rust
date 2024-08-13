@@ -1,4 +1,5 @@
 use crate::Value;
+use base64::prelude::*;
 use chrono::Duration;
 use thiserror::Error;
 
@@ -31,7 +32,6 @@ impl Value {
     /// assert_eq!(result, serde_json::Value::Null);
     /// ```
     pub fn json(&self) -> Result<serde_json::Value, ConvertToJsonError> {
-        use base64::prelude::*;
         Ok(match *self {
             Value::List(ref vec) => serde_json::Value::Array(
                 vec.iter()
