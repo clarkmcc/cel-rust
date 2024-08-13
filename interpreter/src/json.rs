@@ -1,11 +1,17 @@
 use crate::duration::format_duration;
 use crate::Value;
+use chrono::Duration;
 use thiserror::Error;
 
 /// Error converting a CEL value to a JSON value.
 #[derive(Debug, Clone, Error)]
 #[error("unable to convert value to json: {0:?}")]
-pub struct ConvertToJsonError<'a>(&'a Value);
+pub enum ConvertToJsonError<'a> {
+    #[error("unable to convert value to json: {0:?}")]
+    Value(&'a Value),
+    #[error("duration too large to convert to nanoseconds: {0:?}")]
+    DurationOverflow(&'a Duration),
+}
 
 impl Value {
     /// Converts a CEL value to a JSON value.
@@ -43,8 +49,11 @@ impl Value {
             Value::Timestamp(ref dt) => dt.to_rfc3339().into(),
             Value::Bytes(ref b) => BASE64_STANDARD.encode(b.as_slice()).to_string().into(),
             Value::Null => serde_json::Value::Null,
-            Value::Duration(v) => format_duration(&v).to_string().into(),
-            _ => return Err(ConvertToJsonError(self)),
+            Value::Duration(ref v) => serde_json::Value::Number(serde_json::Number::from(
+                v.num_nanoseconds()
+                    .ok_or(ConvertToJsonError::DurationOverflow(v))?,
+            )),
+            _ => return Err(ConvertToJsonError::Value(self)),
         })
     }
 }
@@ -65,7 +74,10 @@ mod tests {
             (json!(42.0), CelValue::Float(42.0)),
             (json!(true), CelValue::Bool(true)),
             (json!(null), CelValue::Null),
-            (json!("1s"), CelValue::Duration(Duration::seconds(1))),
+            (
+                json!(1_000_000_000),
+                CelValue::Duration(Duration::seconds(1)),
+            ),
             (
                 json!([true, null]),
                 CelValue::List(vec![CelValue::Bool(true), CelValue::Null].into()),
