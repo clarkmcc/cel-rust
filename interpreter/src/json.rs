@@ -49,6 +49,7 @@ impl Value {
 
 #[cfg(test)]
 mod tests {
+    use crate::objects::Map;
     use crate::Value as CelValue;
     use serde_json::Value as SerdeValue;
     use std::collections::HashMap;
@@ -80,13 +81,10 @@ mod tests {
                     obj.insert("hello".to_string(), SerdeValue::String("world".to_string()));
                     obj
                 }),
-                CelValue::Map(
-                    HashMap::from([(
-                        "hello".to_string(),
-                        CelValue::String("world".to_string().into()),
-                    )])
-                        .into(),
-                ),
+                CelValue::Map(Map::from(HashMap::from([(
+                    "hello".to_string(),
+                    CelValue::String("world".to_string().into()),
+                )]))),
             ),
         ];
 
