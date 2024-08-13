@@ -1,14 +1,18 @@
-use crate::duration::format_duration;
 use crate::Value;
 use chrono::Duration;
 use thiserror::Error;
 
-/// Error converting a CEL value to a JSON value.
 #[derive(Debug, Clone, Error)]
 #[error("unable to convert value to json: {0:?}")]
 pub enum ConvertToJsonError<'a> {
+    /// We cannot convert the CEL value to JSON. Some CEL types (like functions) are
+    /// not representable in JSON.
     #[error("unable to convert value to json: {0:?}")]
     Value(&'a Value),
+
+    /// The duration is too large to convert to nanoseconds. Any duration of 2^63
+    /// nanoseconds or more will overflow. We'll return the duration type in the
+    /// error message.
     #[error("duration too large to convert to nanoseconds: {0:?}")]
     DurationOverflow(&'a Duration),
 }
