@@ -1,3 +1,4 @@
+use crate::duration::format_duration;
 use crate::Value;
 use thiserror::Error;
 
@@ -42,6 +43,7 @@ impl Value {
             Value::Timestamp(ref dt) => dt.to_rfc3339().into(),
             Value::Bytes(ref b) => BASE64_STANDARD.encode(b.as_slice()).to_string().into(),
             Value::Null => serde_json::Value::Null,
+            Value::Duration(v) => format_duration(&v).to_string().into(),
             _ => return Err(ConvertToJsonError(self)),
         })
     }
@@ -51,6 +53,7 @@ impl Value {
 mod tests {
     use crate::objects::Map;
     use crate::Value as CelValue;
+    use chrono::Duration;
     use serde_json::json;
     use std::collections::HashMap;
 
@@ -62,6 +65,7 @@ mod tests {
             (json!(42.0), CelValue::Float(42.0)),
             (json!(true), CelValue::Bool(true)),
             (json!(null), CelValue::Null),
+            (json!("1s"), CelValue::Duration(Duration::seconds(1))),
             (
                 json!([true, null]),
                 CelValue::List(vec![CelValue::Bool(true), CelValue::Null].into()),
