@@ -568,6 +568,22 @@ mod tests {
     use serde_bytes::Bytes;
     use std::{collections::HashMap, iter::FromIterator, sync::Arc};
 
+    macro_rules! primitive_test {
+        ($functionName:ident, $strValue: literal, $value: literal) => {
+            #[test]
+            fn $functionName() {
+                let program = Program::compile($strValue).unwrap();
+                let result = program.execute(&Context::default());
+                assert_eq!(Value::from($value), result.unwrap());
+            }
+        };
+    }
+
+    primitive_test!(test_u64_zero, "0u", 0_u64);
+    primitive_test!(test_i64_zero, "0", 0_i64);
+    primitive_test!(test_f64_zero, "0.0", 0_f64);
+    //primitive_test!(test_f64_zero, "0.", 0_f64); this test fails
+
     #[test]
     fn test_primitives() {
         #[derive(Serialize)]
