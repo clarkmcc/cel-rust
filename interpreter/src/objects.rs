@@ -13,7 +13,7 @@ use std::convert::{Infallible, TryFrom, TryInto};
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Default, Debug, PartialEq, Clone)]
 pub struct Map {
     pub map: Arc<HashMap<Key, Value>>,
 }

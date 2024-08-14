@@ -3,7 +3,10 @@ name = "cel-interpreter"
 description = "An interpreter for the Common Expression Language (CEL)"
 repository = "https://github.com/clarkmcc/cel-rust"
 version = "0.8.1"
-authors = ["Tom Forbes <tom@tomforb.es>", "Clark McCauley <me@clarkmccauley.com>"]
+authors = [
+    "Tom Forbes <tom@tomforb.es>",
+    "Clark McCauley <me@clarkmccauley.com>",
+]
 edition = "2021"
 license = "MIT"
 categories = ["compilers"]
@@ -20,7 +23,13 @@ regex = "1.10.5"
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
 serde_bytes = "0.11.14"
+cucumber = "0.20"
+futures = "0.3"
 
 [[bench]]
 name = "runtime"
+harness = false
+
+[[test]]
+name = "conformance"
 harness = false
