@@ -100,6 +100,17 @@ impl Serialize for Key {
     }
 }
 
+impl Display for Key {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Key::Int(v) => write!(f, "{}", v),
+            Key::Uint(v) => write!(f, "{}", v),
+            Key::Bool(v) => write!(f, "{}", v),
+            Key::String(v) => write!(f, "{}", v),
+        }
+    }
+}
+
 /// Implement conversions from [`Key`] into [`Value`]
 
 impl TryInto<Key> for Value {
@@ -514,10 +525,9 @@ impl<'a> Value {
                     let value = Value::resolve(v, ctx)?;
                     map.insert(key, value);
                 }
-                Value::Map(Map {
+                Ok(Value::Map(Map {
                     map: Arc::from(map),
-                })
-                .into()
+                }))
             }
             Expression::Ident(name) => ctx.get_variable(&***name),
             Expression::FunctionCall(name, target, args) => {
@@ -570,10 +580,9 @@ impl<'a> Value {
                         .into(),
                     (Value::String(str), Value::Int(idx)) => {
                         match str.get(idx as usize..(idx + 1) as usize) {
-                            None => Value::Null,
-                            Some(str) => Value::String(str.to_string().into()),
+                            None => Ok(Value::Null),
+                            Some(str) => Ok(Value::String(str.to_string().into())),
                         }
-                        .into()
                     }
                     (Value::Map(map), Value::String(property)) => map
                         .get(&property.into())

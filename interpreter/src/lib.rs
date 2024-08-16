@@ -19,8 +19,12 @@ pub mod objects;
 mod resolvers;
 mod ser;
 pub use ser::to_value;
+
+#[cfg(feature = "json")]
+mod json;
 #[cfg(test)]
 mod testing;
+
 use magic::FromContext;
 
 pub mod extractors {
