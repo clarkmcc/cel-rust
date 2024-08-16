@@ -122,9 +122,9 @@ RelationOp: RelationOp = {
 Atom: Atom = {
     // Integer literals. Annoying to parse :/
     r"-?[0-9]+" => Atom::Int(<>.parse().unwrap()),
-    <s:r"-?0[xX][0-9a-fA-F]+"> => Atom::Int(i64::from_str_radix(&s[1..], 16).unwrap()),
+    <s:r"-?0[xX][0-9a-fA-F]+"> => Atom::Int(i64::from_str_radix(&s.chars().filter(|&x| x != 'x' && x != 'X').collect::<String>(), 16).unwrap()),
     <s:r"[0-9]+[uU]"> => Atom::UInt(s[..s.len()-1].parse().unwrap()),
-    <s:r"-?0[xX][0-9a-fA-F]+[uU]"> => Atom::UInt(u64::from_str_radix(&s[1..s.len()-1], 16).unwrap()),
+    <s:r"-?0[xX][0-9a-fA-F]+[uU]"> => Atom::UInt(u64::from_str_radix(&s.chars().filter(|&x| x != 'x' && x != 'X' && x != 'u' && x != 'U').collect::<String>(), 16).unwrap()),
 
     // Float with decimals and optional exponent
     r"([-+]?[0-9]*\.[0-9]+([eE][-+]?[0-9]+)?)" => Atom::Float(<>.parse().unwrap()),
