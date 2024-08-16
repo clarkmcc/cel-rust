@@ -569,7 +569,7 @@ mod tests {
     use std::{collections::HashMap, iter::FromIterator, sync::Arc};
 
     macro_rules! primitive_test {
-        ($functionName:ident, $strValue: literal, $value: literal) => {
+        ($functionName:ident, $strValue: literal, $value: expr) => {
             #[test]
             fn $functionName() {
                 let program = Program::compile($strValue).unwrap();
@@ -583,9 +583,17 @@ mod tests {
     primitive_test!(test_i64_zero, "0", 0_i64);
     primitive_test!(test_f64_zero, "0.0", 0_f64);
     //primitive_test!(test_f64_zero, "0.", 0_f64); this test fails
+    primitive_test!(test_bool_false, "false", false);
+    primitive_test!(test_bool_true, "true", true);
+    primitive_test!(test_string_empty, "\"\"", "");
+    primitive_test!(test_string_non_empty, "\"test\"", "test");
+    primitive_test!(test_byte_ones, r#"b"\001\001""#, vec!(1_u8, 1_u8));
+    // primitive_test!(test_triple_double_quoted_string, #"r"""""""#, "");
+    // primitive_test!(test_triple_single_quoted_string, "r''''''", "");
+    primitive_test!(test_utf8_character_as_bytes, "b'ÿ'", vec!(195_u8, 191_u8));
 
     #[test]
-    fn test_primitives() {
+    fn test_json_data_conversion() {
         #[derive(Serialize)]
         struct TestPrimitives {
             bool: bool,
