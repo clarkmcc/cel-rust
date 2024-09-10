@@ -29,8 +29,10 @@ pub use ser::SerializationError;
 
 #[cfg(feature = "json")]
 mod json;
-#[cfg(feature = "json")]
-pub use json::ConvertToJsonError;
+#[cfg(feature = "proto")]
+pub mod proto;
+#[cfg(test)]
+mod testing;
 
 use magic::FromContext;
 
