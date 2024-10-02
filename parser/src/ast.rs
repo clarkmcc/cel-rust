@@ -1,69 +1,115 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+use parse_display::Display;
+
+#[derive(Display, Debug, Eq, PartialEq, Clone)]
 pub enum RelationOp {
+    #[display("<")]
     LessThan,
+    #[display("<=")]
     LessThanEq,
+    #[display(">")]
     GreaterThan,
+    #[display(">=")]
     GreaterThanEq,
+    #[display("==")]
     Equals,
+    #[display("!=")]
     NotEquals,
+    #[display("in")]
     In,
 }
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Display, Debug, Eq, PartialEq, Clone)]
 pub enum ArithmeticOp {
+    #[display("+")]
     Add,
+    #[display("-")]
     Subtract,
+    #[display("*")]
     Divide,
+    #[display("/")]
     Multiply,
+    #[display("%")]
     Modulus,
 }
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Display, Debug, Eq, PartialEq, Clone)]
 pub enum UnaryOp {
+    #[display("!")]
     Not,
+    #[display("!!")]
     DoubleNot,
+    #[display("-")]
     Minus,
+    #[display("--")]
     DoubleMinus,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Display, Debug, PartialEq, Clone)]
 pub enum Expression {
+    #[display("{0} {1} {2}")]
     Arithmetic(Box<Expression>, ArithmeticOp, Box<Expression>),
+    #[display("{0} {1} {2}")]
     Relation(Box<Expression>, RelationOp, Box<Expression>),
 
+    #[display("{0} ? {1} : {2}")]
     Ternary(Box<Expression>, Box<Expression>, Box<Expression>),
+    #[display("{0} || {1}")]
     Or(Box<Expression>, Box<Expression>),
+    #[display("{0} && {1}")]
     And(Box<Expression>, Box<Expression>),
+    #[display("{0} {1}")]
     Unary(UnaryOp, Box<Expression>),
 
+    #[display("{0}{1}")]
     Member(Box<Expression>, Box<Member>),
-    FunctionCall(Box<Expression>, Option<Box<Expression>>, Vec<Expression>),
+    #[display("{1}{0}({2})")]
+    FunctionCall(
+        Box<Expression>,
+        #[display(with = display::FunctionCallMember)] Option<Box<Expression>>,
+        #[display(with = display::Csv)] Vec<Expression>,
+    ),
 
-    List(Vec<Expression>),
-    Map(Vec<(Expression, Expression)>),
+    #[display("[{0}]")]
+    List(#[display(with = display::Csv)] Vec<Expression>),
+    #[display("{{{0}}}")]
+    Map(#[display(with = display::Map)] Vec<(Expression, Expression)>),
 
+    #[display("{0}")]
     Atom(Atom),
+    #[display("{0}")]
     Ident(Arc<String>),
 }
 
-#[derive(Debug, PartialEq, Clone)]
+mod display;
+
+#[derive(Display, Debug, PartialEq, Clone)]
 pub enum Member {
+    #[display(".{0}")]
     Attribute(Arc<String>),
+    #[display("[{0}]")]
     Index(Box<Expression>),
-    Fields(Vec<(Arc<String>, Expression)>),
+    #[display("{{{0}}}")]
+    Fields(#[display(with = display::Map)] Vec<(Arc<String>, Expression)>),
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Display, Debug, PartialEq, Clone)]
 pub enum Atom {
+    #[display("{0}")]
     Int(i64),
+    #[display("{0}")]
     UInt(u64),
+    #[display("{0}")]
     Float(f64),
-    String(Arc<String>),
-    Bytes(Arc<Vec<u8>>),
+    #[display("{0}")]
+    String(#[display(with = display::StringAtom)] Arc<String>),
+    #[display("{0}")]
+    Bytes(#[display(with = display::BytesAtom)] Arc<Vec<u8>>),
+    #[display("{0}")]
     Bool(bool),
+    #[display("null")]
     Null,
 }
 
@@ -219,5 +265,16 @@ mod tests {
         assert!(refs.has_function("size"));
         assert!(refs.has_function("startsWith"));
         assert_eq!(refs.functions.len(), 2);
+    }
+
+    #[test]
+    fn test_display() {
+        let expr =
+            parse("foo.bar.baz == true && size(foo) > 0 && foo[0] == 1 && bar.startsWith('a')")
+                .unwrap();
+        assert_eq!(
+            &expr.to_string(),
+            "foo.bar.baz == true && size(foo) > 0 && foo.[0] == 1 && bar.startsWith(\"a\")"
+        );
     }
 }
