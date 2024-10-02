@@ -70,8 +70,11 @@ impl<'context> FunctionContext<'context> {
 /// ```skip
 /// size([1, 2, 3]) == 3
 /// ```
-pub fn size(ftx: &FunctionContext, value: Value) -> Result<i64> {
-    let size = match value {
+/// ```skip
+/// 'foobar'.size() == 6
+/// ```
+pub fn size(ftx: &FunctionContext, This(this): This<Value>) -> Result<i64> {
+    let size = match this {
         Value::List(l) => l.len(),
         Value::Map(m) => m.map.len(),
         Value::String(s) => s.len(),
@@ -565,6 +568,8 @@ mod tests {
             ("size of map", "size({'a': 1, 'b': 2, 'c': 3}) == 3"),
             ("size of string", "size('foo') == 3"),
             ("size of bytes", "size(b'foo') == 3"),
+            ("size as a list method", "[1, 2, 3].size() == 3"),
+            ("size as a string method", "'foobar'.size() == 6"),
         ]
         .iter()
         .for_each(assert_script);
