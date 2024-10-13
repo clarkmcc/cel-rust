@@ -14,7 +14,7 @@ use thiserror::Error;
 pub struct Serializer;
 pub struct KeySerializer;
 
-/// A special Duration type which allows conversion to [Value::Duration] for
+/// A wrapper Duration type which allows conversion to [Value::Duration] for
 /// types using automatic conversion with [serde::Serialize].
 ///
 /// It is only recommended to use this type with the cel_interpreter
@@ -57,7 +57,7 @@ impl ser::Serialize for Duration {
     }
 }
 
-/// A special Timestamp type which allows conversion to [Value::Timestamp] for
+/// A wrapper Timestamp type which allows conversion to [Value::Timestamp] for
 /// types using automatic conversion with [serde::Serialize].
 ///
 /// It is only recommended to use this type with the cel_interpreter
