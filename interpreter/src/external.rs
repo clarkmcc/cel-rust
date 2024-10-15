@@ -28,7 +28,7 @@ pub trait AsValue: Send + Sync {
     }
 
     #[inline]
-    fn to_value(&self, ty: ValueType) -> Option<Value> {
+    fn to_value(&self, hint: ValueType) -> Option<Value> {
         None
     }
 
