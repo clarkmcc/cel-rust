@@ -273,14 +273,12 @@ impl PartialEq for Value {
             (Value::Float(a), Value::UInt(b)) => *a == (*b as f64),
             (Value::External(a), b) if !a.is_opaque() => {
                 let a = a
-                    .as_value()
-                    .expect("non-opaque external must act like value");
+                    .as_value_expect();
                 a.value_eq(b)
             }
             (a, Value::External(b)) if !b.is_opaque() => {
                 let b = b
-                    .as_value()
-                    .expect("non-opaque external must act like value");
+                    .as_value_expect();
                 b.value_eq(a)
             }
             (_, _) => false,
@@ -323,14 +321,12 @@ impl PartialOrd for Value {
 
             (Value::External(a), b) if !a.is_opaque() => {
                 let a = a
-                    .as_value()
-                    .expect("non-opaque external must act like value");
+                    .as_value_expect();
                 a.value_cmp(b).ok()
             }
             (a, Value::External(b)) if !b.is_opaque() => {
                 let b = b
-                    .as_value()
-                    .expect("non-opaque external must act like value");
+                    .as_value_expect();
                 b.value_cmp(a).map(|ord| ord.reverse()).ok()
             }
 
@@ -630,8 +626,7 @@ impl<'a> Value {
                     (Value::List(_), index) => Err(ExecutionError::UnsupportedListIndex(index)),
                     (Value::External(external), index) if !external.is_opaque() => {
                         let external = external
-                            .as_value()
-                            .expect("non-opaque external must act like value");
+                            .as_value_expect();
                         external.value_index(&index)
                     }
                     (value, index) => Err(ExecutionError::UnsupportedIndex(value, index)),
@@ -647,8 +642,7 @@ impl<'a> Value {
                     Value::Map(ref m) => m.map.get(&name.clone().into()).cloned(),
                     Value::External(ref external) if !external.is_opaque() => {
                         let external = external
-                            .as_value()
-                            .expect("non-opaque external must act like value");
+                            .as_value_expect();
                         return external.value_field(name.as_str());
                     }
                     _ => None,
@@ -683,8 +677,7 @@ impl<'a> Value {
             Value::Function(_, _) => false,
             Value::External(external) if !external.is_opaque() => {
                 let external = external
-                    .as_value()
-                    .expect("non-opaque external must act like value");
+                    .as_value_expect();
                 match external.to_value(ValueType::Bool) {
                     Some(Value::Bool(result)) => result,
                     Some(other) => other.to_bool(),
@@ -753,14 +746,12 @@ impl ops::Add<Value> for Value {
 
             (Value::External(a), b) if !a.is_opaque() => {
                 let a = a
-                    .as_value()
-                    .expect("non-opaque external must act like value");
+                    .as_value_expect();
                 a.value_add(&b)
             }
             (a, Value::External(b)) if !b.is_opaque() => {
                 let b = b
-                    .as_value()
-                    .expect("non-opaque external must act like value");
+                    .as_value_expect();
                 b.value_add_other(&a)
             }
 
@@ -793,14 +784,12 @@ impl ops::Sub<Value> for Value {
 
             (Value::External(a), b) if !a.is_opaque() => {
                 let a = a
-                    .as_value()
-                    .expect("non-opaque external must act like value");
+                    .as_value_expect();
                 a.value_sub(&b)
             }
             (a, Value::External(b)) if !b.is_opaque() => {
                 let b = b
-                    .as_value()
-                    .expect("non-opaque external must act like value");
+                    .as_value_expect();
                 b.value_sub_other(&a)
             }
 
@@ -829,14 +818,12 @@ impl ops::Div<Value> for Value {
 
             (Value::External(a), b) if !a.is_opaque() => {
                 let a = a
-                    .as_value()
-                    .expect("non-opaque external must act like value");
+                    .as_value_expect();
                 a.value_div(&b)
             }
             (a, Value::External(b)) if !b.is_opaque() => {
                 let b = b
-                    .as_value()
-                    .expect("non-opaque external must act like value");
+                    .as_value_expect();
                 b.value_div_other(&a)
             }
 
@@ -865,14 +852,12 @@ impl ops::Mul<Value> for Value {
 
             (Value::External(a), b) if !a.is_opaque() => {
                 let a = a
-                    .as_value()
-                    .expect("non-opaque external must act like value");
+                    .as_value_expect();
                 a.value_mul(&b)
             }
             (a, Value::External(b)) if !b.is_opaque() => {
                 let b = b
-                    .as_value()
-                    .expect("non-opaque external must act like value");
+                    .as_value_expect();
                 b.value_mul_other(&a)
             }
 
@@ -901,14 +886,12 @@ impl ops::Rem<Value> for Value {
 
             (Value::External(a), b) if !a.is_opaque() => {
                 let a = a
-                    .as_value()
-                    .expect("non-opaque external must act like value");
+                    .as_value_expect();
                 a.value_rem(&b)
             }
             (a, Value::External(b)) if !b.is_opaque() => {
                 let b = b
-                    .as_value()
-                    .expect("non-opaque external must act like value");
+                    .as_value_expect();
                 b.value_rem_other(&a)
             }
 

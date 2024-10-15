@@ -14,9 +14,7 @@ use crate::{
 pub trait AsValue: Send + Sync {
     #[inline]
     fn value_field(&self, name: &str) -> ResolveResult {
-        Err(ExecutionError::NoSuchKey(Arc::new(
-            name.to_string(),
-        )))
+        Err(ExecutionError::NoSuchKey(Arc::new(name.to_string())))
     }
 
     #[inline]
@@ -166,32 +164,55 @@ impl<V: AsValue + 'static> TryIntoValue for V {
     }
 }
 
+/// External value is a wrapper for external types that aren't directly
+/// supported by supported CEL primitives.
+#[derive(Clone)]
 pub struct ExternalValue {
+    inner: Arc<Data>,
+}
+
+struct Data {
     r#type: TypeId,
+    name: &'static str,
     data: *mut (),
     drop_fn: DropFn,
-    use_counter: *mut AtomicUsize,
-    external: Option<*const ()>,
+    as_value_vtable: Option<*const ()>,
 }
 
 impl ExternalValue {
+    /// Constructs a new opaque `ExternalValue`.
+    /// 
+    /// Opaque external values act like [_abstract types_] as documented in
+    /// specification.
+    /// 
     /// # Safety
     ///
     /// Type `T` must be kept alive for as long as returned `ExternalValue`
     /// exists.
+    /// 
+    /// [_abstract types_]:
+    ///     https://github.com/google/cel-spec/blob/master/doc/langdef.md#abstract-types
     pub unsafe fn new_opaque<T>(value: T) -> Self
     where
         T: Sized + Send + Sync + 'static,
     {
         Self {
-            r#type: TypeId::of::<T>(),
-            data: Box::leak(Box::new(value)) as *mut T as *mut (),
-            drop_fn: drop_fn::<T>(),
-            use_counter: Box::leak(Box::new(AtomicUsize::new(1))) as *mut AtomicUsize,
-            external: None,
+            inner: Arc::new(Data {
+                r#type: TypeId::of::<T>(),
+                name: std::any::type_name::<T>(),
+                data: Box::leak(Box::new(value)) as *mut T as *mut (),
+                drop_fn: drop_fn::<T>(),
+                as_value_vtable: None,
+            }),
         }
     }
 
+    /// Constructs a new non-opaque `ExternalValue`.
+    /// 
+    /// Non-opaque external values behave like type safe
+    /// [`Map`][crate::objects::Map]s that allow operator specialization and
+    /// function implementations to check their underlying types.
+    /// 
     /// # Safety
     ///
     /// Type `T` must be kept alive for as long as returned `ExternalValue`
@@ -200,71 +221,83 @@ impl ExternalValue {
     where
         T: AsValue + Sized + Send + Sync + 'static,
     {
-        let vtable = unsafe {
+        let as_value_vtable = unsafe {
             let value = &value as &dyn AsValue;
             let (_, vtable): (*const (), *const ()) = std::mem::transmute(value);
-            vtable
+            Some(vtable)
         };
 
         Self {
-            r#type: TypeId::of::<T>(),
-            data: Box::leak(Box::new(value)) as *mut T as *mut (),
-            drop_fn: drop_fn::<T>(),
-            use_counter: Box::leak(Box::new(AtomicUsize::new(1))) as *mut AtomicUsize,
-            external: Some(vtable),
+            inner: Arc::new(Data {
+                r#type: TypeId::of::<T>(),
+                name: std::any::type_name::<T>(),
+                data: Box::leak(Box::new(value)) as *mut T as *mut (),
+                drop_fn: drop_fn::<T>(),
+                as_value_vtable,
+            }),
         }
     }
 
+    /// Returns a reference to contained value if the contained type is `T`.
     pub fn as_ref<T>(&self) -> Option<&T>
     where
         T: 'static + Sized + Send + Sync,
     {
-        if self.r#type != TypeId::of::<T>() {
+        if self.inner.r#type != TypeId::of::<T>() {
             return None;
         }
-        let data = self.data as *const T;
+        let data = self.inner.data as *const T;
         Some(unsafe { data.as_ref().unwrap() })
     }
 
-    pub fn as_value(&self) -> Option<&dyn AsValue> {
-        let vtable = self.external?;
-        Some(unsafe { std::mem::transmute((self.data, vtable)) })
+    /// Returns a reference to contained value if the contained type is `T`, or
+    /// returns an [`UnexpectedType`][ExecutionError::UnexpectedType] error.
+    pub fn as_ref_or_error<T>(&self) -> Result<&T, ExecutionError>
+    where
+        T: 'static + Sized + Send + Sync,
+    {
+        match self.as_ref() {
+            Some(it) => Ok(it),
+            None => Err(ExecutionError::UnexpectedType {
+                got: format!("external({})", self.inner.name),
+                want: format!("external({})", std::any::type_name::<T>()),
+            }),
+        }
     }
 
-    /// # Safety
+    /// Returns `true` if contained type is opaque, i.e. doesn't implement
+    /// [`AsValue`].
+    pub fn is_opaque(&self) -> bool {
+        !self.inner.as_value_vtable.is_some()
+    }
+
+    /// Returns [`&dyn AsValue`][AsValue] reference to contained value if it's
+    /// not opaque.
+    pub fn as_value(&self) -> Option<&dyn AsValue> {
+        let vtable = self.inner.as_value_vtable?;
+        Some(unsafe { std::mem::transmute((self.inner.data, vtable)) })
+    }
+
+    /// Returns [`&dyn AsValue`][AsValue] reference to contained value, or
+    /// panics if it's opaque.
+    pub fn as_value_expect(&self) -> &dyn AsValue {
+        self.as_value().expect("expected external value to be non non-opaque")
+    }
+
+    /// Returns [`&dyn AsValue`][AsValue] reference to contained value, assuming
+    /// it's not opaque.
     /// 
+    /// # Safety
+    ///
     /// Calling this function is unsafe if `ExternalValue` was constructed from
     /// opaque type.
     pub unsafe fn as_value_unchecked(&self) -> &dyn AsValue {
         let vtable = unsafe {
-            // SAFETY: This operation
-            self.external.unwrap_unchecked()
+            // SAFETY: This operation is unsafe which is reflected in function
+            // signature.
+            self.inner.as_value_vtable.unwrap_unchecked()
         };
-        unsafe { std::mem::transmute((self.data, vtable)) }
-    }
-
-    pub fn is_opaque(&self) -> bool {
-        !self.external.is_some()
-    }
-}
-
-impl Clone for ExternalValue {
-    fn clone(&self) -> Self {
-        unsafe {
-            let uses = match self.use_counter.as_mut() {
-                Some(it) => it,
-                None => unreachable!("use_counter is null"),
-            };
-            uses.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        }
-
-        Self {
-            r#type: self.r#type,
-            data: self.data,
-            drop_fn: self.drop_fn,
-            use_counter: self.use_counter,
-            external: self.external,
-        }
+        unsafe { std::mem::transmute((self.inner.data, vtable)) }
     }
 }
 
@@ -275,19 +308,9 @@ impl Debug for ExternalValue {
     }
 }
 
-impl Drop for ExternalValue {
+impl Drop for Data {
     fn drop(&mut self) {
-        unsafe {
-            let uses = match self.use_counter.as_mut() {
-                Some(it) => it,
-                None => unreachable!("use_counter is null"),
-            };
-            let use_count = uses.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
-            if use_count == 0 {
-                (self.drop_fn)(self.data);
-                drop(Box::from_raw(self.use_counter));
-            }
-        }
+        (self.drop_fn)(self.data);
     }
 }
 
