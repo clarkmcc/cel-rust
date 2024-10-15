@@ -8,9 +8,7 @@ struct MyStruct {
     b: i32,
     // To preserve durations and timestamps, use the cel_interpreter wrapper types.
     c: Duration,
-    d: Duration,
-    e: Timestamp,
-    f: Timestamp,
+    d: Timestamp,
 }
 
 fn main() {
@@ -24,11 +22,7 @@ fn main() {
                 a: 1,
                 b: 1,
                 c: chrono::Duration::hours(2).into(),
-                d: chrono::Duration::hours(2).into(),
-                e: chrono::DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00")
-                    .unwrap()
-                    .into(),
-                f: chrono::DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00")
+                d: chrono::DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00")
                     .unwrap()
                     .into(),
             },
@@ -39,11 +33,11 @@ fn main() {
     let value = program.execute(&context).unwrap();
     assert_eq!(value, true.into());
 
-    let program = Program::compile("foo.c == foo.d").unwrap();
+    let program = Program::compile("foo.c == duration('2h')").unwrap();
     let value = program.execute(&context).unwrap();
     assert_eq!(value, true.into());
 
-    let program = Program::compile("foo.e == foo.f").unwrap();
+    let program = Program::compile("foo.d == timestamp('1996-12-19T16:39:57-08:00')").unwrap();
     let value = program.execute(&context).unwrap();
     assert_eq!(value, true.into());
 }

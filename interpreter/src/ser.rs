@@ -986,7 +986,7 @@ mod tests {
     #[test]
     fn test_durations() {
         // Test Duration serialization
-        let map = to_value([
+        let durations = to_value([
             chrono::Duration::milliseconds(1527).into(),
             // Let's test chrono::Duration's particular handling around math
             // and negatives.
@@ -1002,6 +1002,6 @@ mod tests {
             chrono::Duration::nanoseconds(1),
         ]
         .into();
-        assert_eq!(map, expected)
+        assert_eq!(durations, expected)
     }
 }
