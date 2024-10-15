@@ -40,6 +40,25 @@ pub enum Context<'a> {
 }
 
 impl<'a> Context<'a> {
+    pub fn serialize_variable<S, V>(
+        &mut self,
+        name: S,
+        value: V,
+    ) -> Result<(), Box<dyn std::error::Error>>
+    where
+        S: Into<String>,
+        V: serde::Serialize,
+    {
+        match self {
+            Context::Root { variables, .. } => {
+                variables.insert(name.into(), crate::ser::to_value(value)?);
+            }
+            Context::Child { variables, .. } => {
+                variables.insert(name.into(), crate::ser::to_value(value)?);
+            }
+        }
+        Ok(())
+    }
     pub fn add_variable<S, V>(
         &mut self,
         name: S,
