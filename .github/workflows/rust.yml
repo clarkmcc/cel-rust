@@ -26,3 +26,5 @@ jobs:
         run: |
           cargo test --verbose
           cargo test --verbose --features json
+          cargo test --verbose --features regex
+          cargo test --verbose --features chrono
