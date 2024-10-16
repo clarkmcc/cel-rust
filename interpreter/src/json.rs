@@ -77,7 +77,7 @@ mod tests {
 
     #[test]
     fn test_cel_value_to_json() {
-        let mut tests = [
+        let mut tests = vec![
             (json!("hello"), CelValue::String("hello".to_string().into())),
             (json!(42), CelValue::Int(42)),
             (json!(42.0), CelValue::Float(42.0)),
