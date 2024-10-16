@@ -1,8 +1,7 @@
-use crate::context::Context;
 use crate::functions::FunctionContext;
-use crate::ser::SerializationError;
+use crate::ExecutionError;
 use crate::ExecutionError::NoSuchKey;
-use crate::{to_value, ExecutionError};
+use crate::{context::Context, external::ExternalValue};
 use cel_parser::{ArithmeticOp, Atom, Expression, Member, RelationOp, UnaryOp};
 use chrono::{DateTime, Duration, FixedOffset};
 use core::ops;
@@ -144,13 +143,6 @@ pub trait TryIntoValue {
     fn try_into_value(self) -> Result<Value, Self::Error>;
 }
 
-impl<T: Serialize> TryIntoValue for T {
-    type Error = SerializationError;
-    fn try_into_value(self) -> Result<Value, Self::Error> {
-        to_value(self)
-    }
-}
-
 impl TryIntoValue for Value {
     type Error = Infallible;
     fn try_into_value(self) -> Result<Value, Self::Error> {
@@ -164,6 +156,7 @@ pub enum Value {
     Map(Map),
 
     Function(Arc<String>, Option<Box<Value>>),
+    External(ExternalValue),
 
     // Atoms
     Int(i64),
@@ -181,6 +174,7 @@ pub enum ValueType {
     List,
     Map,
     Function,
+    External,
     Int,
     UInt,
     Float,
@@ -198,6 +192,7 @@ impl Display for ValueType {
             ValueType::List => write!(f, "list"),
             ValueType::Map => write!(f, "map"),
             ValueType::Function => write!(f, "function"),
+            ValueType::External => write!(f, "external"),
             ValueType::Int => write!(f, "int"),
             ValueType::UInt => write!(f, "uint"),
             ValueType::Float => write!(f, "float"),
@@ -217,6 +212,7 @@ impl Value {
             Value::List(_) => ValueType::List,
             Value::Map(_) => ValueType::Map,
             Value::Function(_, _) => ValueType::Function,
+            Value::External(_) => ValueType::External,
             Value::Int(_) => ValueType::Int,
             Value::UInt(_) => ValueType::UInt,
             Value::Float(_) => ValueType::Float,
@@ -273,6 +269,16 @@ impl PartialEq for Value {
             (Value::UInt(a), Value::Float(b)) => (*a as f64) == *b,
             (Value::Float(a), Value::Int(b)) => *a == (*b as f64),
             (Value::Float(a), Value::UInt(b)) => *a == (*b as f64),
+            (Value::External(a), b) if !a.is_opaque() => {
+                let a = a
+                    .as_value_expect();
+                a.value_eq(b)
+            }
+            (a, Value::External(b)) if !b.is_opaque() => {
+                let b = b
+                    .as_value_expect();
+                b.value_eq(a)
+            }
             (_, _) => false,
         }
     }
@@ -310,6 +316,18 @@ impl PartialOrd for Value {
             (Value::UInt(a), Value::Float(b)) => (*a as f64).partial_cmp(b),
             (Value::Float(a), Value::Int(b)) => a.partial_cmp(&(*b as f64)),
             (Value::Float(a), Value::UInt(b)) => a.partial_cmp(&(*b as f64)),
+
+            (Value::External(a), b) if !a.is_opaque() => {
+                let a = a
+                    .as_value_expect();
+                a.value_cmp(b).ok()
+            }
+            (a, Value::External(b)) if !b.is_opaque() => {
+                let b = b
+                    .as_value_expect();
+                b.value_cmp(a).map(|ord| ord.reverse()).ok()
+            }
+
             _ => None,
         }
     }
@@ -604,6 +622,11 @@ impl<'a> Value {
                         .into(),
                     (Value::Map(_), index) => Err(ExecutionError::UnsupportedMapIndex(index)),
                     (Value::List(_), index) => Err(ExecutionError::UnsupportedListIndex(index)),
+                    (Value::External(external), index) if !external.is_opaque() => {
+                        let external = external
+                            .as_value_expect();
+                        external.value_index(&index)
+                    }
                     (value, index) => Err(ExecutionError::UnsupportedIndex(value, index)),
                 }
             }
@@ -615,6 +638,11 @@ impl<'a> Value {
                 // a property on self, or a method on self.
                 let child = match self {
                     Value::Map(ref m) => m.map.get(&name.clone().into()).cloned(),
+                    Value::External(ref external) if !external.is_opaque() => {
+                        let external = external
+                            .as_value_expect();
+                        return external.value_field(name.as_str());
+                    }
                     _ => None,
                 };
 
@@ -645,6 +673,16 @@ impl<'a> Value {
             Value::Duration(v) => v.num_nanoseconds().map(|n| n != 0).unwrap_or(false),
             Value::Timestamp(v) => v.timestamp_nanos_opt().unwrap_or_default() > 0,
             Value::Function(_, _) => false,
+            Value::External(external) if !external.is_opaque() => {
+                let external = external
+                    .as_value_expect();
+                match external.to_value(ValueType::Bool) {
+                    Some(Value::Bool(result)) => result,
+                    Some(other) => other.to_bool(),
+                    None => false,
+                }
+            }
+            Value::External(_) => false,
         }
     }
 }
@@ -703,6 +741,18 @@ impl ops::Add<Value> for Value {
             (Value::Duration(l), Value::Duration(r)) => Value::Duration(l + r).into(),
             (Value::Timestamp(l), Value::Duration(r)) => Value::Timestamp(l + r).into(),
             (Value::Duration(l), Value::Timestamp(r)) => Value::Timestamp(r + l).into(),
+
+            (Value::External(a), b) if !a.is_opaque() => {
+                let a = a
+                    .as_value_expect();
+                a.value_add(&b)
+            }
+            (a, Value::External(b)) if !b.is_opaque() => {
+                let b = b
+                    .as_value_expect();
+                b.value_add_other(&a)
+            }
+
             (left, right) => Err(ExecutionError::UnsupportedBinaryOperator(
                 "add", left, right,
             )),
@@ -729,6 +779,18 @@ impl ops::Sub<Value> for Value {
             (Value::Duration(l), Value::Duration(r)) => Value::Duration(l - r).into(),
             (Value::Timestamp(l), Value::Duration(r)) => Value::Timestamp(l - r).into(),
             (Value::Timestamp(l), Value::Timestamp(r)) => Value::Duration(l - r).into(),
+
+            (Value::External(a), b) if !a.is_opaque() => {
+                let a = a
+                    .as_value_expect();
+                a.value_sub(&b)
+            }
+            (a, Value::External(b)) if !b.is_opaque() => {
+                let b = b
+                    .as_value_expect();
+                b.value_sub_other(&a)
+            }
+
             (left, right) => Err(ExecutionError::UnsupportedBinaryOperator(
                 "sub", left, right,
             )),
@@ -751,6 +813,17 @@ impl ops::Div<Value> for Value {
             (Value::Float(l), Value::Int(r)) => Value::Float(l / r as f64).into(),
             (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 / r).into(),
             (Value::Float(l), Value::UInt(r)) => Value::Float(l / r as f64).into(),
+
+            (Value::External(a), b) if !a.is_opaque() => {
+                let a = a
+                    .as_value_expect();
+                a.value_div(&b)
+            }
+            (a, Value::External(b)) if !b.is_opaque() => {
+                let b = b
+                    .as_value_expect();
+                b.value_div_other(&a)
+            }
 
             (left, right) => Err(ExecutionError::UnsupportedBinaryOperator(
                 "div", left, right,
@@ -775,6 +848,17 @@ impl ops::Mul<Value> for Value {
             (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 * r).into(),
             (Value::Float(l), Value::UInt(r)) => Value::Float(l * r as f64).into(),
 
+            (Value::External(a), b) if !a.is_opaque() => {
+                let a = a
+                    .as_value_expect();
+                a.value_mul(&b)
+            }
+            (a, Value::External(b)) if !b.is_opaque() => {
+                let b = b
+                    .as_value_expect();
+                b.value_mul_other(&a)
+            }
+
             (left, right) => Err(ExecutionError::UnsupportedBinaryOperator(
                 "mul", left, right,
             )),
@@ -797,6 +881,17 @@ impl ops::Rem<Value> for Value {
             (Value::Float(l), Value::Int(r)) => Value::Float(l % r as f64).into(),
             (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 % r).into(),
             (Value::Float(l), Value::UInt(r)) => Value::Float(l % r as f64).into(),
+
+            (Value::External(a), b) if !a.is_opaque() => {
+                let a = a
+                    .as_value_expect();
+                a.value_rem(&b)
+            }
+            (a, Value::External(b)) if !b.is_opaque() => {
+                let b = b
+                    .as_value_expect();
+                b.value_rem_other(&a)
+            }
 
             (left, right) => Err(ExecutionError::UnsupportedBinaryOperator(
                 "rem", left, right,

@@ -140,85 +140,211 @@ pub fn contains(This(this): This<Value>, arg: Value) -> Result<Value> {
     .into())
 }
 
-// Performs a type conversion on the target. The following conversions are currently
-// supported:
-// * `string` - Returns a copy of the target string.
-// * `timestamp` - Returns the timestamp in RFC3339 format.
-// * `duration` - Returns the duration in a string formatted like "72h3m0.5s".
-// * `int` - Returns the integer value of the target.
-// * `uint` - Returns the unsigned integer value of the target.
-// * `float` - Returns the float value of the target.
-// * `bytes` - Converts bytes to string using from_utf8_lossy.
+macro_rules! return_external_conversion {
+    ($v: ident as $ty: ident) => {{
+        let $v = unsafe { $v.as_value_unchecked() };
+        if let Some(it) = $v.to_value(ValueType::$ty) {
+            if matches!(it, Value::$ty(_)) {
+                return Ok(it);
+            }
+        }
+    }};
+}
+
+/// Converts provided value into a [`string`][Value::String].
+///
+/// # Supported Conversions
+///
+/// - [`string`][Value::String] - will be returned as is.
+/// - [`timestamp`][Value::Timestamp] - will be formatted into RFC3339 format.
+/// - [`duration`][Value::Duration] - will be formatted to string representation
+///   (e.g. "72h3m0.5s").
+/// - [`int`][Value::Int] - will be formatted into a string.
+/// - [`uint`][Value::UInt] - will be formatted into a string.
+/// - [`float`][Value::Float] - will be formatted into a string.
+/// - [`bytes`][Value::Bytes] - will be converted to string using
+///   [`from_utf8_lossy`][String::from_utf8_lossy].
+/// - [`external`][Value::External] - will be converted to
+///   [`string`][Value::String] if it's not opaque (i.e. implements
+///   [`AsValue`][crate::external::AsValue]), and value returned by
+///   [`to_value(ValueType::String)`][crate::external::AsValue::to_value] is
+///   [`string`][Value::String]. [`AsValue`][crate::external::AsValue]) and the
+///   returned value is a [`string`][Value::String].
 pub fn string(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
-    Ok(match this {
-        Value::String(v) => Value::String(v.clone()),
-        Value::Timestamp(t) => Value::String(t.to_rfc3339().into()),
-        Value::Duration(v) => Value::String(format_duration(&v).into()),
-        Value::Int(v) => Value::String(v.to_string().into()),
-        Value::UInt(v) => Value::String(v.to_string().into()),
-        Value::Float(v) => Value::String(v.to_string().into()),
-        Value::Bytes(v) => Value::String(Arc::new(String::from_utf8_lossy(v.as_slice()).into())),
-        v => return Err(ftx.error(format!("cannot convert {:?} to string", v))),
+    match &this {
+        Value::String(v) => return Ok(Value::String(v.clone())),
+        Value::Timestamp(t) => return Ok(Value::String(t.to_rfc3339().into())),
+        Value::Duration(v) => return Ok(Value::String(format_duration(&v).into())),
+        Value::Int(v) => return Ok(Value::String(v.to_string().into())),
+        Value::UInt(v) => return Ok(Value::String(v.to_string().into())),
+        Value::Float(v) => return Ok(Value::String(v.to_string().into())),
+        Value::Bytes(v) => {
+            return Ok(Value::String(Arc::new(
+                String::from_utf8_lossy(v.as_slice()).into(),
+            )))
+        }
+        Value::External(v) if !v.is_opaque() => {
+            return_external_conversion!(v as String);
+        }
+        _ => {}
+    }
+
+    Err(ftx.error(format!("cannot convert {:?} to string", this)))
+}
+
+/// Converts provided value into [`bytes`][Value::Bytes].
+///
+/// # Supported Conversions
+///
+/// - [`bytes`][Value::Bytes] - will be returned as is.
+/// - [`string`][Value::String] - will return UTF8 bytes.
+/// - [`external`][Value::External] - will be converted to
+///   [`bytes`][Value::Bytes] if it's not opaque (i.e. implements
+///   [`AsValue`][crate::external::AsValue]), and value returned by
+///   [`to_value(ValueType::Bytes)`][crate::external::AsValue::to_value] is
+///   [`bytes`][Value::Bytes].
+pub fn bytes(Arguments(args): Arguments) -> Result<Value> {
+    if args.len() > 1 {
+        return Err(ExecutionError::InvalidArgumentCount {
+            expected: 1,
+            actual: args.len(),
+        });
+    }
+    let value = match args.get(0) {
+        Some(it) => it,
+        None => return Err(ExecutionError::MissingArgumentOrTarget),
+    };
+    match value {
+        Value::Bytes(v) => return Ok(Value::Bytes(v.clone())),
+        Value::String(v) => return Ok(Value::Bytes(v.as_bytes().to_vec().into())),
+        Value::External(v) if !v.is_opaque() => {
+            return_external_conversion!(v as Bytes);
+        }
+        _ => {}
+    }
+
+    Err(ExecutionError::UnexpectedType {
+        got: value.type_of().to_string(),
+        want: "`string` or `external` convertible to `bytes`".to_string(),
     })
 }
 
-pub fn bytes(value: Arc<String>) -> Result<Value> {
-    Ok(Value::Bytes(value.as_bytes().to_vec().into()))
-}
-
-// Performs a type conversion on the target.
+/// Converts provided value into [`float`][Value::Float].
+///
+/// # Supported Conversions
+///
+/// - [`string`][Value::String] - will be parsed as `f64`.
+/// - [`float`][Value::Float] - will be returned as is.
+/// - [`int`][Value::Int] - will be cast into a float.
+/// - [`uint`][Value::UInt] - will be cast into a float.
+/// - [`external`][Value::External] - will be converted to
+///   [`float`][Value::Float] if it's not opaque (i.e. implements
+///   [`AsValue`][crate::external::AsValue]), and value returned by
+///   [`to_value(ValueType::Float)`][crate::external::AsValue::to_value] is
+///   a [`float`][Value::Float].
 pub fn double(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
-    Ok(match this {
-        Value::String(v) => v
-            .parse::<f64>()
-            .map(Value::Float)
-            .map_err(|e| ftx.error(format!("string parse error: {e}")))?,
-        Value::Float(v) => Value::Float(v),
-        Value::Int(v) => Value::Float(v as f64),
-        Value::UInt(v) => Value::Float(v as f64),
-        v => return Err(ftx.error(format!("cannot convert {:?} to double", v))),
-    })
+    match &this {
+        Value::Float(v) => return Ok(Value::Float(*v)),
+        Value::String(v) => {
+            return v
+                .parse::<f64>()
+                .map(Value::Float)
+                .map_err(|e| ftx.error(format!("string parse error: {e}")))
+        }
+        Value::Int(v) => return Ok(Value::Float(*v as f64)),
+        Value::UInt(v) => return Ok(Value::Float(*v as f64)),
+        Value::External(v) if !v.is_opaque() => {
+            return_external_conversion!(v as Float);
+        }
+        _ => {}
+    }
+
+    Err(ftx.error(format!("cannot convert {:?} to float", this)))
 }
 
-// Performs a type conversion on the target.
+/// Converts provided value into [`uint`][Value::UInt].
+///
+/// # Supported Conversions
+///
+/// - [`string`][Value::String] - will be parsed as `u64`.
+/// - [`float`][Value::Float] - will be cast if there's no overflow.
+/// - [`int`][Value::Int] - will be cast if there's no overflow.
+/// - [`uint`][Value::UInt] - will be returned as is.
+/// - [`external`][Value::External] - will be converted to [`uint`][Value::UInt]
+///   if it's not opaque (i.e. implements
+///   [`AsValue`][crate::external::AsValue]), and value returned by
+///   [`to_value(ValueType::Float)`][crate::external::AsValue::to_value] is
+///   an [`uint`][Value::UInt].
 pub fn uint(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
-    Ok(match this {
-        Value::String(v) => v
-            .parse::<u64>()
-            .map(Value::UInt)
-            .map_err(|e| ftx.error(format!("string parse error: {e}")))?,
+    match &this {
+        Value::UInt(v) => return Ok(Value::UInt(*v)),
+        Value::String(v) => {
+            return v
+                .parse::<u64>()
+                .map(Value::UInt)
+                .map_err(|e| ftx.error(format!("string parse error: {e}")))
+        }
         Value::Float(v) => {
-            if v > u64::MAX as f64 || v < u64::MIN as f64 {
+            if *v > u64::MAX as f64 || *v < u64::MIN as f64 {
                 return Err(ftx.error("unsigned integer overflow"));
             }
-            Value::UInt(v as u64)
+            return Ok(Value::UInt(*v as u64));
         }
-        Value::Int(v) => Value::UInt(
-            v.try_into()
-                .map_err(|_| ftx.error("unsigned integer overflow"))?,
-        ),
-        Value::UInt(v) => Value::UInt(v),
-        v => return Err(ftx.error(format!("cannot convert {:?} to uint", v))),
-    })
+        Value::Int(v) => {
+            return (*v)
+                .try_into()
+                .map(Value::UInt)
+                .map_err(|_| ftx.error("unsigned integer overflow"))
+        }
+        Value::External(v) if !v.is_opaque() => {
+            return_external_conversion!(v as UInt);
+        }
+        _ => {}
+    }
+
+    Err(ftx.error(format!("cannot convert {:?} to uint", this)))
 }
 
-// Performs a type conversion on the target.
+/// Converts provided value into [`int`][Value::Int].
+///
+/// # Supported Conversions
+///
+/// - [`string`][Value::String] - will be parsed as `i64`.
+/// - [`float`][Value::Float] - will be cast if there's no overflow.
+/// - [`int`][Value::Int] - will be returned as is.
+/// - [`uint`][Value::UInt] - will be cast if there's no overflow.
+/// - [`external`][Value::External] - Will be converted to [`int`][Value::Int]
+///   if it's not opaque (i.e. implements
+///   [`AsValue`][crate::external::AsValue]), and value returned by
+///   [`to_value(ValueType::Int)`][crate::external::AsValue::to_value] is
+///   an [`int`][Value::Int].
 pub fn int(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
-    Ok(match this {
-        Value::String(v) => v
-            .parse::<i64>()
-            .map(Value::Int)
-            .map_err(|e| ftx.error(format!("string parse error: {e}")))?,
+    match &this {
+        Value::Int(v) => return Ok(Value::Int(*v)),
+        Value::String(v) => {
+            return v
+                .parse::<i64>()
+                .map(Value::Int)
+                .map_err(|e| ftx.error(format!("string parse error: {e}")))
+        }
         Value::Float(v) => {
-            if v > i64::MAX as f64 || v < i64::MIN as f64 {
+            if *v > i64::MAX as f64 || *v < i64::MIN as f64 {
                 return Err(ftx.error("integer overflow"));
             }
-            Value::Int(v as i64)
+            return Ok(Value::Int(*v as i64));
         }
-        Value::Int(v) => Value::Int(v),
-        Value::UInt(v) => Value::Int(v.try_into().map_err(|_| ftx.error("integer overflow"))?),
-        v => return Err(ftx.error(format!("cannot convert {:?} to int", v))),
-    })
+        Value::UInt(v) => {
+            return TryInto::<i64>::try_into(*v)
+                .map(Value::Int)
+                .map_err(|_| ftx.error("integer overflow"))
+        }
+        Value::External(v) if !v.is_opaque() => {
+            return_external_conversion!(v as Int);
+        }
+        _ => {}
+    }
+
+    Err(ftx.error(format!("cannot convert {:?} to int", this)))
 }
 
 /// Returns true if a string starts with another string.
@@ -485,12 +611,21 @@ pub fn exists_one(
     }
 }
 
-/// Duration parses the provided argument into a [`Value::Duration`] value.
-/// The argument must be string, and must be in the format of a duration. See
-/// the [`parse_duration`] documentation for more information on the supported
-/// formats.
+/// Duration converts the provided argument into a
+/// [`duration`][Value::Duration].
 ///
-/// # Examples
+/// # Supported Conversions
+///
+/// - [`duration`][Value::Duration] - will be returned as is.
+/// - [`string`][Value::String] - will be parsed with [`parse_duration`].
+/// - [`external`][Value::External] - will be converted to bytes if it's not
+///   opaque (i.e. implements [`AsValue`][crate::external::AsValue]), and value
+///   returned by
+///   [`to_value(ValueType::Duration)`][crate::external::AsValue::to_value] is a
+///   [`duration`][Value::Duration].
+///
+/// # Parsing Result Examples
+///
 /// - `1h` parses as 1 hour
 /// - `1.5h` parses as 1 hour and 30 minutes
 /// - `1h30m` parses as 1 hour and 30 minutes
@@ -499,17 +634,74 @@ pub fn exists_one(
 /// - `1.5ms` parses as 1 millisecond and 500 microseconds
 /// - `1ns` parses as 1 nanosecond
 /// - `1.5ns` parses as 1 nanosecond (sub-nanosecond durations not supported)
-pub fn duration(value: Arc<String>) -> Result<Value> {
-    Ok(Value::Duration(_duration(value.as_str())?))
+pub fn duration(Arguments(args): Arguments) -> Result<Value> {
+    if args.len() > 1 {
+        return Err(ExecutionError::InvalidArgumentCount {
+            expected: 1,
+            actual: args.len(),
+        });
+    }
+    let value = match args.get(0) {
+        Some(it) => it,
+        None => return Err(ExecutionError::MissingArgumentOrTarget),
+    };
+    match value {
+        Value::Duration(value) => return Ok(Value::Duration(*value)),
+        Value::String(value) => return Ok(Value::Duration(_duration(value.as_str())?)),
+        Value::External(external) if !external.is_opaque() => {
+            return_external_conversion!(external as Duration);
+        }
+        _ => {}
+    }
+
+    Err(ExecutionError::UnexpectedType {
+        got: value.type_of().to_string(),
+        want: "`string` or `external` convertible to `duration`".to_string(),
+    })
 }
 
-/// Timestamp parses the provided argument into a [`Value::Timestamp`] value.
-/// The
-pub fn timestamp(value: Arc<String>) -> Result<Value> {
-    Ok(Value::Timestamp(
-        DateTime::parse_from_rfc3339(value.as_str())
-            .map_err(|e| ExecutionError::function_error("timestamp", e.to_string().as_str()))?,
-    ))
+/// Timestamp converts the provided argument into a
+/// [`timestamp`][Value::Timestamp].
+///
+/// # Supported Conversions
+///
+/// - [`timestamp`][Value::Timestamp] - will be returned as is.
+/// - [`string`][Value::String] - will be parsed as RFC3339 formatted timestamp.
+/// - [`external`][Value::External] - will be converted to
+///   [`timestamp`][Value::Timestamp] if it's not opaque (i.e. implements
+///   [`AsValue`][crate::external::AsValue]), and value returned by
+///   [`to_value(ValueType::Timestamp)`][crate::external::AsValue::to_value] is
+///   a [`timestamp`][Value::Timestamp].
+pub fn timestamp(Arguments(args): Arguments) -> Result<Value> {
+    if args.len() > 1 {
+        return Err(ExecutionError::InvalidArgumentCount {
+            expected: 1,
+            actual: args.len(),
+        });
+    }
+    let value = match args.get(0) {
+        Some(it) => it,
+        None => return Err(ExecutionError::MissingArgumentOrTarget),
+    };
+    match value {
+        Value::Timestamp(value) => return Ok(Value::Timestamp(*value)),
+        Value::String(value) => {
+            return Ok(Value::Timestamp(
+                DateTime::parse_from_rfc3339(value.as_str()).map_err(|e| {
+                    ExecutionError::function_error("timestamp", e.to_string().as_str())
+                })?,
+            ))
+        }
+        Value::External(external) if !external.is_opaque() => {
+            return_external_conversion!(external as Timestamp);
+        }
+        _ => {}
+    }
+
+    Err(ExecutionError::UnexpectedType {
+        got: value.type_of().to_string(),
+        want: "`string` or `external` convertible to `timestamp`".to_string(),
+    })
 }
 
 pub fn max(Arguments(args): Arguments) -> Result<Value> {

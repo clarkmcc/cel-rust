@@ -14,6 +14,7 @@ pub use functions::FunctionContext;
 pub use objects::{ResolveResult, Value};
 mod duration;
 pub mod functions;
+pub mod external;
 mod magic;
 pub mod objects;
 mod resolvers;
@@ -73,6 +74,10 @@ pub enum ExecutionError {
     /// where it's unsupported, for example list + map.
     #[error("Unsupported binary operator '{0}': {1:?}, {2:?}")]
     UnsupportedBinaryOperator(&'static str, Value, Value),
+    /// Indicates that an unsupported binary operator was applied on an external
+    /// value
+    #[error("Unsupported binary operator: '{1}' {0} '{2}'")]
+    UnsupportedBinaryOperatorExternal(&'static str, &'static str, &'static str),
     /// Indicates that an unsupported type was used to index a map
     #[error("Cannot use value as map index: {0:?}")]
     UnsupportedMapIndex(Value),
@@ -82,6 +87,9 @@ pub enum ExecutionError {
     /// Indicates that an unsupported type was used to index a list
     #[error("Cannot use value {0:?} to index {1:?}")]
     UnsupportedIndex(Value, Value),
+    /// Indicates that an unsupported type was used to index an external type
+    #[error("Cannot use value {0:?} to index {1}")]
+    UnsupportedIndexExternal(Value, &'static str),
     /// Indicates that a function call occurred without an [`Expression::Ident`]
     /// as the function identifier.
     #[error("Unsupported function call identifier type: {0:?}")]
