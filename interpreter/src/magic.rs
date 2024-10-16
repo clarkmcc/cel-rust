@@ -2,6 +2,7 @@ use crate::macros::{impl_conversions, impl_handler};
 use crate::resolvers::{AllArguments, Argument};
 use crate::{ExecutionError, FunctionContext, ResolveResult, Value};
 use cel_parser::Expression;
+#[cfg(feature = "chrono")]
 use chrono::{DateTime, Duration, FixedOffset};
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -14,9 +15,13 @@ impl_conversions!(
     Arc<String> => Value::String,
     Arc<Vec<u8>> => Value::Bytes,
     bool => Value::Bool,
+    Arc<Vec<Value>> => Value::List
+);
+
+#[cfg(feature = "chrono")]
+impl_conversions!(
     Duration => Value::Duration,
     DateTime<FixedOffset> => Value::Timestamp,
-    Arc<Vec<Value>> => Value::List
 );
 
 impl From<i32> for Value {
