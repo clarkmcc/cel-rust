@@ -177,8 +177,6 @@ pub fn parse_bytes(s: &str) -> Result<Vec<u8>, ParseError> {
 ///
 /// The returned result can display a human readable error if the string cannot be parsed as a
 /// valid quoted string.
-///
-
 pub fn parse_string(s: &str) -> Result<String, ParseError> {
     let mut chars = s.chars().enumerate();
     let res = String::with_capacity(s.len());

@@ -49,7 +49,6 @@ pub enum Key {
 }
 
 /// Implement conversions from primitive types to [`Key`]
-
 impl From<String> for Key {
     fn from(v: String) -> Self {
         Key::String(v.into())
@@ -112,7 +111,6 @@ impl Display for Key {
 }
 
 /// Implement conversions from [`Key`] into [`Value`]
-
 impl TryInto<Key> for Value {
     type Error = Value;
 
