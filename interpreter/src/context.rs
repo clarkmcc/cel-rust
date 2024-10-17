@@ -5,15 +5,16 @@ use cel_parser::Expression;
 use std::collections::HashMap;
 
 /// Context is a collection of variables and functions that can be used
-/// by the interpreter to resolve expressions. The context can be either
-/// a parent context, or a child context. A parent context is created by
-/// default and contains all of the built-in functions. A child context
-/// can be created by calling `.clone()`. The child context has it's own
-/// variables (which can be added to), but it will also reference the
-/// parent context. This allows for variables to be overridden within the
-/// child context while still being able to resolve variables in the child's
-/// parents. You can have theoretically have an infinite number of child
-/// contexts that reference each-other.
+/// by the interpreter to resolve expressions.
+///
+/// The context can be either a parent context, or a child context. A
+/// parent context is created by default and contains all of the built-in
+/// functions. A child context can be created by calling `.clone()`. The
+/// child context has it's own variables (which can be added to), but it
+/// will also reference the parent context. This allows for variables to
+/// be overridden within the child context while still being able to
+/// resolve variables in the child's parents. You can have theoretically
+/// have an infinite number of child contexts that reference each-other.
 ///
 /// So why is this important? Well some CEL-macros such as the `.map` macro
 /// declare intermediate user-specified identifiers that should only be
