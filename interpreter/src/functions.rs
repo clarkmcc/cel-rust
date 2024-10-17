@@ -11,6 +11,7 @@ use std::sync::Arc;
 type Result<T> = std::result::Result<T, ExecutionError>;
 
 /// `FunctionContext` is a context object passed to functions when they are called.
+///
 /// It contains references to the target object (if the function is called as
 /// a method), the program context ([`Context`]) which gives functions access
 /// to variables, and the arguments to the function call.
@@ -54,8 +55,10 @@ impl<'context> FunctionContext<'context> {
 }
 
 /// Calculates the size of either the target, or the provided args depending on how
-/// the function is called. If called as a method, the target will be used. If called
-/// as a function, the first argument will be used.
+/// the function is called.
+///
+/// If called as a method, the target will be used. If called as a function, the
+/// first argument will be used.
 ///
 /// The following [`Value`] variants are supported:
 /// * [`Value::List`]
@@ -258,10 +261,11 @@ pub fn matches(
     }
 }
 
-/// Returns true if the provided argument can be resolved. This function is
-/// useful for checking if a property exists on a type before attempting to
-/// resolve it. Resolving a property that does not exist will result in a
-/// [`ExecutionError::NoSuchKey`] error.
+/// Returns true if the provided argument can be resolved.
+///
+/// This function is useful for checking if a property exists on a type before
+/// attempting to resolve it. Resolving a property that does not exist will
+/// result in a [`ExecutionError::NoSuchKey`] error.
 ///
 /// Operates similar to the `has` macro describe in the Go CEL implementation
 /// spec: <https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros>.
@@ -284,8 +288,10 @@ pub fn has(ftx: &FunctionContext) -> Result<Value> {
 }
 
 /// Maps the provided list to a new list by applying an expression to each
-/// input item. This function is intended to be used like the CEL-go `map`
-/// macro: <https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros>
+/// input item.
+///
+/// This function is intended to be used like the CEL-go `map` macro:
+/// <https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros>
 ///
 /// # Examples
 /// ```cel
@@ -391,8 +397,9 @@ pub fn all(
 }
 
 /// Returns a boolean value indicating whether a or more values in the provided
-/// list or map meet the predicate defined by the provided expression. If
-/// called on a map, the predicate is applied to the map keys.
+/// list or map meet the predicate defined by the provided expression.
+///
+/// If called on a map, the predicate is applied to the map keys.
 ///
 /// This function is intended to be used like the CEL-go `exists` macro:
 /// <https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros>
@@ -434,8 +441,9 @@ pub fn exists(
 }
 
 /// Returns a boolean value indicating whether only one value in the provided
-/// list or map meets the predicate defined by the provided expression. If
-/// called on a map, the predicate is applied to the map keys.
+/// list or map meets the predicate defined by the provided expression.
+///
+/// If called on a map, the predicate is applied to the map keys.
 ///
 /// This function is intended to be used like the CEL-go `exists` macro:
 /// <https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros>
@@ -486,6 +494,7 @@ pub fn exists_one(
 }
 
 /// Duration parses the provided argument into a [`Value::Duration`] value.
+///
 /// The argument must be string, and must be in the format of a duration. See
 /// the [`parse_duration`] documentation for more information on the supported
 /// formats.
