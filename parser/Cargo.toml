@@ -9,14 +9,14 @@ license = "MIT"
 categories = ["parsing"]
 
 [dependencies]
-lalrpop-util = { version = "0.19.1", features = ["lexer"] }
+lalrpop-util = { version = "0.22.0", features = ["lexer"] }
 regex = "1.4.2"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
 
 [build-dependencies]
-lalrpop = { version = "0.19.1", features = ["lexer"] }
+lalrpop = { version = "0.22.0", features = ["lexer"] }
 
 [[bench]]
 name = "runtime"
