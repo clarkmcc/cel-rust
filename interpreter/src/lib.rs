@@ -19,7 +19,7 @@ mod magic;
 pub mod objects;
 mod resolvers;
 mod ser;
-pub use ser::to_value;
+pub use ser::{to_value, Duration, Timestamp};
 
 #[cfg(feature = "json")]
 mod json;
