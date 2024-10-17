@@ -165,14 +165,6 @@ impl<'a> Default for Context<'a> {
             functions: Default::default(),
         };
 
-        #[cfg(feature = "regex")]
-        ctx.add_function("matches", functions::matches);
-
-        #[cfg(feature = "chrono")]
-        ctx.add_function("duration", functions::duration);
-        #[cfg(feature = "chrono")]
-        ctx.add_function("timestamp", functions::timestamp);
-
         ctx.add_function("contains", functions::contains);
         ctx.add_function("size", functions::size);
         ctx.add_function("has", functions::has);
@@ -189,6 +181,14 @@ impl<'a> Default for Context<'a> {
         ctx.add_function("exists_one", functions::exists_one);
         ctx.add_function("int", functions::int);
         ctx.add_function("uint", functions::uint);
+
+        #[cfg(feature = "regex")]
+        ctx.add_function("matches", functions::matches);
+        #[cfg(feature = "chrono")]
+        ctx.add_function("duration", functions::duration);
+        #[cfg(feature = "chrono")]
+        ctx.add_function("timestamp", functions::timestamp);
+
         ctx
     }
 }

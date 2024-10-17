@@ -4,8 +4,6 @@ use crate::ser::SerializationError;
 use crate::ExecutionError::NoSuchKey;
 use crate::{to_value, ExecutionError};
 use cel_parser::{ArithmeticOp, Atom, Expression, Member, RelationOp, UnaryOp};
-#[cfg(feature = "chrono")]
-use chrono::{DateTime, Duration, FixedOffset};
 use core::ops;
 use serde::{Serialize, Serializer};
 use std::cmp::Ordering;
@@ -176,9 +174,9 @@ pub enum Value {
     Bytes(Arc<Vec<u8>>),
     Bool(bool),
     #[cfg(feature = "chrono")]
-    Duration(Duration),
+    Duration(chrono::Duration),
     #[cfg(feature = "chrono")]
-    Timestamp(DateTime<FixedOffset>),
+    Timestamp(chrono::DateTime<chrono::FixedOffset>),
     Null,
 }
 

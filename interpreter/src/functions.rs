@@ -1,15 +1,9 @@
 use crate::context::Context;
-#[cfg(feature = "chrono")]
-use crate::duration::{format_duration, parse_duration};
 use crate::magic::{Arguments, Identifier, This};
 use crate::objects::{Value, ValueType};
 use crate::resolvers::{Argument, Resolver};
 use crate::ExecutionError;
 use cel_parser::Expression;
-#[cfg(feature = "chrono")]
-use chrono::{DateTime, Duration, FixedOffset};
-#[cfg(feature = "regex")]
-use regex::Regex;
 use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::sync::Arc;
@@ -158,7 +152,7 @@ pub fn string(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
         #[cfg(feature = "chrono")]
         Value::Timestamp(t) => Value::String(t.to_rfc3339().into()),
         #[cfg(feature = "chrono")]
-        Value::Duration(v) => Value::String(format_duration(&v).into()),
+        Value::Duration(v) => Value::String(crate::duration::format_duration(&v).into()),
         Value::Int(v) => Value::String(v.to_string().into()),
         Value::UInt(v) => Value::String(v.to_string().into()),
         Value::Float(v) => Value::String(v.to_string().into()),
@@ -258,7 +252,7 @@ pub fn matches(
     This(this): This<Arc<String>>,
     regex: Arc<String>,
 ) -> Result<bool> {
-    match Regex::new(&regex) {
+    match regex::Regex::new(&regex) {
         Ok(re) => Ok(re.is_match(&this)),
         Err(err) => Err(ftx.error(format!("'{regex}' not a valid regex:\n{err}"))),
     }
@@ -515,7 +509,7 @@ pub fn duration(value: Arc<String>) -> Result<Value> {
 #[cfg(feature = "chrono")]
 pub fn timestamp(value: Arc<String>) -> Result<Value> {
     Ok(Value::Timestamp(
-        DateTime::parse_from_rfc3339(value.as_str())
+        chrono::DateTime::parse_from_rfc3339(value.as_str())
             .map_err(|e| ExecutionError::function_error("timestamp", e.to_string().as_str()))?,
     ))
 }
@@ -523,15 +517,15 @@ pub fn timestamp(value: Arc<String>) -> Result<Value> {
 /// A wrapper around [`parse_duration`] that converts errors into [`ExecutionError`].
 /// and only returns the duration, rather than returning the remaining input.
 #[cfg(feature = "chrono")]
-fn _duration(i: &str) -> Result<Duration> {
-    let (_, duration) =
-        parse_duration(i).map_err(|e| ExecutionError::function_error("duration", e.to_string()))?;
+fn _duration(i: &str) -> Result<chrono::Duration> {
+    let (_, duration) = crate::duration::parse_duration(i)
+        .map_err(|e| ExecutionError::function_error("duration", e.to_string()))?;
     Ok(duration)
 }
 
 #[cfg(feature = "chrono")]
-fn _timestamp(i: &str) -> Result<DateTime<FixedOffset>> {
-    DateTime::parse_from_rfc3339(i)
+fn _timestamp(i: &str) -> Result<chrono::DateTime<chrono::FixedOffset>> {
+    chrono::DateTime::parse_from_rfc3339(i)
         .map_err(|e| ExecutionError::function_error("timestamp", e.to_string()))
 }
 
@@ -565,10 +559,6 @@ mod tests {
     use crate::testing::test_script;
     #[cfg(feature = "regex")]
     use crate::ExecutionError::FunctionError;
-    #[cfg(feature = "chrono")]
-    use crate::{Program, Value};
-    #[cfg(feature = "chrono")]
-    use chrono::{DateTime, FixedOffset};
     use std::collections::HashMap;
 
     fn assert_script(input: &(&str, &str)) {
@@ -752,11 +742,13 @@ mod tests {
     #[test]
     fn test_timestamp_variable() {
         let mut context = Context::default();
-        let ts: DateTime<FixedOffset> =
-            DateTime::parse_from_rfc3339("2023-05-29T00:00:00Z").unwrap();
-        context.add_variable("ts", Value::Timestamp(ts)).unwrap();
+        let ts: chrono::DateTime<chrono::FixedOffset> =
+            chrono::DateTime::parse_from_rfc3339("2023-05-29T00:00:00Z").unwrap();
+        context
+            .add_variable("ts", crate::Value::Timestamp(ts))
+            .unwrap();
 
-        let program = Program::compile("ts == timestamp('2023-05-29T00:00:00Z')").unwrap();
+        let program = crate::Program::compile("ts == timestamp('2023-05-29T00:00:00Z')").unwrap();
         let result = program.execute(&context).unwrap();
         assert_eq!(result, true.into());
     }
