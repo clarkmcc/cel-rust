@@ -1,5 +1,6 @@
 use crate::Value;
 use base64::prelude::*;
+#[cfg(feature = "chrono")]
 use chrono::Duration;
 use thiserror::Error;
 
@@ -11,6 +12,7 @@ pub enum ConvertToJsonError<'a> {
     #[error("unable to convert value to json: {0:?}")]
     Value(&'a Value),
 
+    #[cfg(feature = "chrono")]
     /// The duration is too large to convert to nanoseconds. Any duration of 2^63
     /// nanoseconds or more will overflow. We'll return the duration type in the
     /// error message.
@@ -50,9 +52,11 @@ impl Value {
             Value::Float(f) => f.into(),
             Value::String(ref s) => s.to_string().into(),
             Value::Bool(b) => b.into(),
-            Value::Timestamp(ref dt) => dt.to_rfc3339().into(),
             Value::Bytes(ref b) => BASE64_STANDARD.encode(b.as_slice()).to_string().into(),
             Value::Null => serde_json::Value::Null,
+            #[cfg(feature = "chrono")]
+            Value::Timestamp(ref dt) => dt.to_rfc3339().into(),
+            #[cfg(feature = "chrono")]
             Value::Duration(ref v) => serde_json::Value::Number(serde_json::Number::from(
                 v.num_nanoseconds()
                     .ok_or(ConvertToJsonError::DurationOverflow(v))?,
@@ -66,22 +70,19 @@ impl Value {
 mod tests {
     use crate::objects::Map;
     use crate::Value as CelValue;
+    #[cfg(feature = "chrono")]
     use chrono::Duration;
     use serde_json::json;
     use std::collections::HashMap;
 
     #[test]
     fn test_cel_value_to_json() {
-        let tests = [
+        let mut tests = vec![
             (json!("hello"), CelValue::String("hello".to_string().into())),
             (json!(42), CelValue::Int(42)),
             (json!(42.0), CelValue::Float(42.0)),
             (json!(true), CelValue::Bool(true)),
             (json!(null), CelValue::Null),
-            (
-                json!(1_000_000_000),
-                CelValue::Duration(Duration::seconds(1)),
-            ),
             (
                 json!([true, null]),
                 CelValue::List(vec![CelValue::Bool(true), CelValue::Null].into()),
@@ -94,6 +95,14 @@ mod tests {
                 )]))),
             ),
         ];
+
+        #[cfg(feature = "chrono")]
+        if true {
+            tests.push((
+                json!(1_000_000_000),
+                CelValue::Duration(Duration::seconds(1)),
+            ));
+        }
 
         for (expected, value) in tests.iter() {
             assert_eq!(

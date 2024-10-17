@@ -4,7 +4,6 @@ use crate::ser::SerializationError;
 use crate::ExecutionError::NoSuchKey;
 use crate::{to_value, ExecutionError};
 use cel_parser::{ArithmeticOp, Atom, Expression, Member, RelationOp, UnaryOp};
-use chrono::{DateTime, Duration, FixedOffset};
 use core::ops;
 use serde::{Serialize, Serializer};
 use std::cmp::Ordering;
@@ -172,8 +171,10 @@ pub enum Value {
     String(Arc<String>),
     Bytes(Arc<Vec<u8>>),
     Bool(bool),
-    Duration(Duration),
-    Timestamp(DateTime<FixedOffset>),
+    #[cfg(feature = "chrono")]
+    Duration(chrono::Duration),
+    #[cfg(feature = "chrono")]
+    Timestamp(chrono::DateTime<chrono::FixedOffset>),
     Null,
 }
 
@@ -223,7 +224,9 @@ impl Value {
             Value::String(_) => ValueType::String,
             Value::Bytes(_) => ValueType::Bytes,
             Value::Bool(_) => ValueType::Bool,
+            #[cfg(feature = "chrono")]
             Value::Duration(_) => ValueType::Duration,
+            #[cfg(feature = "chrono")]
             Value::Timestamp(_) => ValueType::Timestamp,
             Value::Null => ValueType::Null,
         }
@@ -256,7 +259,9 @@ impl PartialEq for Value {
             (Value::Bytes(a), Value::Bytes(b)) => a == b,
             (Value::Bool(a), Value::Bool(b)) => a == b,
             (Value::Null, Value::Null) => true,
+            #[cfg(feature = "chrono")]
             (Value::Duration(a), Value::Duration(b)) => a == b,
+            #[cfg(feature = "chrono")]
             (Value::Timestamp(a), Value::Timestamp(b)) => a == b,
             // Allow different numeric types to be compared without explicit casting.
             (Value::Int(a), Value::UInt(b)) => a
@@ -289,7 +294,9 @@ impl PartialOrd for Value {
             (Value::String(a), Value::String(b)) => Some(a.cmp(b)),
             (Value::Bool(a), Value::Bool(b)) => Some(a.cmp(b)),
             (Value::Null, Value::Null) => Some(Ordering::Equal),
+            #[cfg(feature = "chrono")]
             (Value::Duration(a), Value::Duration(b)) => Some(a.cmp(b)),
+            #[cfg(feature = "chrono")]
             (Value::Timestamp(a), Value::Timestamp(b)) => Some(a.cmp(b)),
             // Allow different numeric types to be compared without explicit casting.
             (Value::Int(a), Value::UInt(b)) => Some(
@@ -642,7 +649,9 @@ impl<'a> Value {
             Value::Bytes(v) => !v.is_empty(),
             Value::Bool(v) => *v,
             Value::Null => false,
+            #[cfg(feature = "chrono")]
             Value::Duration(v) => v.num_nanoseconds().map(|n| n != 0).unwrap_or(false),
+            #[cfg(feature = "chrono")]
             Value::Timestamp(v) => v.timestamp_nanos_opt().unwrap_or_default() > 0,
             Value::Function(_, _) => false,
         }
@@ -700,8 +709,11 @@ impl ops::Add<Value> for Value {
                 }
                 Value::Map(Map { map: Arc::new(new) }).into()
             }
+            #[cfg(feature = "chrono")]
             (Value::Duration(l), Value::Duration(r)) => Value::Duration(l + r).into(),
+            #[cfg(feature = "chrono")]
             (Value::Timestamp(l), Value::Duration(r)) => Value::Timestamp(l + r).into(),
+            #[cfg(feature = "chrono")]
             (Value::Duration(l), Value::Timestamp(r)) => Value::Timestamp(r + l).into(),
             (left, right) => Err(ExecutionError::UnsupportedBinaryOperator(
                 "add", left, right,
@@ -726,8 +738,11 @@ impl ops::Sub<Value> for Value {
             (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 - r).into(),
             (Value::Float(l), Value::UInt(r)) => Value::Float(l - r as f64).into(),
             // todo: implement checked sub for these over-flowable operations
+            #[cfg(feature = "chrono")]
             (Value::Duration(l), Value::Duration(r)) => Value::Duration(l - r).into(),
+            #[cfg(feature = "chrono")]
             (Value::Timestamp(l), Value::Duration(r)) => Value::Timestamp(l - r).into(),
+            #[cfg(feature = "chrono")]
             (Value::Timestamp(l), Value::Timestamp(r)) => Value::Duration(l - r).into(),
             (left, right) => Err(ExecutionError::UnsupportedBinaryOperator(
                 "sub", left, right,
