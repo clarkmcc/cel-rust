@@ -2,7 +2,6 @@ use crate::macros::{impl_conversions, impl_handler};
 use crate::resolvers::{AllArguments, Argument};
 use crate::{ExecutionError, FunctionContext, ResolveResult, Value};
 use cel_parser::Expression;
-use chrono::{DateTime, Duration, FixedOffset};
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -14,9 +13,13 @@ impl_conversions!(
     Arc<String> => Value::String,
     Arc<Vec<u8>> => Value::Bytes,
     bool => Value::Bool,
-    Duration => Value::Duration,
-    DateTime<FixedOffset> => Value::Timestamp,
     Arc<Vec<Value>> => Value::List
+);
+
+#[cfg(feature = "chrono")]
+impl_conversions!(
+    chrono::Duration => Value::Duration,
+    chrono::DateTime<chrono::FixedOffset> => Value::Timestamp,
 );
 
 impl From<i32> for Value {
@@ -75,8 +78,10 @@ pub(crate) trait FromContext<'a, 'context> {
 
 /// A function argument abstraction enabling dynamic method invocation on a
 /// target instance or on the first argument if the function is not called
-/// as a method. This is similar to how methods can be called as functions
-/// using the [fully-qualified syntax](https://doc.rust-lang.org/book/ch19-03-advanced-traits.html#fully-qualified-syntax-for-disambiguation-calling-methods-with-the-same-name).
+/// as a method.
+///
+/// This is similar to how methods can be called as functions using the
+/// [fully-qualified syntax](https://doc.rust-lang.org/book/ch19-03-advanced-traits.html#fully-qualified-syntax-for-disambiguation-calling-methods-with-the-same-name).
 ///
 /// # Using `This`
 /// ```
@@ -142,8 +147,10 @@ where
 }
 
 /// Identifier is an argument extractor that attempts to extract an identifier
-/// from an argument's expression. It fails if the argument is not available,
-/// or if the argument cannot be converted into an expression.
+/// from an argument's expression.
+///
+/// It fails if the argument is not available, or if the argument cannot be
+/// converted into an expression.
 ///
 /// # Examples
 /// Identifiers are useful for functions like `.map` or `.filter` where one
@@ -198,9 +205,10 @@ impl From<Identifier> for String {
 }
 
 /// An argument extractor that extracts all the arguments passed to a function, resolves their
-/// expressions and returns a vector of [`Value`]. This is useful for functions that accept a
-/// variable number of arguments rather than known arguments and types (for example a `sum`
-/// function).
+/// expressions and returns a vector of [`Value`].
+///
+/// This is useful for functions that accept a variable number of arguments rather than known
+/// arguments and types (for example a `sum` function).
 ///
 /// # Example
 /// ```javascript

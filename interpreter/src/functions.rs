@@ -1,12 +1,9 @@
 use crate::context::Context;
-use crate::duration::{format_duration, parse_duration};
 use crate::magic::{Arguments, Identifier, This};
 use crate::objects::{Value, ValueType};
 use crate::resolvers::{Argument, Resolver};
 use crate::ExecutionError;
 use cel_parser::Expression;
-use chrono::{DateTime, Duration, FixedOffset};
-use regex::Regex;
 use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::sync::Arc;
@@ -14,6 +11,7 @@ use std::sync::Arc;
 type Result<T> = std::result::Result<T, ExecutionError>;
 
 /// `FunctionContext` is a context object passed to functions when they are called.
+///
 /// It contains references to the target object (if the function is called as
 /// a method), the program context ([`Context`]) which gives functions access
 /// to variables, and the arguments to the function call.
@@ -57,8 +55,10 @@ impl<'context> FunctionContext<'context> {
 }
 
 /// Calculates the size of either the target, or the provided args depending on how
-/// the function is called. If called as a method, the target will be used. If called
-/// as a function, the first argument will be used.
+/// the function is called.
+///
+/// If called as a method, the target will be used. If called as a function, the
+/// first argument will be used.
 ///
 /// The following [`Value`] variants are supported:
 /// * [`Value::List`]
@@ -152,8 +152,10 @@ pub fn contains(This(this): This<Value>, arg: Value) -> Result<Value> {
 pub fn string(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
     Ok(match this {
         Value::String(v) => Value::String(v.clone()),
+        #[cfg(feature = "chrono")]
         Value::Timestamp(t) => Value::String(t.to_rfc3339().into()),
-        Value::Duration(v) => Value::String(format_duration(&v).into()),
+        #[cfg(feature = "chrono")]
+        Value::Duration(v) => Value::String(crate::duration::format_duration(&v).into()),
         Value::Int(v) => Value::String(v.to_string().into()),
         Value::UInt(v) => Value::String(v.to_string().into()),
         Value::Float(v) => Value::String(v.to_string().into()),
@@ -247,21 +249,23 @@ pub fn ends_with(This(this): This<Arc<String>>, suffix: Arc<String>) -> bool {
 /// ```cel
 /// "abc".matches("^[a-z]*$") == true
 /// ```
+#[cfg(feature = "regex")]
 pub fn matches(
     ftx: &FunctionContext,
     This(this): This<Arc<String>>,
     regex: Arc<String>,
 ) -> Result<bool> {
-    match Regex::new(&regex) {
+    match regex::Regex::new(&regex) {
         Ok(re) => Ok(re.is_match(&this)),
         Err(err) => Err(ftx.error(format!("'{regex}' not a valid regex:\n{err}"))),
     }
 }
 
-/// Returns true if the provided argument can be resolved. This function is
-/// useful for checking if a property exists on a type before attempting to
-/// resolve it. Resolving a property that does not exist will result in a
-/// [`ExecutionError::NoSuchKey`] error.
+/// Returns true if the provided argument can be resolved.
+///
+/// This function is useful for checking if a property exists on a type before
+/// attempting to resolve it. Resolving a property that does not exist will
+/// result in a [`ExecutionError::NoSuchKey`] error.
 ///
 /// Operates similar to the `has` macro describe in the Go CEL implementation
 /// spec: <https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros>.
@@ -284,8 +288,10 @@ pub fn has(ftx: &FunctionContext) -> Result<Value> {
 }
 
 /// Maps the provided list to a new list by applying an expression to each
-/// input item. This function is intended to be used like the CEL-go `map`
-/// macro: <https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros>
+/// input item.
+///
+/// This function is intended to be used like the CEL-go `map` macro:
+/// <https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros>
 ///
 /// # Examples
 /// ```cel
@@ -391,8 +397,9 @@ pub fn all(
 }
 
 /// Returns a boolean value indicating whether a or more values in the provided
-/// list or map meet the predicate defined by the provided expression. If
-/// called on a map, the predicate is applied to the map keys.
+/// list or map meet the predicate defined by the provided expression.
+///
+/// If called on a map, the predicate is applied to the map keys.
 ///
 /// This function is intended to be used like the CEL-go `exists` macro:
 /// <https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros>
@@ -434,8 +441,9 @@ pub fn exists(
 }
 
 /// Returns a boolean value indicating whether only one value in the provided
-/// list or map meets the predicate defined by the provided expression. If
-/// called on a map, the predicate is applied to the map keys.
+/// list or map meets the predicate defined by the provided expression.
+///
+/// If called on a map, the predicate is applied to the map keys.
 ///
 /// This function is intended to be used like the CEL-go `exists` macro:
 /// <https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros>
@@ -486,6 +494,7 @@ pub fn exists_one(
 }
 
 /// Duration parses the provided argument into a [`Value::Duration`] value.
+///
 /// The argument must be string, and must be in the format of a duration. See
 /// the [`parse_duration`] documentation for more information on the supported
 /// formats.
@@ -499,17 +508,34 @@ pub fn exists_one(
 /// - `1.5ms` parses as 1 millisecond and 500 microseconds
 /// - `1ns` parses as 1 nanosecond
 /// - `1.5ns` parses as 1 nanosecond (sub-nanosecond durations not supported)
+#[cfg(feature = "chrono")]
 pub fn duration(value: Arc<String>) -> Result<Value> {
     Ok(Value::Duration(_duration(value.as_str())?))
 }
 
 /// Timestamp parses the provided argument into a [`Value::Timestamp`] value.
 /// The
+#[cfg(feature = "chrono")]
 pub fn timestamp(value: Arc<String>) -> Result<Value> {
     Ok(Value::Timestamp(
-        DateTime::parse_from_rfc3339(value.as_str())
+        chrono::DateTime::parse_from_rfc3339(value.as_str())
             .map_err(|e| ExecutionError::function_error("timestamp", e.to_string().as_str()))?,
     ))
+}
+
+/// A wrapper around [`parse_duration`] that converts errors into [`ExecutionError`].
+/// and only returns the duration, rather than returning the remaining input.
+#[cfg(feature = "chrono")]
+fn _duration(i: &str) -> Result<chrono::Duration> {
+    let (_, duration) = crate::duration::parse_duration(i)
+        .map_err(|e| ExecutionError::function_error("duration", e.to_string()))?;
+    Ok(duration)
+}
+
+#[cfg(feature = "chrono")]
+fn _timestamp(i: &str) -> Result<chrono::DateTime<chrono::FixedOffset>> {
+    chrono::DateTime::parse_from_rfc3339(i)
+        .map_err(|e| ExecutionError::function_error("timestamp", e.to_string()))
 }
 
 pub fn max(Arguments(args): Arguments) -> Result<Value> {
@@ -536,25 +562,12 @@ pub fn max(Arguments(args): Arguments) -> Result<Value> {
         .cloned()
 }
 
-/// A wrapper around [`parse_duration`] that converts errors into [`ExecutionError`].
-/// and only returns the duration, rather than returning the remaining input.
-fn _duration(i: &str) -> Result<Duration> {
-    let (_, duration) =
-        parse_duration(i).map_err(|e| ExecutionError::function_error("duration", e.to_string()))?;
-    Ok(duration)
-}
-
-fn _timestamp(i: &str) -> Result<DateTime<FixedOffset>> {
-    DateTime::parse_from_rfc3339(i)
-        .map_err(|e| ExecutionError::function_error("timestamp", e.to_string()))
-}
-
 #[cfg(test)]
 mod tests {
     use crate::context::Context;
     use crate::testing::test_script;
-    use crate::{Program, Value};
-    use chrono::{DateTime, FixedOffset};
+    #[cfg(feature = "regex")]
+    use crate::ExecutionError::FunctionError;
     use std::collections::HashMap;
 
     fn assert_script(input: &(&str, &str)) {
@@ -662,27 +675,6 @@ mod tests {
     }
 
     #[test]
-    fn test_duration() {
-        [
-            ("duration equal 1", "duration('1s') == duration('1000ms')"),
-            ("duration equal 2", "duration('1m') == duration('60s')"),
-            ("duration equal 3", "duration('1h') == duration('60m')"),
-            ("duration comparison 1", "duration('1m') > duration('1s')"),
-            ("duration comparison 2", "duration('1m') < duration('1h')"),
-            (
-                "duration subtraction",
-                "duration('1h') - duration('1m') == duration('59m')",
-            ),
-            (
-                "duration addition",
-                "duration('1h') + duration('1m') == duration('1h1m')",
-            ),
-        ]
-        .iter()
-        .for_each(assert_script);
-    }
-
-    #[test]
     fn test_starts_with() {
         [
             ("starts with true", "'foobar'.startsWith('foo') == true"),
@@ -702,6 +694,7 @@ mod tests {
         .for_each(assert_script);
     }
 
+    #[cfg(feature = "chrono")]
     #[test]
     fn test_timestamp() {
         [(
@@ -732,26 +725,109 @@ mod tests {
         .for_each(assert_script);
     }
 
+    #[cfg(feature = "chrono")]
+    #[test]
+    fn test_duration() {
+        [
+            ("duration equal 1", "duration('1s') == duration('1000ms')"),
+            ("duration equal 2", "duration('1m') == duration('60s')"),
+            ("duration equal 3", "duration('1h') == duration('60m')"),
+            ("duration comparison 1", "duration('1m') > duration('1s')"),
+            ("duration comparison 2", "duration('1m') < duration('1h')"),
+            (
+                "duration subtraction",
+                "duration('1h') - duration('1m') == duration('59m')",
+            ),
+            (
+                "duration addition",
+                "duration('1h') + duration('1m') == duration('1h1m')",
+            ),
+        ]
+        .iter()
+        .for_each(assert_script);
+    }
+
+    #[cfg(feature = "chrono")]
     #[test]
     fn test_timestamp_variable() {
         let mut context = Context::default();
-        let ts: DateTime<FixedOffset> =
-            DateTime::parse_from_rfc3339("2023-05-29T00:00:00Z").unwrap();
-        context.add_variable("ts", Value::Timestamp(ts)).unwrap();
+        let ts: chrono::DateTime<chrono::FixedOffset> =
+            chrono::DateTime::parse_from_rfc3339("2023-05-29T00:00:00Z").unwrap();
+        context
+            .add_variable("ts", crate::Value::Timestamp(ts))
+            .unwrap();
 
-        let program = Program::compile("ts == timestamp('2023-05-29T00:00:00Z')").unwrap();
+        let program = crate::Program::compile("ts == timestamp('2023-05-29T00:00:00Z')").unwrap();
         let result = program.execute(&context).unwrap();
         assert_eq!(result, true.into());
     }
 
+    #[cfg(feature = "chrono")]
     #[test]
-    fn test_string() {
+    fn test_chrono_string() {
         [
             ("duration", "duration('1h30m').string() == '1h30m0s'"),
             (
                 "timestamp",
                 "timestamp('2023-05-29T00:00:00Z').string() == '2023-05-29T00:00:00+00:00'",
             ),
+        ]
+        .iter()
+        .for_each(assert_script);
+    }
+
+    #[test]
+    fn test_contains() {
+        let tests = vec![
+            ("list", "[1, 2, 3].contains(3) == true"),
+            ("map", "{1: true, 2: true, 3: true}.contains(3) == true"),
+            ("string", "'foobar'.contains('bar') == true"),
+            ("bytes", "b'foobar'.contains(b'o') == true"),
+        ];
+
+        for (name, script) in tests {
+            assert_eq!(test_script(script, None), Ok(true.into()), "{}", name);
+        }
+    }
+
+    #[cfg(feature = "regex")]
+    #[test]
+    fn test_matches() {
+        let tests = vec![
+            ("string", "'foobar'.matches('^[a-zA-Z]*$') == true"),
+            (
+                "map",
+                "{'1': 'abc', '2': 'def', '3': 'ghi'}.all(key, key.matches('^[a-zA-Z]*$')) == false",
+            ),
+        ];
+
+        for (name, script) in tests {
+            assert_eq!(
+                test_script(script, None),
+                Ok(true.into()),
+                ".matches failed for '{name}'"
+            );
+        }
+    }
+
+    #[cfg(feature = "regex")]
+    #[test]
+    fn test_matches_err() {
+        assert_eq!(
+            test_script(
+                "'foobar'.matches('(foo') == true", None),
+            Err(
+                FunctionError {
+                    function: "matches".to_string(),
+                    message: "'(foo' not a valid regex:\nregex parse error:\n    (foo\n    ^\nerror: unclosed group".to_string()
+                }
+            )
+        );
+    }
+
+    #[test]
+    fn test_string() {
+        [
             ("string", "'foo'.string() == 'foo'"),
             ("int", "10.string() == '10'"),
             ("float", "10.5.string() == '10.5'"),

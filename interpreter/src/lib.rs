@@ -12,6 +12,7 @@ pub use cel_parser::Expression;
 pub use context::Context;
 pub use functions::FunctionContext;
 pub use objects::{ResolveResult, Value};
+#[cfg(feature = "chrono")]
 mod duration;
 pub mod functions;
 mod magic;
@@ -184,7 +185,6 @@ mod tests {
     use crate::context::Context;
     use crate::objects::{ResolveResult, Value};
     use crate::testing::test_script;
-    use crate::ExecutionError::FunctionError;
     use crate::{ExecutionError, Program};
     use std::collections::HashMap;
     use std::convert::TryInto;
@@ -227,53 +227,6 @@ mod tests {
         assert_output(
             "{'a': 1} + {'a': 2, 'b': 3}",
             Ok(HashMap::from([("a", 2), ("b", 3)]).into()),
-        );
-    }
-
-    #[test]
-    fn test_contains() {
-        let tests = vec![
-            ("list", "[1, 2, 3].contains(3) == true"),
-            ("map", "{1: true, 2: true, 3: true}.contains(3) == true"),
-            ("string", "'foobar'.contains('bar') == true"),
-            ("bytes", "b'foobar'.contains(b'o') == true"),
-        ];
-
-        for (name, script) in tests {
-            assert_eq!(test_script(script, None), Ok(true.into()), "{}", name);
-        }
-    }
-
-    #[test]
-    fn test_matches() {
-        let tests = vec![
-            ("string", "'foobar'.matches('^[a-zA-Z]*$') == true"),
-            (
-                "map",
-                "{'1': 'abc', '2': 'def', '3': 'ghi'}.all(key, key.matches('^[a-zA-Z]*$')) == false",
-            ),
-        ];
-
-        for (name, script) in tests {
-            assert_eq!(
-                test_script(script, None),
-                Ok(true.into()),
-                ".matches failed for '{name}'"
-            );
-        }
-    }
-
-    #[test]
-    fn test_matches_err() {
-        assert_eq!(
-            test_script(
-                "'foobar'.matches('(foo') == true", None),
-            Err(
-                FunctionError {
-                    function: "matches".to_string(),
-                    message: "'(foo' not a valid regex:\nregex parse error:\n    (foo\n    ^\nerror: unclosed group".to_string()
-                }
-            )
         );
     }
 
