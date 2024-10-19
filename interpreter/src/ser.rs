@@ -151,7 +151,7 @@ impl ser::Serialize for Timestamp {
     where
         S: ser::Serializer,
     {
-        serializer.serialize_newtype_struct(Self::NAME, &self.0.to_rfc3339())
+        serializer.serialize_newtype_struct(Self::NAME, &self.0)
     }
 }
 
@@ -789,7 +789,7 @@ impl ser::Serializer for TimeSerializer {
 
     fn serialize_str(self, v: &str) -> Result<Value> {
         assert!(matches!(self, Self::Timestamp));
-        Ok(chrono::DateTime::parse_from_rfc3339(v)
+        Ok(v.parse::<chrono::DateTime<FixedOffset>>()
             .map_err(|e| SerializationError::SerdeError(e.to_string()))?
             .into())
     }
