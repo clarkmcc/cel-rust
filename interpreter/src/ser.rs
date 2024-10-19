@@ -543,13 +543,13 @@ impl ser::SerializeStructVariant for SerializeStructVariant {
 impl ser::SerializeStruct for SerializeTimestamp {
     type Ok = Value;
     type Error = SerializationError;
-    fn serialize_field<T: ?Sized>(
+    fn serialize_field<T>(
         &mut self,
         key: &'static str,
         value: &T,
     ) -> std::result::Result<(), Self::Error>
     where
-        T: Serialize,
+        T: ?Sized + Serialize,
     {
         match key {
             Duration::SECS_FIELD => {
