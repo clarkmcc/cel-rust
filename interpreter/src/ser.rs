@@ -6,7 +6,7 @@
 use crate::{objects::Key, Value};
 use chrono::FixedOffset;
 use serde::{
-    ser::{self, Impossible},
+    ser::{self, Impossible, SerializeStruct},
     Serialize,
 };
 use std::{collections::HashMap, fmt::Display, iter::FromIterator, sync::Arc};
@@ -16,10 +16,6 @@ pub struct KeySerializer;
 
 /// A wrapper Duration type which allows conversion to [Value::Duration] for
 /// types using automatic conversion with [serde::Serialize].
-///
-/// It is only recommended to use this type with the cel_interpreter
-/// [serde::Serializer] implementation, as it may produce unexpected output
-/// with other Serializers.
 ///
 /// # Examples
 ///
@@ -53,10 +49,11 @@ pub struct Duration(pub chrono::Duration);
 
 impl Duration {
     // Since serde can't natively represent durations, we serialize a special
-    // struct+field to indicate we want to rebuild the duration in the result.
-    const SECONDS_FIELD: &str = "$__cel_private_duration_secs";
-    const NANOS_FIELD: &str = "$__cel_private_duration_nanos";
+    // newtype to indicate we want to rebuild the duration in the result, while
+    // remaining compatible with most other Serializer implemenations.
     const NAME: &str = "$__cel_private_Duration";
+    const SECS_FIELD: &str = "secs";
+    const NANOS_FIELD: &str = "nanos";
 }
 
 impl From<Duration> for chrono::Duration {
@@ -76,21 +73,27 @@ impl ser::Serialize for Duration {
     where
         S: ser::Serializer,
     {
-        use serde::ser::SerializeStruct;
-
-        let mut s = serializer.serialize_struct(Self::NAME, 1)?;
-        s.serialize_field(Self::NANOS_FIELD, &self.0.subsec_nanos())?;
-        s.serialize_field(Self::SECONDS_FIELD, &self.0.num_seconds())?;
-        s.end()
+        // chrono::Duration's Serialize impl isn't stable yet and relies on
+        // private fields, so attempt to mimic serde's default impl for std
+        // Duration.
+        struct DurationProxy(chrono::Duration);
+        impl Serialize for DurationProxy {
+            fn serialize<S: ser::Serializer>(
+                &self,
+                serializer: S,
+            ) -> std::result::Result<S::Ok, S::Error> {
+                let mut s = serializer.serialize_struct("Duration", 2)?;
+                s.serialize_field(Duration::SECS_FIELD, &self.0.num_seconds())?;
+                s.serialize_field(Duration::NANOS_FIELD, &self.0.subsec_nanos())?;
+                s.end()
+            }
+        }
+        serializer.serialize_newtype_struct(Self::NAME, &DurationProxy(self.0))
     }
 }
 
 /// A wrapper Timestamp type which allows conversion to [Value::Timestamp] for
 /// types using automatic conversion with [serde::Serialize].
-///
-/// It is only recommended to use this type with the cel_interpreter
-/// [serde::Serializer] implementation, as it may produce unexpected output
-/// with other Serializers.
 ///
 /// # Examples
 ///
@@ -125,9 +128,9 @@ impl ser::Serialize for Duration {
 pub struct Timestamp(pub chrono::DateTime<FixedOffset>);
 
 impl Timestamp {
-    // Since serde can't natively represent durations, we serialize a special
-    // struct+field to indicate we want to rebuild the duration in the result.
-    const FIELD: &str = "$__cel_private_timestamp";
+    // Since serde can't natively represent timestamps, we serialize a special
+    // newtype to indicate we want to rebuild the timestamp in the result,
+    // while remaining compatible with most other Serializer implemenations.
     const NAME: &str = "$__cel_private_Timestamp";
 }
 
@@ -148,11 +151,7 @@ impl ser::Serialize for Timestamp {
     where
         S: ser::Serializer,
     {
-        use serde::ser::SerializeStruct;
-
-        let mut s = serializer.serialize_struct(Self::NAME, 1)?;
-        s.serialize_field(Self::FIELD, &self.0.to_rfc3339())?;
-        s.end()
+        serializer.serialize_newtype_struct(Self::NAME, &self.0)
     }
 }
 
@@ -285,11 +284,15 @@ impl ser::Serializer for Serializer {
         self.serialize_str(variant)
     }
 
-    fn serialize_newtype_struct<T>(self, _name: &'static str, value: &T) -> Result<Value>
+    fn serialize_newtype_struct<T>(self, name: &'static str, value: &T) -> Result<Value>
     where
         T: ?Sized + Serialize,
     {
-        value.serialize(self)
+        match name {
+            Duration::NAME => value.serialize(TimeSerializer::Duration),
+            Timestamp::NAME => value.serialize(TimeSerializer::Timestamp),
+            _ => value.serialize(self),
+        }
     }
 
     fn serialize_newtype_variant<T>(
@@ -338,26 +341,13 @@ impl ser::Serializer for Serializer {
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap> {
         Ok(SerializeMap {
-            kind: SerializeMapKind::Map(HashMap::new()),
+            map: HashMap::new(),
             next_key: None,
         })
     }
 
-    fn serialize_struct(self, name: &'static str, len: usize) -> Result<Self::SerializeStruct> {
-        match name {
-            Duration::NAME => Ok(SerializeMap {
-                kind: SerializeMapKind::Duration {
-                    seconds: 0,
-                    nanos: 0,
-                },
-                next_key: None,
-            }),
-            Timestamp::NAME => Ok(SerializeMap {
-                kind: SerializeMapKind::Timestamp(Arc::new(String::new())),
-                next_key: None,
-            }),
-            _ => self.serialize_map(Some(len)),
-        }
+    fn serialize_struct(self, _name: &'static str, len: usize) -> Result<Self::SerializeStruct> {
+        self.serialize_map(Some(len))
     }
 
     fn serialize_struct_variant(
@@ -384,19 +374,19 @@ pub struct SerializeTupleVariant {
 }
 
 pub struct SerializeMap {
-    kind: SerializeMapKind,
+    map: HashMap<Key, Value>,
     next_key: Option<Key>,
-}
-
-enum SerializeMapKind {
-    Map(HashMap<Key, Value>),
-    Duration { seconds: i64, nanos: i32 },
-    Timestamp(Arc<String>),
 }
 
 pub struct SerializeStructVariant {
     name: String,
     map: HashMap<Key, Value>,
+}
+
+#[derive(Debug, Default)]
+struct SerializeTimestamp {
+    secs: i64,
+    nanos: i32,
 }
 
 impl ser::SerializeSeq for SerializeVec {
@@ -482,10 +472,7 @@ impl ser::SerializeMap for SerializeMap {
     where
         T: ?Sized + Serialize,
     {
-        let SerializeMapKind::Map(map) = &mut self.kind else {
-            unreachable!();
-        };
-        map.insert(
+        self.map.insert(
             self.next_key.clone().ok_or_else(|| {
                 SerializationError::InvalidKey(
                     "serialize_value called before serialize_key".to_string(),
@@ -497,16 +484,7 @@ impl ser::SerializeMap for SerializeMap {
     }
 
     fn end(self) -> Result<Value> {
-        match self.kind {
-            SerializeMapKind::Map(map) => Ok(map.into()),
-            SerializeMapKind::Duration { seconds, nanos } => Ok(chrono::Duration::seconds(seconds)
-                .checked_add(&chrono::Duration::nanoseconds(nanos.into()))
-                .unwrap()
-                .into()),
-            SerializeMapKind::Timestamp(raw) => Ok(chrono::DateTime::parse_from_rfc3339(&raw)
-                .map_err(|e| SerializationError::SerdeError(e.to_string()))?
-                .into()),
-        }
+        Ok(self.map.into())
     }
 }
 
@@ -518,50 +496,7 @@ impl ser::SerializeStruct for SerializeMap {
     where
         T: ?Sized + Serialize,
     {
-        match &mut self.kind {
-            SerializeMapKind::Map(_) => serde::ser::SerializeMap::serialize_entry(self, key, value),
-            SerializeMapKind::Duration { seconds, nanos } => match key {
-                Duration::SECONDS_FIELD => {
-                    let Value::Int(val) = value.serialize(Serializer)? else {
-                        return Err(SerializationError::SerdeError(
-                            "invalid type of value in timestamp struct".to_owned(),
-                        ));
-                    };
-                    *seconds = val;
-                    Ok(())
-                }
-                Duration::NANOS_FIELD => {
-                    let Value::Int(val) = value.serialize(Serializer)? else {
-                        return Err(SerializationError::SerdeError(
-                            "invalid type of value in timestamp struct".to_owned(),
-                        ));
-                    };
-                    *nanos = val.try_into().map_err(|_| {
-                        SerializationError::SerdeError(
-                            "timestamp struct nanos field is invalid".to_owned(),
-                        )
-                    })?;
-                    Ok(())
-                }
-                _ => Err(SerializationError::SerdeError(
-                    "invalid field in duration struct".to_owned(),
-                )),
-            },
-            SerializeMapKind::Timestamp(raw) => {
-                if key != Timestamp::FIELD {
-                    return Err(SerializationError::SerdeError(
-                        "invalid field in timestamp struct".to_owned(),
-                    ));
-                }
-                let Value::String(val) = value.serialize(Serializer)? else {
-                    return Err(SerializationError::SerdeError(
-                        "invalid type of value in timestamp struct".to_owned(),
-                    ));
-                };
-                *raw = val;
-                Ok(())
-            }
-        }
+        serde::ser::SerializeMap::serialize_entry(self, key, value)
     }
 
     fn end(self) -> Result<Value> {
@@ -585,6 +520,54 @@ impl ser::SerializeStructVariant for SerializeStructVariant {
     fn end(self) -> Result<Value> {
         let map: HashMap<String, Value> = HashMap::from_iter([(self.name, self.map.into())]);
         Ok(map.into())
+    }
+}
+
+impl ser::SerializeStruct for SerializeTimestamp {
+    type Ok = Value;
+    type Error = SerializationError;
+    fn serialize_field<T: ?Sized>(
+        &mut self,
+        key: &'static str,
+        value: &T,
+    ) -> std::result::Result<(), Self::Error>
+    where
+        T: Serialize,
+    {
+        match key {
+            Duration::SECS_FIELD => {
+                let Value::Int(val) = value.serialize(Serializer)? else {
+                    return Err(SerializationError::SerdeError(
+                        "invalid type of value in timestamp struct".to_owned(),
+                    ));
+                };
+                self.secs = val;
+                Ok(())
+            }
+            Duration::NANOS_FIELD => {
+                let Value::Int(val) = value.serialize(Serializer)? else {
+                    return Err(SerializationError::SerdeError(
+                        "invalid type of value in timestamp struct".to_owned(),
+                    ));
+                };
+                self.nanos = val.try_into().map_err(|_| {
+                    SerializationError::SerdeError(
+                        "timestamp struct nanos field is invalid".to_owned(),
+                    )
+                })?;
+                Ok(())
+            }
+            _ => Err(SerializationError::SerdeError(
+                "invalid field in duration struct".to_owned(),
+            )),
+        }
+    }
+
+    fn end(self) -> std::result::Result<Self::Ok, Self::Error> {
+        Ok(chrono::Duration::seconds(self.secs)
+            .checked_add(&chrono::Duration::nanoseconds(self.nanos.into()))
+            .unwrap()
+            .into())
     }
 }
 
@@ -774,6 +757,181 @@ impl ser::Serializer for KeySerializer {
         Err(SerializationError::InvalidKey(
             "Struct variants are not supported".to_string(),
         ))
+    }
+}
+
+#[derive(Debug)]
+enum TimeSerializer {
+    Duration,
+    Timestamp,
+}
+
+impl ser::Serializer for TimeSerializer {
+    type Ok = Value;
+    type Error = SerializationError;
+
+    type SerializeStruct = SerializeTimestamp;
+
+    // Should never be used, so just reuse existing.
+    type SerializeSeq = SerializeVec;
+    type SerializeTuple = SerializeVec;
+    type SerializeTupleStruct = SerializeVec;
+    type SerializeTupleVariant = SerializeTupleVariant;
+    type SerializeMap = SerializeMap;
+    type SerializeStructVariant = SerializeStructVariant;
+
+    fn serialize_struct(self, name: &'static str, len: usize) -> Result<Self::SerializeStruct> {
+        assert!(matches!(self, Self::Duration { .. }));
+        assert_eq!(name, "Duration");
+        assert_eq!(len, 2);
+        Ok(SerializeTimestamp::default())
+    }
+
+    fn serialize_str(self, v: &str) -> Result<Value> {
+        assert!(matches!(self, Self::Timestamp));
+        Ok(chrono::DateTime::parse_from_rfc3339(v)
+            .map_err(|e| SerializationError::SerdeError(e.to_string()))?
+            .into())
+    }
+
+    fn serialize_bool(self, _v: bool) -> Result<Value> {
+        unreachable!()
+    }
+
+    fn serialize_i8(self, _v: i8) -> Result<Value> {
+        unreachable!()
+    }
+
+    fn serialize_i16(self, _v: i16) -> Result<Value> {
+        unreachable!()
+    }
+
+    fn serialize_i32(self, _v: i32) -> Result<Value> {
+        unreachable!()
+    }
+
+    fn serialize_i64(self, _v: i64) -> Result<Value> {
+        unreachable!()
+    }
+
+    fn serialize_u8(self, _v: u8) -> Result<Value> {
+        unreachable!()
+    }
+
+    fn serialize_u16(self, _v: u16) -> Result<Value> {
+        unreachable!()
+    }
+
+    fn serialize_u32(self, _v: u32) -> Result<Value> {
+        unreachable!()
+    }
+
+    fn serialize_u64(self, _v: u64) -> Result<Value> {
+        unreachable!()
+    }
+
+    fn serialize_f32(self, _v: f32) -> Result<Value> {
+        unreachable!()
+    }
+
+    fn serialize_f64(self, _v: f64) -> Result<Value> {
+        unreachable!()
+    }
+
+    fn serialize_char(self, _v: char) -> Result<Value> {
+        unreachable!()
+    }
+
+    fn serialize_bytes(self, _v: &[u8]) -> Result<Value> {
+        unreachable!()
+    }
+
+    fn serialize_none(self) -> Result<Value> {
+        unreachable!()
+    }
+
+    fn serialize_some<T>(self, _value: &T) -> Result<Value>
+    where
+        T: ?Sized + Serialize,
+    {
+        unreachable!()
+    }
+
+    fn serialize_unit(self) -> Result<Value> {
+        unreachable!()
+    }
+
+    fn serialize_unit_struct(self, _name: &'static str) -> Result<Value> {
+        unreachable!()
+    }
+
+    fn serialize_unit_variant(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+    ) -> Result<Value> {
+        unreachable!()
+    }
+
+    fn serialize_newtype_struct<T>(self, _name: &'static str, _value: &T) -> Result<Value>
+    where
+        T: ?Sized + Serialize,
+    {
+        unreachable!()
+    }
+
+    fn serialize_newtype_variant<T>(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+        _value: &T,
+    ) -> Result<Value>
+    where
+        T: ?Sized + Serialize,
+    {
+        unreachable!()
+    }
+
+    fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
+        unreachable!()
+    }
+
+    fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple> {
+        unreachable!()
+    }
+
+    fn serialize_tuple_struct(
+        self,
+        _name: &'static str,
+        _len: usize,
+    ) -> Result<Self::SerializeTupleStruct> {
+        unreachable!()
+    }
+
+    fn serialize_tuple_variant(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+        _len: usize,
+    ) -> Result<Self::SerializeTupleVariant> {
+        unreachable!()
+    }
+
+    fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap> {
+        unreachable!()
+    }
+
+    fn serialize_struct_variant(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+        _len: usize,
+    ) -> Result<Self::SerializeStructVariant> {
+        unreachable!()
     }
 }
 
@@ -1061,5 +1219,30 @@ mod tests {
         ]
         .into();
         assert_eq!(durations, expected);
+    }
+
+    #[test]
+    fn test_duration_json() {
+        // Test that Durations serialize correctly with serde_json.
+        let durations = [
+            Duration(chrono::Duration::milliseconds(1527)),
+            // Let's test chrono::Duration's particular handling around math
+            // and negatives.
+            chrono::Duration::milliseconds(-1527).into(),
+            (chrono::Duration::seconds(1) - chrono::Duration::nanoseconds(1000000001)).into(),
+            (chrono::Duration::seconds(-1) + chrono::Duration::nanoseconds(1000000001)).into(),
+        ];
+        let expect = r#"[{"secs":1,"nanos":527000000},{"secs":-1,"nanos":-527000000},{"secs":0,"nanos":-1},{"secs":0,"nanos":1}]"#;
+        let actual = serde_json::to_string(&durations).unwrap();
+        assert_eq!(actual, expect);
+    }
+
+    #[test]
+    fn test_timestamp_json() {
+        // Test that Durations serialize correctly with serde_json.
+        let timestamp = chrono::DateTime::parse_from_rfc3339("2025-01-01T00:00:00Z").unwrap();
+        let expect = r#""2025-01-01T00:00:00Z""#;
+        let actual = serde_json::to_string(&timestamp).unwrap();
+        assert_eq!(actual, expect);
     }
 }
