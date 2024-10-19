@@ -1313,29 +1313,48 @@ mod tests {
     #[cfg(feature = "chrono")]
     #[cfg(feature = "json")]
     #[test]
-    fn test_duration_json() {
-        // Test that Durations serialize correctly with serde_json.
-        let durations = [
-            Duration(chrono::Duration::milliseconds(1527)),
-            // Let's test chrono::Duration's particular handling around math
-            // and negatives.
-            chrono::Duration::milliseconds(-1527).into(),
-            (chrono::Duration::seconds(1) - chrono::Duration::nanoseconds(1000000001)).into(),
-            (chrono::Duration::seconds(-1) + chrono::Duration::nanoseconds(1000000001)).into(),
-        ];
-        let expect = r#"[{"secs":1,"nanos":527000000},{"secs":-1,"nanos":-527000000},{"secs":0,"nanos":-1},{"secs":0,"nanos":1}]"#;
-        let actual = serde_json::to_string(&durations).unwrap();
-        assert_eq!(actual, expect);
-    }
+    fn test_time_json() {
+        use chrono::FixedOffset;
 
-    #[cfg(feature = "chrono")]
-    #[cfg(feature = "json")]
-    #[test]
-    fn test_timestamp_json() {
-        // Test that Durations serialize correctly with serde_json.
-        let timestamp = chrono::DateTime::parse_from_rfc3339("2025-01-01T00:00:00Z").unwrap();
-        let expect = r#""2025-01-01T00:00:00Z""#;
-        let actual = serde_json::to_string(&timestamp).unwrap();
+        // Test that Durations and Timestamps serialize correctly with
+        // serde_json.
+        let tests = [
+            TestTimeTypes {
+                dur: chrono::Duration::milliseconds(1527).into(),
+                ts: chrono::DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00")
+                    .unwrap()
+                    .into(),
+            },
+            TestTimeTypes {
+                dur: chrono::Duration::milliseconds(-1527).into(),
+                ts: "-0001-12-01T00:00:00-08:00"
+                    .parse::<chrono::DateTime<FixedOffset>>()
+                    .unwrap()
+                    .into(),
+            },
+            TestTimeTypes {
+                dur: (chrono::Duration::seconds(1) - chrono::Duration::nanoseconds(1000000001))
+                    .into(),
+                ts: chrono::DateTime::parse_from_rfc3339("0001-12-01T00:00:00+08:00")
+                    .unwrap()
+                    .into(),
+            },
+            TestTimeTypes {
+                dur: (chrono::Duration::seconds(-1) + chrono::Duration::nanoseconds(1000000001))
+                    .into(),
+                ts: chrono::DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00")
+                    .unwrap()
+                    .into(),
+            },
+        ];
+
+        let expect = "[\
+{\"dur\":{\"secs\":1,\"nanos\":527000000},\"ts\":\"1996-12-19T16:39:57-08:00\"},\
+{\"dur\":{\"secs\":-1,\"nanos\":-527000000},\"ts\":\"-0001-12-01T00:00:00-08:00\"},\
+{\"dur\":{\"secs\":0,\"nanos\":-1},\"ts\":\"0001-12-01T00:00:00+08:00\"},\
+{\"dur\":{\"secs\":0,\"nanos\":1},\"ts\":\"1996-12-19T16:39:57-08:00\"}\
+]";
+        let actual = serde_json::to_string(&tests).unwrap();
         assert_eq!(actual, expect);
     }
 }
