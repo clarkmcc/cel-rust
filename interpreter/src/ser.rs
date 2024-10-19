@@ -151,7 +151,7 @@ impl ser::Serialize for Timestamp {
     where
         S: ser::Serializer,
     {
-        serializer.serialize_newtype_struct(Self::NAME, &self.0)
+        serializer.serialize_newtype_struct(Self::NAME, &self.0.to_rfc3339())
     }
 }
 
