@@ -19,7 +19,9 @@ mod magic;
 pub mod objects;
 mod resolvers;
 mod ser;
-pub use ser::{to_value, Duration, Timestamp};
+pub use ser::to_value;
+#[cfg(feature = "chrono")]
+pub use ser::{Duration, Timestamp};
 
 #[cfg(feature = "json")]
 mod json;
