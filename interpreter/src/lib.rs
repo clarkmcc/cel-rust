@@ -8,6 +8,7 @@ use thiserror::Error;
 mod macros;
 
 pub mod context;
+pub use cel_parser::error::ParseError;
 pub use cel_parser::Expression;
 pub use context::Context;
 pub use functions::FunctionContext;
@@ -30,12 +31,6 @@ use magic::FromContext;
 
 pub mod extractors {
     pub use crate::magic::{Arguments, Identifier, This};
-}
-
-#[derive(Error, Debug)]
-#[error("Error parsing {msg}")]
-pub struct ParseError {
-    msg: String,
 }
 
 #[derive(Error, Debug, PartialEq, Clone)]
@@ -143,13 +138,7 @@ pub struct Program {
 
 impl Program {
     pub fn compile(source: &str) -> Result<Program, ParseError> {
-        match parse(source) {
-            Ok(expression) => Ok(Program { expression }),
-            // To-Do: Better error handling
-            Err(e) => Err(ParseError {
-                msg: format!("{}", e),
-            }),
-        }
+        parse(source).map(|expression| Program { expression })
     }
 
     pub fn execute(&self, context: &Context) -> ResolveResult {
