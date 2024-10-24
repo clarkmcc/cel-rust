@@ -11,6 +11,7 @@ categories = ["parsing"]
 [dependencies]
 lalrpop-util = { version = "0.22.0", features = ["lexer"] }
 regex = "1.4.2"
+thiserror = "1.0.40"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
