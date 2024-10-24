@@ -1,4 +1,4 @@
-use lalrpop_util::lalrpop_mod;
+use lalrpop_util::{lalrpop_mod, lexer::Token};
 
 pub mod ast;
 pub use ast::*;
@@ -6,18 +6,126 @@ pub use ast::*;
 pub mod parse;
 pub use parse::*;
 
-use std::fmt::Display;
+use std::{fmt::Display, iter};
 
 lalrpop_mod!(#[allow(clippy::all)] pub parser, "/cel.rs");
 
+#[derive(Debug, Clone)]
+pub struct Location {
+    pub line: usize,
+    pub column: usize,
+    pub absolute: usize,
+}
+
+#[derive(Debug, Default)]
+pub struct Span {
+    pub start: Option<Location>,
+    pub end: Option<Location>,
+}
+
+impl Span {
+    fn single_location(location: Location) -> Span {
+        Span {
+            start: Some(location.clone()),
+            end: Some(location),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct ParseError {
-    msg: String,
+    pub msg: String,
+    pub expected: Vec<String>,
+    pub span: Span,
 }
 
 impl Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.msg)
+    }
+}
+
+impl ParseError {
+    fn from_lalrpop(src_str: &str, err: lalrpop_util::ParseError<usize, Token<'_>, &str>) -> Self {
+        use lalrpop_util::ParseError::*;
+
+        match err {
+            InvalidToken { location } => ParseError {
+                span: byte_pos_to_src_location(src_str, location)
+                    .map(Span::single_location)
+                    .unwrap_or_default(),
+                expected: Vec::new(),
+                msg: "invalid token".into(),
+            },
+            UnrecognizedEof { location, expected } => ParseError {
+                msg: "unrecognized eof".into(),
+                span: byte_pos_to_src_location(src_str, location)
+                    .map(Span::single_location)
+                    .unwrap_or_default(),
+                expected,
+            },
+            UnrecognizedToken {
+                token: (start, token, end),
+                expected,
+            } => ParseError {
+                msg: format!("unrecognized token: '{}'", token),
+                span: Span {
+                    start: byte_pos_to_src_location(src_str, start),
+                    end: byte_pos_to_src_location(src_str, end),
+                },
+                expected,
+            },
+            ExtraToken {
+                token: (start, token, end),
+            } => ParseError {
+                msg: format!("extra token: '{}'", token),
+                span: Span {
+                    start: byte_pos_to_src_location(src_str, start),
+                    end: byte_pos_to_src_location(src_str, end),
+                },
+                expected: Vec::new(),
+            },
+            User { error } => ParseError {
+                msg: error.into(),
+                expected: Vec::new(),
+                span: Span::default(),
+            },
+        }
+    }
+}
+
+// Slightly simplified but heavily inspired by
+// https://github.com/gluon-lang/gluon/blob/f8326d21a14b5f21d203e9c43fa5bb7f0688a74c/base/src/source.rs
+fn byte_pos_to_src_location(src_str: &str, byte_pos: usize) -> Option<Location> {
+    let src_bytes = src_str.as_bytes();
+    let total_len = src_bytes.len();
+
+    let line_indices: Vec<usize> = {
+        let input_indices = src_bytes
+            .iter()
+            .enumerate()
+            .filter(|&(_, b)| *b == b'\n')
+            .map(|(i, _)| i + 1); // index of first char in the line
+
+        iter::once(0).chain(input_indices).collect()
+    };
+
+    if byte_pos <= total_len {
+        let num_lines = line_indices.len();
+
+        let line_index = (0..num_lines)
+            .find(|&i| line_indices[i] > byte_pos)
+            .map(|i| i - 1)
+            .unwrap_or(num_lines - 1);
+
+        let line_byte_pos = line_indices[line_index];
+        Some(Location {
+            line: line_index,
+            column: byte_pos - line_byte_pos,
+            absolute: byte_pos,
+        })
+    } else {
+        None
     }
 }
 
@@ -44,9 +152,7 @@ pub fn parse(input: &str) -> Result<Expression, ParseError> {
     // Existing Larlpop Parser:
     crate::parser::ExpressionParser::new()
         .parse(input)
-        .map_err(|e| ParseError {
-            msg: format!("{}", e),
-        })
+        .map_err(|e| ParseError::from_lalrpop(input, e))
 }
 
 #[cfg(test)]
@@ -509,5 +615,53 @@ mod tests {
     #[test]
     fn test_foobar() {
         println!("{:?}", parse("foo.bar.baz == 10 && size(requests) == 3"))
+    }
+
+    #[test]
+    fn test_unrecognized_token_error() {
+        let source = r#"
+            account.balance == transaction.withdrawal
+                || (account.overdraftProtection
+                    account.overdraftLimit >= transaction.withdrawal  - account.balance)
+        "#;
+
+        let err = crate::parse(source).unwrap_err();
+
+        assert_eq!(err.msg, "unrecognized token: 'account'");
+
+        assert_eq!(err.span.start.as_ref().unwrap().line, 3);
+        assert_eq!(err.span.start.as_ref().unwrap().column, 20);
+        assert_eq!(err.span.end.as_ref().unwrap().line, 3);
+        assert_eq!(err.span.end.as_ref().unwrap().column, 27);
+    }
+
+    #[test]
+    fn test_unrecognized_eof_error() {
+        let source = r#" "#;
+
+        let err = crate::parse(source).unwrap_err();
+
+        assert_eq!(err.msg, "unrecognized eof");
+
+        assert_eq!(err.span.start.as_ref().unwrap().line, 0);
+        assert_eq!(err.span.start.as_ref().unwrap().column, 0);
+        assert_eq!(err.span.end.as_ref().unwrap().line, 0);
+        assert_eq!(err.span.end.as_ref().unwrap().column, 0);
+    }
+
+    #[test]
+    fn test_invalid_token_error() {
+        let source = r#"
+            account.balance == §
+        "#;
+
+        let err = crate::parse(source).unwrap_err();
+
+        assert_eq!(err.msg, "invalid token");
+
+        assert_eq!(err.span.start.as_ref().unwrap().line, 1);
+        assert_eq!(err.span.start.as_ref().unwrap().column, 31);
+        assert_eq!(err.span.end.as_ref().unwrap().line, 1);
+        assert_eq!(err.span.end.as_ref().unwrap().column, 31);
     }
 }
