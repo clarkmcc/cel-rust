@@ -4,7 +4,7 @@ use std::str::Chars;
 
 /// Error type of [unescape](unescape).
 #[derive(Debug, PartialEq)]
-pub enum ParseError {
+pub enum ParseSequenceError {
     InvalidSymbol {
         symbol: String,
         index: usize,
@@ -47,7 +47,7 @@ pub enum ParseUnicodeError {
     },
 }
 
-pub fn parse_bytes(s: &str) -> Result<Vec<u8>, ParseError> {
+pub fn parse_bytes(s: &str) -> Result<Vec<u8>, ParseSequenceError> {
     let mut chars = s.chars().enumerate();
     let mut res: Vec<u8> = Vec::with_capacity(s.len());
 
@@ -55,7 +55,7 @@ pub fn parse_bytes(s: &str) -> Result<Vec<u8>, ParseError> {
         if c == '\\' {
             match chars.next() {
                 None => {
-                    return Err(ParseError::InvalidEscape {
+                    return Err(ParseSequenceError::InvalidEscape {
                         escape: format!("{}", c),
                         index: idx,
                         string: String::from(s),
@@ -67,7 +67,7 @@ pub fn parse_bytes(s: &str) -> Result<Vec<u8>, ParseError> {
                             let hex: String = [
                                 chars
                                     .next()
-                                    .ok_or(ParseError::InvalidEscape {
+                                    .ok_or(ParseSequenceError::InvalidEscape {
                                         escape: "\\x".to_string(),
                                         index: idx,
                                         string: s.to_string(),
@@ -75,7 +75,7 @@ pub fn parse_bytes(s: &str) -> Result<Vec<u8>, ParseError> {
                                     .1,
                                 chars
                                     .next()
-                                    .ok_or(ParseError::InvalidEscape {
+                                    .ok_or(ParseSequenceError::InvalidEscape {
                                         escape: "\\x".to_string(),
                                         index: idx,
                                         string: s.to_string(),
@@ -84,10 +84,12 @@ pub fn parse_bytes(s: &str) -> Result<Vec<u8>, ParseError> {
                             ]
                             .iter()
                             .collect();
-                            u8::from_str_radix(&hex, 16).map_err(|_| ParseError::InvalidEscape {
-                                escape: hex,
-                                index: idx,
-                                string: s.to_string(),
+                            u8::from_str_radix(&hex, 16).map_err(|_| {
+                                ParseSequenceError::InvalidEscape {
+                                    escape: hex,
+                                    index: idx,
+                                    string: s.to_string(),
+                                }
                             })?
                         }
                         n if ('0'..='3').contains(&n) => {
@@ -95,7 +97,7 @@ pub fn parse_bytes(s: &str) -> Result<Vec<u8>, ParseError> {
                                 n,
                                 chars
                                     .next()
-                                    .ok_or(ParseError::InvalidEscape {
+                                    .ok_or(ParseSequenceError::InvalidEscape {
                                         escape: format!("\\{n}"),
                                         index: idx,
                                         string: s.to_string(),
@@ -103,7 +105,7 @@ pub fn parse_bytes(s: &str) -> Result<Vec<u8>, ParseError> {
                                     .1,
                                 chars
                                     .next()
-                                    .ok_or(ParseError::InvalidEscape {
+                                    .ok_or(ParseSequenceError::InvalidEscape {
                                         escape: format!("\\{n}"),
                                         index: idx,
                                         string: s.to_string(),
@@ -113,7 +115,7 @@ pub fn parse_bytes(s: &str) -> Result<Vec<u8>, ParseError> {
                             .iter()
                             .collect();
                             u8::from_str_radix(&octal, 8).map_err(|_| {
-                                ParseError::InvalidEscape {
+                                ParseSequenceError::InvalidEscape {
                                     escape: octal,
                                     index: idx,
                                     string: s.to_string(),
@@ -121,7 +123,7 @@ pub fn parse_bytes(s: &str) -> Result<Vec<u8>, ParseError> {
                             })?
                         }
                         _ => {
-                            return Err(ParseError::InvalidEscape {
+                            return Err(ParseSequenceError::InvalidEscape {
                                 escape: format!("{}{}", c, c2),
                                 index: idx,
                                 string: String::from(s),
@@ -177,18 +179,21 @@ pub fn parse_bytes(s: &str) -> Result<Vec<u8>, ParseError> {
 ///
 /// The returned result can display a human readable error if the string cannot be parsed as a
 /// valid quoted string.
-pub fn parse_string(s: &str) -> Result<String, ParseError> {
+pub fn parse_string(s: &str) -> Result<String, ParseSequenceError> {
     let mut chars = s.chars().enumerate();
     let res = String::with_capacity(s.len());
 
     match chars.next() {
         Some((_, c)) if c == 'r' || c == 'R' => parse_raw_string(&mut chars, res),
         Some((_, c)) if c == '\'' || c == '"' => parse_quoted_string(s, &mut chars, res, c),
-        _ => Err(ParseError::MissingOpeningQuote),
+        _ => Err(ParseSequenceError::MissingOpeningQuote),
     }
 }
 
-fn parse_raw_string(chars: &mut Enumerate<Chars>, mut res: String) -> Result<String, ParseError> {
+fn parse_raw_string(
+    chars: &mut Enumerate<Chars>,
+    mut res: String,
+) -> Result<String, ParseSequenceError> {
     let mut in_single_quotes = false;
     let mut in_double_quotes = false;
 
@@ -238,7 +243,7 @@ fn parse_raw_string(chars: &mut Enumerate<Chars>, mut res: String) -> Result<Str
             in_double_quotes = !in_double_quotes;
             continue;
         } else if !in_quotes {
-            return Err(ParseError::MissingOpeningQuote);
+            return Err(ParseSequenceError::MissingOpeningQuote);
         }
 
         res.push(c);
@@ -252,7 +257,7 @@ fn parse_quoted_string(
     mut chars: &mut Enumerate<Chars>,
     mut res: String,
     quote: char,
-) -> Result<String, ParseError> {
+) -> Result<String, ParseSequenceError> {
     let mut in_single_quotes = quote == '\'';
     let mut in_double_quotes = quote == '"';
 
@@ -262,7 +267,7 @@ fn parse_quoted_string(
         if c == '\\' && in_quotes {
             match chars.next() {
                 None => {
-                    return Err(ParseError::InvalidEscape {
+                    return Err(ParseSequenceError::InvalidEscape {
                         escape: format!("{}", c),
                         index: idx,
                         string: String::from(s),
@@ -299,7 +304,7 @@ fn parse_quoted_string(
                             };
 
                             parse_unicode_hex(length, &mut chars).map_err(|x| {
-                                ParseError::InvalidUnicode {
+                                ParseSequenceError::InvalidUnicode {
                                     source: x.clone(),
                                     index: idx,
                                     string: String::from(s),
@@ -307,13 +312,13 @@ fn parse_quoted_string(
                             })?
                         }
                         n if ('0'..='3').contains(&n) => parse_unicode_oct(&n, &mut chars)
-                            .map_err(|x| ParseError::InvalidUnicode {
+                            .map_err(|x| ParseSequenceError::InvalidUnicode {
                                 source: x.clone(),
                                 index: idx,
                                 string: String::from(s),
                             })?,
                         _ => {
-                            return Err(ParseError::InvalidEscape {
+                            return Err(ParseSequenceError::InvalidEscape {
                                 escape: format!("{}{}", c, c2),
                                 index: idx,
                                 string: String::from(s),
@@ -347,7 +352,7 @@ fn parse_quoted_string(
             in_double_quotes = !in_double_quotes;
             continue;
         } else if !in_quotes {
-            return Err(ParseError::MissingOpeningQuote);
+            return Err(ParseSequenceError::MissingOpeningQuote);
         }
 
         res.push(c);
@@ -355,7 +360,7 @@ fn parse_quoted_string(
 
     // Ensure string has a closing quote
     if in_single_quotes || in_double_quotes {
-        return Err(ParseError::MissingClosingQuote);
+        return Err(ParseSequenceError::MissingClosingQuote);
     }
 
     Ok(res)
@@ -399,12 +404,12 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::parse::ParseError;
+    use crate::parse::ParseSequenceError;
     use crate::{parse_bytes, parse_string};
 
     #[test]
     fn single_quotes_interprets_escapes() {
-        let tests: Vec<(&str, Result<String, ParseError>)> = vec![
+        let tests: Vec<(&str, Result<String, ParseSequenceError>)> = vec![
             ("'Hello \\a'", Ok(String::from("Hello \u{07}"))),
             ("'Hello \\b'", Ok(String::from("Hello \u{08}"))),
             ("'Hello \\v'", Ok(String::from("Hello \u{0b}"))),
@@ -423,16 +428,16 @@ mod tests {
             ("'Hello \\040'", Ok(String::from("Hello  "))),
             (
                 "Missing closing quote'",
-                Err(ParseError::MissingOpeningQuote),
+                Err(ParseSequenceError::MissingOpeningQuote),
             ),
             (
                 "'Missing closing quote",
-                Err(ParseError::MissingClosingQuote),
+                Err(ParseSequenceError::MissingClosingQuote),
             ),
             // Testing octal value is out of range
             (
                 "'\\440'",
-                Err(ParseError::InvalidEscape {
+                Err(ParseSequenceError::InvalidEscape {
                     escape: String::from("\\4"),
                     index: 2,
                     string: String::from("'\\440'"),
@@ -448,7 +453,7 @@ mod tests {
 
     #[test]
     fn double_quotes_interprets_escapes() {
-        let tests: Vec<(&str, Result<String, ParseError>)> = vec![
+        let tests: Vec<(&str, Result<String, ParseSequenceError>)> = vec![
             ("\"Hello \\a\"", Ok(String::from("Hello \u{07}"))),
             ("\"Hello \\b\"", Ok(String::from("Hello \u{08}"))),
             ("\"Hello \\v\"", Ok(String::from("Hello \u{0b}"))),
@@ -468,16 +473,16 @@ mod tests {
             ("\"Hello \\040\"", Ok(String::from("Hello  "))),
             (
                 "Missing closing quote\"",
-                Err(ParseError::MissingOpeningQuote),
+                Err(ParseSequenceError::MissingOpeningQuote),
             ),
             (
                 "\"Missing closing quote",
-                Err(ParseError::MissingClosingQuote),
+                Err(ParseSequenceError::MissingClosingQuote),
             ),
             // Testing octal value is out of range
             (
                 "\"\\440\"",
-                Err(ParseError::InvalidEscape {
+                Err(ParseSequenceError::InvalidEscape {
                     escape: String::from("\\4"),
                     index: 2,
                     string: String::from("\"\\440\""),
@@ -493,7 +498,7 @@ mod tests {
 
     #[test]
     fn raw_string_does_not_interpret_escapes() {
-        let tests: Vec<(&str, Result<String, ParseError>)> = vec![
+        let tests: Vec<(&str, Result<String, ParseSequenceError>)> = vec![
             // Raw string in double quotes
             // r"Hello \a \" ' \' \U0001f431 " => Hello \a " ' \' \U0001f431
             // R"Hello \a \" ' \' \U0001f431 " => Hello \a " ' \' \U0001f431

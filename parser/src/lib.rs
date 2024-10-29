@@ -6,20 +6,10 @@ pub use ast::*;
 pub mod parse;
 pub use parse::*;
 
-use std::fmt::Display;
+pub mod error;
+pub use error::ParseError;
 
 lalrpop_mod!(#[allow(clippy::all)] pub parser, "/cel.rs");
-
-#[derive(Debug)]
-pub struct ParseError {
-    msg: String,
-}
-
-impl Display for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.msg)
-    }
-}
 
 /// Parses a CEL expression and returns it.
 ///
@@ -44,9 +34,7 @@ pub fn parse(input: &str) -> Result<Expression, ParseError> {
     // Existing Larlpop Parser:
     crate::parser::ExpressionParser::new()
         .parse(input)
-        .map_err(|e| ParseError {
-            msg: format!("{}", e),
-        })
+        .map_err(|e| ParseError::from_lalrpop(input, e))
 }
 
 #[cfg(test)]
@@ -509,5 +497,53 @@ mod tests {
     #[test]
     fn test_foobar() {
         println!("{:?}", parse("foo.bar.baz == 10 && size(requests) == 3"))
+    }
+
+    #[test]
+    fn test_unrecognized_token_error() {
+        let source = r#"
+            account.balance == transaction.withdrawal
+                || (account.overdraftProtection
+                    account.overdraftLimit >= transaction.withdrawal  - account.balance)
+        "#;
+
+        let err = crate::parse(source).unwrap_err();
+
+        assert_eq!(err.msg, "unrecognized token: 'account'");
+
+        assert_eq!(err.span.start.as_ref().unwrap().line, 3);
+        assert_eq!(err.span.start.as_ref().unwrap().column, 20);
+        assert_eq!(err.span.end.as_ref().unwrap().line, 3);
+        assert_eq!(err.span.end.as_ref().unwrap().column, 27);
+    }
+
+    #[test]
+    fn test_unrecognized_eof_error() {
+        let source = r#" "#;
+
+        let err = crate::parse(source).unwrap_err();
+
+        assert_eq!(err.msg, "unrecognized eof");
+
+        assert_eq!(err.span.start.as_ref().unwrap().line, 0);
+        assert_eq!(err.span.start.as_ref().unwrap().column, 0);
+        assert_eq!(err.span.end.as_ref().unwrap().line, 0);
+        assert_eq!(err.span.end.as_ref().unwrap().column, 0);
+    }
+
+    #[test]
+    fn test_invalid_token_error() {
+        let source = r#"
+            account.balance == §
+        "#;
+
+        let err = crate::parse(source).unwrap_err();
+
+        assert_eq!(err.msg, "invalid token");
+
+        assert_eq!(err.span.start.as_ref().unwrap().line, 1);
+        assert_eq!(err.span.start.as_ref().unwrap().column, 31);
+        assert_eq!(err.span.end.as_ref().unwrap().line, 1);
+        assert_eq!(err.span.end.as_ref().unwrap().column, 31);
     }
 }
