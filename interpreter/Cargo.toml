@@ -2,14 +2,14 @@
 name = "cel-interpreter"
 description = "An interpreter for the Common Expression Language (CEL)"
 repository = "https://github.com/clarkmcc/cel-rust"
-version = "0.8.1"
+version = "0.9.0"
 authors = ["Tom Forbes <tom@tomforb.es>", "Clark McCauley <me@clarkmccauley.com>"]
 edition = "2021"
 license = "MIT"
 categories = ["compilers"]
 
 [dependencies]
-cel-parser = { path = "../parser", version = "0.7.1 " }
+cel-parser = { path = "../parser", version = "0.8.0" }
 thiserror = "1.0.40"
 chrono = { version = "0.4.26", default-features = false, features = ["alloc"], optional = true }
 nom = "7.1.3"
