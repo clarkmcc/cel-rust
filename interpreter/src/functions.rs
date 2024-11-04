@@ -503,49 +503,119 @@ pub fn exists_one(
     }
 }
 
-/// Duration parses the provided argument into a [`Value::Duration`] value.
-///
-/// The argument must be string, and must be in the format of a duration. See
-/// the [`parse_duration`] documentation for more information on the supported
-/// formats.
-///
-/// # Examples
-/// - `1h` parses as 1 hour
-/// - `1.5h` parses as 1 hour and 30 minutes
-/// - `1h30m` parses as 1 hour and 30 minutes
-/// - `1h30m1s` parses as 1 hour, 30 minutes, and 1 second
-/// - `1ms` parses as 1 millisecond
-/// - `1.5ms` parses as 1 millisecond and 500 microseconds
-/// - `1ns` parses as 1 nanosecond
-/// - `1.5ns` parses as 1 nanosecond (sub-nanosecond durations not supported)
 #[cfg(feature = "chrono")]
-pub fn duration(value: Arc<String>) -> Result<Value> {
-    Ok(Value::Duration(_duration(value.as_str())?))
-}
+pub mod time {
+    use super::Result;
+    use crate::magic::This;
+    use crate::{ExecutionError, Value};
+    use chrono::{Datelike, Days, Months, Timelike};
+    use std::sync::Arc;
 
-/// Timestamp parses the provided argument into a [`Value::Timestamp`] value.
-/// The
-#[cfg(feature = "chrono")]
-pub fn timestamp(value: Arc<String>) -> Result<Value> {
-    Ok(Value::Timestamp(
-        chrono::DateTime::parse_from_rfc3339(value.as_str())
-            .map_err(|e| ExecutionError::function_error("timestamp", e.to_string().as_str()))?,
-    ))
-}
+    /// Duration parses the provided argument into a [`Value::Duration`] value.
+    ///
+    /// The argument must be string, and must be in the format of a duration. See
+    /// the [`parse_duration`] documentation for more information on the supported
+    /// formats.
+    ///
+    /// # Examples
+    /// - `1h` parses as 1 hour
+    /// - `1.5h` parses as 1 hour and 30 minutes
+    /// - `1h30m` parses as 1 hour and 30 minutes
+    /// - `1h30m1s` parses as 1 hour, 30 minutes, and 1 second
+    /// - `1ms` parses as 1 millisecond
+    /// - `1.5ms` parses as 1 millisecond and 500 microseconds
+    /// - `1ns` parses as 1 nanosecond
+    /// - `1.5ns` parses as 1 nanosecond (sub-nanosecond durations not supported)
+    pub fn duration(value: Arc<String>) -> crate::functions::Result<Value> {
+        Ok(Value::Duration(_duration(value.as_str())?))
+    }
 
-/// A wrapper around [`parse_duration`] that converts errors into [`ExecutionError`].
-/// and only returns the duration, rather than returning the remaining input.
-#[cfg(feature = "chrono")]
-fn _duration(i: &str) -> Result<chrono::Duration> {
-    let (_, duration) = crate::duration::parse_duration(i)
-        .map_err(|e| ExecutionError::function_error("duration", e.to_string()))?;
-    Ok(duration)
-}
+    /// Timestamp parses the provided argument into a [`Value::Timestamp`] value.
+    /// The
+    pub fn timestamp(value: Arc<String>) -> Result<Value> {
+        Ok(Value::Timestamp(
+            chrono::DateTime::parse_from_rfc3339(value.as_str())
+                .map_err(|e| ExecutionError::function_error("timestamp", e.to_string().as_str()))?,
+        ))
+    }
 
-#[cfg(feature = "chrono")]
-fn _timestamp(i: &str) -> Result<chrono::DateTime<chrono::FixedOffset>> {
-    chrono::DateTime::parse_from_rfc3339(i)
-        .map_err(|e| ExecutionError::function_error("timestamp", e.to_string()))
+    /// A wrapper around [`parse_duration`] that converts errors into [`ExecutionError`].
+    /// and only returns the duration, rather than returning the remaining input.
+    fn _duration(i: &str) -> Result<chrono::Duration> {
+        let (_, duration) = crate::duration::parse_duration(i)
+            .map_err(|e| ExecutionError::function_error("duration", e.to_string()))?;
+        Ok(duration)
+    }
+
+    fn _timestamp(i: &str) -> Result<chrono::DateTime<chrono::FixedOffset>> {
+        chrono::DateTime::parse_from_rfc3339(i)
+            .map_err(|e| ExecutionError::function_error("timestamp", e.to_string()))
+    }
+
+    pub fn timestamp_year(
+        This(this): This<chrono::DateTime<chrono::FixedOffset>>,
+    ) -> Result<Value> {
+        Ok(this.year().into())
+    }
+
+    pub fn timestamp_month(
+        This(this): This<chrono::DateTime<chrono::FixedOffset>>,
+    ) -> Result<Value> {
+        Ok((this.month0() as i32).into())
+    }
+
+    pub fn timestamp_year_day(
+        This(this): This<chrono::DateTime<chrono::FixedOffset>>,
+    ) -> Result<Value> {
+        let year = this
+            .checked_sub_days(Days::new(this.day0() as u64))
+            .unwrap()
+            .checked_sub_months(Months::new(this.month0()))
+            .unwrap();
+        Ok(this.signed_duration_since(year).num_days().into())
+    }
+
+    pub fn timestamp_month_day(
+        This(this): This<chrono::DateTime<chrono::FixedOffset>>,
+    ) -> Result<Value> {
+        Ok((this.day0() as i32).into())
+    }
+
+    pub fn timestamp_date(
+        This(this): This<chrono::DateTime<chrono::FixedOffset>>,
+    ) -> Result<Value> {
+        Ok((this.day() as i32).into())
+    }
+
+    pub fn timestamp_weekday(
+        This(this): This<chrono::DateTime<chrono::FixedOffset>>,
+    ) -> Result<Value> {
+        Ok((this.weekday().num_days_from_sunday() as i32).into())
+    }
+
+    pub fn timestamp_hours(
+        This(this): This<chrono::DateTime<chrono::FixedOffset>>,
+    ) -> Result<Value> {
+        Ok((this.hour() as i32).into())
+    }
+
+    pub fn timestamp_minutes(
+        This(this): This<chrono::DateTime<chrono::FixedOffset>>,
+    ) -> Result<Value> {
+        Ok((this.minute() as i32).into())
+    }
+
+    pub fn timestamp_seconds(
+        This(this): This<chrono::DateTime<chrono::FixedOffset>>,
+    ) -> Result<Value> {
+        Ok((this.second() as i32).into())
+    }
+
+    pub fn timestamp_millis(
+        This(this): This<chrono::DateTime<chrono::FixedOffset>>,
+    ) -> Result<Value> {
+        Ok((this.timestamp_subsec_millis() as i32).into())
+    }
 }
 
 pub fn max(Arguments(args): Arguments) -> Result<Value> {
@@ -734,7 +804,49 @@ mod tests {
             (
                 "timestamp string",
                 "timestamp('2023-05-28T00:00:00Z').string() == '2023-05-28T00:00:00+00:00'",
-            )]
+            ),
+            (
+                "timestamp getFullYear",
+                "timestamp('2023-05-28T00:00:00Z').getFullYear() == 2023",
+            ),
+            (
+                "timestamp getMonth",
+                "timestamp('2023-05-28T00:00:00Z').getMonth() == 4",
+            ),
+            (
+                "timestamp getDayOfMonth",
+                "timestamp('2023-05-28T00:00:00Z').getDayOfMonth() == 27",
+            ),
+            (
+                "timestamp getDayOfYear",
+                "timestamp('2023-05-28T00:00:00Z').getDayOfYear() == 147",
+            ),
+            (
+                "timestamp getDate",
+                "timestamp('2023-05-28T00:00:00Z').getDate() == 28",
+            ),
+            (
+                "timestamp getDayOfWeek",
+                "timestamp('2023-05-28T00:00:00Z').getDayOfWeek() == 0",
+            ),
+            (
+                "timestamp getHours",
+                "timestamp('2023-05-28T02:00:00Z').getHours() == 2",
+            ),
+            (
+                "timestamp getMinutes",
+                " timestamp('2023-05-28T00:05:00Z').getMinutes() == 5",
+            ),
+            (
+                "timestamp getSeconds",
+                "timestamp('2023-05-28T00:00:06Z').getSeconds() == 6",
+            ),
+            (
+                "timestamp getMilliseconds",
+                "timestamp('2023-05-28T00:00:42.123Z').getMilliseconds() == 123",
+            ),
+
+        ]
         .iter()
         .for_each(assert_script);
     }
