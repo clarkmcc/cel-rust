@@ -21,9 +21,7 @@ mod resolvers;
 #[cfg(feature = "chrono")]
 mod duration;
 
-#[cfg(feature = "serde")]
 mod ser;
-#[cfg(feature = "serde")]
 pub use ser::to_value;
 
 #[cfg(feature = "json")]
@@ -47,14 +45,6 @@ pub enum ExecutionError {
     /// but the type of the value was not supported as a key.
     #[error("Unable to use value '{0:?}' as a key")]
     UnsupportedKeyType(Value),
-    #[error(
-        "Casting number '{value:.2}' ({source_ty}) to {target_ty} type would cause an overflow"
-    )]
-    CastOverflow {
-        value: f64,
-        source_ty: &'static str,
-        target_ty: &'static str,
-    },
     #[error("Unexpected type: got '{got}', want '{want}'")]
     UnexpectedType { got: String, want: String },
     /// Indicates that the script attempted to reference a key on a type that

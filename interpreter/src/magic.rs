@@ -7,15 +7,8 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 impl_conversions!(
-    i8 as i64 => Value::Int,
-    i16 as i64 => Value::Int,
-    i32 as i64 => Value::Int,
     i64 => Value::Int,
-    u8 as u64 => Value::UInt,
-    u16 as u64 => Value::UInt,
-    u32 as u64 => Value::UInt,
     u64 => Value::UInt,
-    f32 as f64 => Value::Float,
     f64 => Value::Float,
     Arc<String> => Value::String,
     Arc<Vec<u8>> => Value::Bytes,
@@ -28,6 +21,12 @@ impl_conversions!(
     chrono::Duration => Value::Duration,
     chrono::DateTime<chrono::FixedOffset> => Value::Timestamp,
 );
+
+impl From<i32> for Value {
+    fn from(value: i32) -> Self {
+        Value::Int(value as i64)
+    }
+}
 
 /// Describes any type that can be converted from a [`Value`] into itself.
 /// This is commonly used to convert from [`Value`] into primitive types,
