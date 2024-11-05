@@ -9,6 +9,10 @@ use std::fmt::{Display, Formatter};
 use std::ops;
 use std::sync::Arc;
 
+#[path = "value_conversion.rs"]
+mod convert;
+pub(crate) use convert::FromValue;
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct Map {
     pub map: Arc<HashMap<Key, Value>>,
