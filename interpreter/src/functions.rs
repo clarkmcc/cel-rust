@@ -645,10 +645,7 @@ pub fn max(Arguments(args): Arguments) -> Result<Value> {
 #[cfg(test)]
 mod tests {
     use crate::context::Context;
-    use crate::testing::test_script;
-    #[cfg(feature = "regex")]
-    use crate::ExecutionError::FunctionError;
-    use std::collections::HashMap;
+    use crate::tests::test_script;
 
     fn assert_script(input: &(&str, &str)) {
         assert_eq!(test_script(input.1, None), Ok(true.into()), "{}", input.0);
@@ -679,7 +676,7 @@ mod tests {
 
         for (name, script) in tests {
             let mut ctx = Context::default();
-            ctx.add_variable_from_value("foo", HashMap::from([("bar", 1)]));
+            ctx.add_variable_from_value("foo", std::collections::HashMap::from([("bar", 1)]));
             assert_eq!(test_script(script, Some(ctx)), Ok(true.into()), "{}", name);
         }
     }
@@ -943,7 +940,7 @@ mod tests {
             test_script(
                 "'foobar'.matches('(foo') == true", None),
             Err(
-                FunctionError {
+                crate::ExecutionError::FunctionError {
                     function: "matches".to_string(),
                     message: "'(foo' not a valid regex:\nregex parse error:\n    (foo\n    ^\nerror: unclosed group".to_string()
                 }
