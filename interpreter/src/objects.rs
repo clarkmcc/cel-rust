@@ -1,15 +1,12 @@
 use crate::context::Context;
 use crate::functions::FunctionContext;
-use crate::ser::SerializationError;
-use crate::ExecutionError::NoSuchKey;
-use crate::{to_value, ExecutionError};
-use cel_parser::{ArithmeticOp, Atom, Expression, Member, RelationOp, UnaryOp};
-use core::ops;
-use serde::{Serialize, Serializer};
+use crate::ExecutionError;
+use cel_parser::ast::*;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::{Infallible, TryFrom, TryInto};
 use std::fmt::{Display, Formatter};
+use std::ops;
 use std::sync::Arc;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -84,10 +81,11 @@ impl From<u64> for Key {
     }
 }
 
-impl Serialize for Key {
+#[cfg(feature = "serde")]
+impl serde::Serialize for Key {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: Serializer,
+        S: serde::Serializer,
     {
         match self {
             Key::Int(v) => v.serialize(serializer),
@@ -143,17 +141,26 @@ pub trait TryIntoValue {
     fn try_into_value(self) -> Result<Value, Self::Error>;
 }
 
-impl<T: Serialize> TryIntoValue for T {
-    type Error = SerializationError;
+#[cfg(feature = "serde")]
+impl<T: serde::Serialize> TryIntoValue for T {
+    type Error = crate::ser::SerializationError;
     fn try_into_value(self) -> Result<Value, Self::Error> {
-        to_value(self)
+        crate::ser::to_value(self)
     }
 }
-
+#[cfg(feature = "serde")]
 impl TryIntoValue for Value {
     type Error = Infallible;
     fn try_into_value(self) -> Result<Value, Self::Error> {
         Ok(self)
+    }
+}
+#[cfg(not(feature = "serde"))]
+impl<T: Into<Value>> TryIntoValue for T {
+    type Error = Infallible;
+
+    fn try_into_value(self) -> Result<Value, Self::Error> {
+        Ok(self.into())
     }
 }
 
@@ -351,16 +358,17 @@ impl From<&Key> for Key {
 }
 
 // Convert Vec<T> to Value
-impl<T: Into<Value>> From<Vec<T>> for Value {
+impl<T: Into<Value> + 'static> From<Vec<T>> for Value {
     fn from(v: Vec<T>) -> Self {
-        Value::List(v.into_iter().map(|v| v.into()).collect::<Vec<_>>().into())
-    }
-}
-
-// Convert Vec<u8> to Value
-impl From<Vec<u8>> for Value {
-    fn from(v: Vec<u8>) -> Self {
-        Value::Bytes(v.into())
+        if std::any::TypeId::of::<Vec<T>>() == std::any::TypeId::of::<Vec<u8>>() {
+            Value::Bytes(Arc::new(unsafe {
+                // SAFETY: Checked Vec<T> is Vec<u8>, so they're the same type,
+                // just the compiler can't tell without specialization.
+                std::mem::transmute::<Vec<T>, Vec<u8>>(v)
+            }))
+        } else {
+            Value::List(v.into_iter().map(|v| v.into()).collect::<Vec<_>>().into())
+        }
     }
 }
 
@@ -629,7 +637,7 @@ impl<'a> Value {
                 // give priority to the property. Maybe we can implement lookahead
                 // to see if the next token is a function call?
                 match (child, ctx.has_function(&***name)) {
-                    (None, false) => NoSuchKey(name.clone()).into(),
+                    (None, false) => ExecutionError::NoSuchKey(name.clone()).into(),
                     (Some(child), _) => child.into(),
                     (None, true) => Value::Function(name.clone(), Some(self.into())).into(),
                 }
