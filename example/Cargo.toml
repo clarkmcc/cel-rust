@@ -5,6 +5,7 @@ edition = "2021"
 
 [features]
 axum = ["dep:axum", "dep:tokio", "dep:thiserror"]
+serde = ["dep:serde", "cel-interpreter/serde"]
 json = ["dep:serde_json", "cel-interpreter/json"]
 chrono = ["dep:chrono", "cel-interpreter/chrono"]
 
@@ -13,7 +14,7 @@ cel-interpreter = { path = "../interpreter", default-features = false }
 
 chrono = { version = "0.4", optional = true }
 
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1.0", optional = true }
 
 axum = { version = "0.7.5", default-features = false, features = [
@@ -48,6 +49,7 @@ path = "src/threads.rs"
 [[bin]]
 name = "example-serde"
 path = "src/serde.rs"
+required-features = ["serde"]
 
 [[bin]]
 name = "example-axum"
