@@ -968,4 +968,20 @@ mod tests {
         let result = program.execute(&context);
         assert_eq!(result.unwrap(), Value::Null);
     }
+
+    #[test]
+    fn reference_to_value() {
+        let test = "example".to_string();
+        let direct: Value = test.as_str().into();
+        assert_eq!(direct, Value::String(Arc::new(String::from("example"))));
+
+        let vec = vec![test.as_str()];
+        let indirect: Value = vec.into();
+        assert_eq!(
+            indirect,
+            Value::List(Arc::new(vec![Value::String(Arc::new(String::from(
+                "example"
+            )))]))
+        );
+    }
 }
