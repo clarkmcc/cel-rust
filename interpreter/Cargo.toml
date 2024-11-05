@@ -31,7 +31,7 @@ name = "runtime"
 harness = false
 
 [features]
-default = ["regex", "chrono"]
+default = ["regex", "chrono", "serde"]
 json = ["serde", "dep:serde_json", "dep:base64"]
 serde = ["dep:serde"]
 regex = ["dep:regex"]
