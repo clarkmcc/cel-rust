@@ -24,6 +24,8 @@ pub use ser::to_value;
 
 #[cfg(feature = "json")]
 mod json;
+#[cfg(feature = "proto")]
+pub mod proto;
 #[cfg(test)]
 mod testing;
 
