@@ -18,7 +18,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Format
         run: cargo fmt --all -- --check
-      - name: Build
+      - name: Build minimal
+        run: cargo build --no-default-features --verbose
+      - name: Build with all features
         run: cargo build --verbose
       - name: Clippy
         run: cargo clippy --all-features --all-targets -- -D warnings
