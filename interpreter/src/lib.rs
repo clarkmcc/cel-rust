@@ -13,19 +13,19 @@ pub use cel_parser::Expression;
 pub use context::Context;
 pub use functions::FunctionContext;
 pub use objects::{ResolveResult, Value};
-#[cfg(feature = "chrono")]
-mod duration;
 pub mod functions;
 mod magic;
 pub mod objects;
 mod resolvers;
+
+#[cfg(feature = "chrono")]
+mod duration;
+
 mod ser;
 pub use ser::to_value;
 
 #[cfg(feature = "json")]
 mod json;
-#[cfg(test)]
-mod testing;
 
 use magic::FromContext;
 
@@ -173,10 +173,15 @@ impl TryFrom<&str> for Program {
 mod tests {
     use crate::context::Context;
     use crate::objects::{ResolveResult, Value};
-    use crate::testing::test_script;
     use crate::{ExecutionError, Program};
     use std::collections::HashMap;
     use std::convert::TryInto;
+
+    /// Tests the provided script and returns the result. An optional context can be provided.
+    pub(crate) fn test_script(script: &str, ctx: Option<Context>) -> ResolveResult {
+        let program = Program::compile(script).unwrap();
+        program.execute(&ctx.unwrap_or_default())
+    }
 
     #[test]
     fn parse() {

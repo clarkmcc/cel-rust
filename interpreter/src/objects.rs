@@ -1,15 +1,12 @@
 use crate::context::Context;
 use crate::functions::FunctionContext;
-use crate::ser::SerializationError;
-use crate::ExecutionError::NoSuchKey;
-use crate::{to_value, ExecutionError};
-use cel_parser::{ArithmeticOp, Atom, Expression, Member, RelationOp, UnaryOp};
-use core::ops;
-use serde::{Serialize, Serializer};
+use crate::ExecutionError;
+use cel_parser::ast::*;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::{Infallible, TryFrom, TryInto};
 use std::fmt::{Display, Formatter};
+use std::ops;
 use std::sync::Arc;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -84,10 +81,10 @@ impl From<u64> for Key {
     }
 }
 
-impl Serialize for Key {
+impl serde::Serialize for Key {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: Serializer,
+        S: serde::Serializer,
     {
         match self {
             Key::Int(v) => v.serialize(serializer),
@@ -143,13 +140,12 @@ pub trait TryIntoValue {
     fn try_into_value(self) -> Result<Value, Self::Error>;
 }
 
-impl<T: Serialize> TryIntoValue for T {
-    type Error = SerializationError;
+impl<T: serde::Serialize> TryIntoValue for T {
+    type Error = crate::ser::SerializationError;
     fn try_into_value(self) -> Result<Value, Self::Error> {
-        to_value(self)
+        crate::ser::to_value(self)
     }
 }
-
 impl TryIntoValue for Value {
     type Error = Infallible;
     fn try_into_value(self) -> Result<Value, Self::Error> {
@@ -629,7 +625,7 @@ impl<'a> Value {
                 // give priority to the property. Maybe we can implement lookahead
                 // to see if the next token is a function call?
                 match (child, ctx.has_function(&***name)) {
-                    (None, false) => NoSuchKey(name.clone()).into(),
+                    (None, false) => ExecutionError::NoSuchKey(name.clone()).into(),
                     (Some(child), _) => child.into(),
                     (None, true) => Value::Function(name.clone(), Some(self.into())).into(),
                 }
@@ -959,5 +955,21 @@ mod tests {
             .unwrap();
         let result = program.execute(&context);
         assert_eq!(result.unwrap(), Value::Null);
+    }
+
+    #[test]
+    fn reference_to_value() {
+        let test = "example".to_string();
+        let direct: Value = test.as_str().into();
+        assert_eq!(direct, Value::String(Arc::new(String::from("example"))));
+
+        let vec = vec![test.as_str()];
+        let indirect: Value = vec.into();
+        assert_eq!(
+            indirect,
+            Value::List(Arc::new(vec![Value::String(Arc::new(String::from(
+                "example"
+            )))]))
+        );
     }
 }

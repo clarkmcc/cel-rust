@@ -10,14 +10,17 @@ categories = ["compilers"]
 
 [dependencies]
 cel-parser = { path = "../parser", version = "0.8.0" }
-thiserror = "1.0.40"
-chrono = { version = "0.4.26", default-features = false, features = ["alloc"], optional = true }
+
 nom = "7.1.3"
-paste = "1.0.14"
-serde = "1.0.196"
+
+chrono = { version = "0.4", default-features = false, features = ["alloc"], optional = true }
 regex = { version = "1.10.5", optional = true }
-serde_json = { version = "1.0.124", optional = true }
+serde = "1.0"
+serde_json = { version = "1.0", optional = true }
 base64 = { version = "0.22.1", optional = true }
+
+thiserror = "1.0"
+paste = "1.0"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
@@ -28,6 +31,7 @@ name = "runtime"
 harness = false
 
 [features]
-json = ["dep:base64", "dep:serde_json"]
+default = ["regex", "chrono"]
+json = ["dep:serde_json", "dep:base64"]
 regex = ["dep:regex"]
 chrono = ["dep:chrono"]
