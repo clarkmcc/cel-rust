@@ -188,8 +188,8 @@ impl<'a> Default for Context<'a> {
 
         #[cfg(feature = "chrono")]
         {
-            ctx.add_function("duration", functions::time::duration);
-            ctx.add_function("timestamp", functions::time::timestamp);
+            ctx.add_function("duration", functions::duration);
+            ctx.add_function("timestamp", functions::timestamp);
             ctx.add_function("getFullYear", functions::time::timestamp_year);
             ctx.add_function("getMonth", functions::time::timestamp_month);
             ctx.add_function("getDayOfYear", functions::time::timestamp_year_day);

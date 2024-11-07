@@ -504,9 +504,9 @@ pub fn exists_one(
 }
 
 #[cfg(feature = "chrono")]
-pub use time::timestamp as timestamp;
+pub use time::duration;
 #[cfg(feature = "chrono")]
-pub use time::duration as duration;
+pub use time::timestamp;
 
 #[cfg(feature = "chrono")]
 pub mod time {
