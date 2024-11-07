@@ -174,6 +174,7 @@ pub enum Value {
     Null,
 }
 
+#[derive(Clone, Copy, Debug)]
 pub enum ValueType {
     List,
     Map,
