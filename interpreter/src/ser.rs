@@ -57,6 +57,7 @@ impl Duration {
     // newtype to indicate we want to rebuild the duration in the result, while
     // remaining compatible with most other Serializer implemenations.
     const NAME: &str = "$__cel_private_Duration";
+    const STRUCT_NAME: &str = "Duration";
     const SECS_FIELD: &str = "secs";
     const NANOS_FIELD: &str = "nanos";
 }
@@ -90,7 +91,7 @@ impl ser::Serialize for Duration {
                 &self,
                 serializer: S,
             ) -> std::result::Result<S::Ok, S::Error> {
-                let mut s = serializer.serialize_struct("Duration", 2)?;
+                let mut s = serializer.serialize_struct(Duration::STRUCT_NAME, 2)?;
                 s.serialize_field(Duration::SECS_FIELD, &self.0.num_seconds())?;
                 s.serialize_field(Duration::NANOS_FIELD, &self.0.subsec_nanos())?;
                 s.end()
@@ -800,13 +801,23 @@ impl ser::Serializer for TimeSerializer {
     type SerializeStructVariant = SerializeStructVariant;
 
     fn serialize_struct(self, name: &'static str, len: usize) -> Result<Self::SerializeStruct> {
+        // SAFTEY: TimeSerializer is only invoked from Serializer when special marker newtype
+        // structs are recognized. Since Duration is the only marker type wrapping a struct,
+        // serialize_struct should only run when expecting a Duration's inner struct.
         assert!(matches!(self, Self::Duration { .. }));
-        assert_eq!(name, "Duration");
+        // SAFTEY: Since we're expecting a Duration, name should always match the one used for
+        // serializing the Duration marker type's inner struct.
+        assert_eq!(name, Duration::STRUCT_NAME);
+        // SAFTEY: Since we're expecting a Duration, there should always be just two fields for the
+        // seconds and nanoseconds.
         assert_eq!(len, 2);
         Ok(SerializeTimestamp::default())
     }
 
     fn serialize_str(self, v: &str) -> Result<Value> {
+        // SAFTEY: TimeSerializer is only invoked from Serializer when special marker newtype
+        // structs are recognized. Since Timestamp is the only marker type wrapping a string,
+        // serialize_str should only run when expecting a Timestamp struct.
         assert!(matches!(self, Self::Timestamp));
         Ok(v.parse::<chrono::DateTime<FixedOffset>>()
             .map_err(|e| SerializationError::SerdeError(e.to_string()))?
