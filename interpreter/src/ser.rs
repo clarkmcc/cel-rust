@@ -801,24 +801,25 @@ impl ser::Serializer for TimeSerializer {
     type SerializeStructVariant = SerializeStructVariant;
 
     fn serialize_struct(self, name: &'static str, len: usize) -> Result<Self::SerializeStruct> {
-        // SAFTEY: TimeSerializer is only invoked from Serializer when special marker newtype
-        // structs are recognized. Since Duration is the only marker type wrapping a struct,
-        // serialize_struct should only run when expecting a Duration's inner struct.
-        assert!(matches!(self, Self::Duration { .. }));
-        // SAFTEY: Since we're expecting a Duration, name should always match the one used for
-        // serializing the Duration marker type's inner struct.
-        assert_eq!(name, Duration::STRUCT_NAME);
-        // SAFTEY: Since we're expecting a Duration, there should always be just two fields for the
-        // seconds and nanoseconds.
-        assert_eq!(len, 2);
+        if !matches!(self, Self::Duration { .. }) || name != Duration::STRUCT_NAME {
+            return Err(SerializationError::SerdeError(
+                "expected Duration struct with Duration marker newtype struct".to_owned(),
+            ));
+        }
+        if len != 2 {
+            return Err(SerializationError::SerdeError(
+                "expected Duration struct to have 2 fields".to_owned(),
+            ));
+        }
         Ok(SerializeTimestamp::default())
     }
 
     fn serialize_str(self, v: &str) -> Result<Value> {
-        // SAFTEY: TimeSerializer is only invoked from Serializer when special marker newtype
-        // structs are recognized. Since Timestamp is the only marker type wrapping a string,
-        // serialize_str should only run when expecting a Timestamp struct.
-        assert!(matches!(self, Self::Timestamp));
+        if !matches!(self, Self::Timestamp) {
+            return Err(SerializationError::SerdeError(
+                "expected Timestamp string with Timestamp marker newtype struct".to_owned(),
+            ));
+        }
         Ok(v.parse::<chrono::DateTime<FixedOffset>>()
             .map_err(|e| SerializationError::SerdeError(e.to_string()))?
             .into())
