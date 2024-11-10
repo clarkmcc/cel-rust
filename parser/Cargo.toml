@@ -2,7 +2,7 @@
 name = "cel-parser"
 description = "A parser for the Common Expression Language (CEL)"
 repository = "https://github.com/clarkmcc/cel-rust"
-version = "0.7.1"
+version = "0.8.0"
 authors = ["Tom Forbes <tom@tomforb.es>", "Clark McCauley <me@clarkmccauley.com>"]
 edition = "2021"
 license = "MIT"
@@ -11,6 +11,7 @@ categories = ["parsing"]
 [dependencies]
 lalrpop-util = { version = "0.22.0", features = ["lexer"] }
 regex = "1.4.2"
+thiserror = "1.0.40"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }

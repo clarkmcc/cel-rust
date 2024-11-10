@@ -185,10 +185,22 @@ impl<'a> Default for Context<'a> {
 
         #[cfg(feature = "regex")]
         ctx.add_function("matches", functions::matches);
+
         #[cfg(feature = "chrono")]
-        ctx.add_function("duration", functions::duration);
-        #[cfg(feature = "chrono")]
-        ctx.add_function("timestamp", functions::timestamp);
+        {
+            ctx.add_function("duration", functions::time::duration);
+            ctx.add_function("timestamp", functions::time::timestamp);
+            ctx.add_function("getFullYear", functions::time::timestamp_year);
+            ctx.add_function("getMonth", functions::time::timestamp_month);
+            ctx.add_function("getDayOfYear", functions::time::timestamp_year_day);
+            ctx.add_function("getDayOfMonth", functions::time::timestamp_month_day);
+            ctx.add_function("getDate", functions::time::timestamp_date);
+            ctx.add_function("getDayOfWeek", functions::time::timestamp_weekday);
+            ctx.add_function("getHours", functions::time::timestamp_hours);
+            ctx.add_function("getMinutes", functions::time::timestamp_minutes);
+            ctx.add_function("getSeconds", functions::time::timestamp_seconds);
+            ctx.add_function("getMilliseconds", functions::time::timestamp_millis);
+        }
 
         ctx
     }
