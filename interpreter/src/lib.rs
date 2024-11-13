@@ -23,9 +23,12 @@ mod duration;
 
 mod ser;
 pub use ser::to_value;
+pub use ser::SerializationError;
 
 #[cfg(feature = "json")]
 mod json;
+#[cfg(feature = "json")]
+pub use json::ConvertToJsonError;
 
 use magic::FromContext;
 
