@@ -20,14 +20,17 @@ mod resolvers;
 
 #[cfg(feature = "chrono")]
 mod duration;
-
-mod ser;
-pub use ser::to_value;
 #[cfg(feature = "chrono")]
 pub use ser::{Duration, Timestamp};
 
+mod ser;
+pub use ser::to_value;
+pub use ser::SerializationError;
+
 #[cfg(feature = "json")]
 mod json;
+#[cfg(feature = "json")]
+pub use json::ConvertToJsonError;
 
 use magic::FromContext;
 
