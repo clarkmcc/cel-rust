@@ -504,6 +504,11 @@ pub fn exists_one(
 }
 
 #[cfg(feature = "chrono")]
+pub use time::duration;
+#[cfg(feature = "chrono")]
+pub use time::timestamp;
+
+#[cfg(feature = "chrono")]
 pub mod time {
     use super::Result;
     use crate::magic::This;
