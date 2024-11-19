@@ -20,6 +20,8 @@ mod resolvers;
 
 #[cfg(feature = "chrono")]
 mod duration;
+#[cfg(feature = "chrono")]
+pub use ser::{Duration, Timestamp};
 
 mod ser;
 pub use ser::to_value;
