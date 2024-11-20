@@ -1,6 +1,10 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum RelationOp {
     LessThan,
@@ -12,6 +16,7 @@ pub enum RelationOp {
     In,
 }
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum ArithmeticOp {
     Add,
@@ -21,6 +26,7 @@ pub enum ArithmeticOp {
     Modulus,
 }
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum UnaryOp {
     Not,
@@ -29,6 +35,7 @@ pub enum UnaryOp {
     DoubleMinus,
 }
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Clone)]
 pub enum Expression {
     Arithmetic(Box<Expression>, ArithmeticOp, Box<Expression>),
@@ -49,6 +56,7 @@ pub enum Expression {
     Ident(Arc<String>),
 }
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Clone)]
 pub enum Member {
     Attribute(Arc<String>),
@@ -56,6 +64,7 @@ pub enum Member {
     Fields(Vec<(Arc<String>, Expression)>),
 }
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Clone)]
 pub enum Atom {
     Int(i64),

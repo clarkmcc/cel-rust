@@ -8,9 +8,14 @@ edition = "2021"
 license = "MIT"
 categories = ["parsing"]
 
+[features]
+default = []
+serde = ["dep:serde"]
+
 [dependencies]
 lalrpop-util = { version = "0.22.0", features = ["lexer"] }
 regex = "1.4.2"
+serde = { version = "1.0.215", features = ["derive", "rc"], optional = true }
 thiserror = "1.0.40"
 
 [dev-dependencies]
