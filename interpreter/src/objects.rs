@@ -981,11 +981,14 @@ mod tests {
     #[test]
     fn test_short_curcuit_and() {
         let mut context = Context::default();
-        let data: HashMap<String, String>  = HashMap::new();
+        let data: HashMap<String, String> = HashMap::new();
         context.add_variable_from_value("data", data);
 
         let program = Program::compile("has(data.x) && data.x.startsWith(\"foo\")").unwrap();
         let value = program.execute(&context);
-        assert!(value.is_ok(), "The AND expression should support short-circuit evaluation.");
+        assert!(
+            value.is_ok(), 
+            "The AND expression should support short-circuit evaluation."
+        );
     }
 }
