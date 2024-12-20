@@ -486,8 +486,12 @@ impl<'a> Value {
             }
             Expression::And(left, right) => {
                 let left = Value::resolve(left, ctx)?;
-                let right = Value::resolve(right, ctx)?;
-                Value::Bool(left.to_bool() && right.to_bool()).into()
+                if !left.to_bool() {
+                    left.into()
+                } else {
+                    let right = Value::resolve(right, ctx)?;
+                    right.into()
+                }
             }
             Expression::Unary(op, expr) => {
                 let expr = Value::resolve(expr, ctx)?;
@@ -972,5 +976,16 @@ mod tests {
                 "example"
             )))]))
         );
+    }
+
+    #[test]
+    fn test_short_curcuit_and() {
+        let mut context = Context::default();
+        let data: HashMap<String, String>  = HashMap::new();
+        context.add_variable_from_value("data", data);
+
+        let program = Program::compile("has(data.x) && data.x.startsWith(\"foo\")").unwrap();
+        let value = program.execute(&context);
+        assert!(value.is_ok(), "The AND expression should support short-circuit evaluation.");
     }
 }
