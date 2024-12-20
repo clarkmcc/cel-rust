@@ -987,7 +987,7 @@ mod tests {
         let program = Program::compile("has(data.x) && data.x.startsWith(\"foo\")").unwrap();
         let value = program.execute(&context);
         assert!(
-            value.is_ok(), 
+            value.is_ok(),
             "The AND expression should support short-circuit evaluation."
         );
     }
