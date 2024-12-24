@@ -487,10 +487,10 @@ impl<'a> Value {
             Expression::And(left, right) => {
                 let left = Value::resolve(left, ctx)?;
                 if !left.to_bool() {
-                    left.into()
+                    Value::Bool(false).into()
                 } else {
                     let right = Value::resolve(right, ctx)?;
-                    right.into()
+                    Value::Bool(right.to_bool()).into()
                 }
             }
             Expression::Unary(op, expr) => {
