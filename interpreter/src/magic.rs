@@ -230,7 +230,7 @@ impl From<Identifier> for String {
 #[derive(Clone)]
 pub struct Arguments(pub Arc<Vec<Value>>);
 
-impl<'a, 'context> FromContext<'a, 'context> for Arguments {
+impl<'a> FromContext<'a, '_> for Arguments {
     fn from_context(ctx: &'a mut FunctionContext) -> Result<Self, ExecutionError>
     where
         Self: Sized,
@@ -389,7 +389,7 @@ impl<'a, 'context, H, T> HandlerCallable<'a, 'context, H, T> {
     }
 }
 
-impl<'a, 'context, H, T> Callable for HandlerCallable<'a, 'context, H, T>
+impl<H, T> Callable for HandlerCallable<'_, '_, H, T>
 where
     H: Handler<T> + Clone + 'static,
 {

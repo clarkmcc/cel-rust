@@ -381,7 +381,7 @@ pub fn all(
     ident: Identifier,
     expr: Expression,
 ) -> Result<bool> {
-    return match this {
+    match this {
         Value::List(items) => {
             let mut ptx = ftx.ptx.new_inner_scope();
             for item in items.iter() {
@@ -402,8 +402,8 @@ pub fn all(
             }
             Ok(true)
         }
-        _ => return Err(this.error_expected_type(ValueType::List)),
-    };
+        _ => Err(this.error_expected_type(ValueType::List)),
+    }
 }
 
 /// Returns a boolean value indicating whether a or more values in the provided

@@ -405,7 +405,7 @@ impl From<Value> for ResolveResult {
     }
 }
 
-impl<'a> Value {
+impl Value {
     pub fn resolve_all(expr: &[Expression], ctx: &Context) -> ResolveResult {
         let mut res = Vec::with_capacity(expr.len());
         for expr in expr {
@@ -415,7 +415,7 @@ impl<'a> Value {
     }
 
     #[inline(always)]
-    pub fn resolve(expr: &'a Expression, ctx: &Context) -> ResolveResult {
+    pub fn resolve(expr: &Expression, ctx: &Context) -> ResolveResult {
         match expr {
             Expression::Atom(atom) => Ok(atom.into()),
             Expression::Arithmetic(left, op, right) => {
