@@ -40,7 +40,7 @@ pub enum Context<'a> {
     },
 }
 
-impl<'a> Context<'a> {
+impl Context<'_> {
     pub fn add_variable<S, V>(
         &mut self,
         name: S,
@@ -159,7 +159,7 @@ impl<'a> Context<'a> {
     }
 }
 
-impl<'a> Default for Context<'a> {
+impl Default for Context<'_> {
     fn default() -> Self {
         let mut ctx = Context::Root {
             variables: Default::default(),

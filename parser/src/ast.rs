@@ -73,7 +73,7 @@ pub struct ExpressionReferences<'expr> {
     functions: HashSet<&'expr str>,
 }
 
-impl<'expr> ExpressionReferences<'expr> {
+impl ExpressionReferences<'_> {
     /// Returns true if the expression references the provided variable name.
     ///
     /// # Example

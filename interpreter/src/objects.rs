@@ -405,7 +405,7 @@ impl From<Value> for ResolveResult {
     }
 }
 
-impl<'a> Value {
+impl Value {
     pub fn resolve_all(expr: &[Expression], ctx: &Context) -> ResolveResult {
         let mut res = Vec::with_capacity(expr.len());
         for expr in expr {
@@ -415,7 +415,7 @@ impl<'a> Value {
     }
 
     #[inline(always)]
-    pub fn resolve(expr: &'a Expression, ctx: &Context) -> ResolveResult {
+    pub fn resolve(expr: &Expression, ctx: &Context) -> ResolveResult {
         match expr {
             Expression::Atom(atom) => Ok(atom.into()),
             Expression::Arithmetic(left, op, right) => {
@@ -486,8 +486,12 @@ impl<'a> Value {
             }
             Expression::And(left, right) => {
                 let left = Value::resolve(left, ctx)?;
-                let right = Value::resolve(right, ctx)?;
-                Value::Bool(left.to_bool() && right.to_bool()).into()
+                if !left.to_bool() {
+                    Value::Bool(false).into()
+                } else {
+                    let right = Value::resolve(right, ctx)?;
+                    Value::Bool(right.to_bool()).into()
+                }
             }
             Expression::Unary(op, expr) => {
                 let expr = Value::resolve(expr, ctx)?;
@@ -971,6 +975,20 @@ mod tests {
             Value::List(Arc::new(vec![Value::String(Arc::new(String::from(
                 "example"
             )))]))
+        );
+    }
+
+    #[test]
+    fn test_short_curcuit_and() {
+        let mut context = Context::default();
+        let data: HashMap<String, String> = HashMap::new();
+        context.add_variable_from_value("data", data);
+
+        let program = Program::compile("has(data.x) && data.x.startsWith(\"foo\")").unwrap();
+        let value = program.execute(&context);
+        assert!(
+            value.is_ok(),
+            "The AND expression should support short-circuit evaluation."
         );
     }
 }
