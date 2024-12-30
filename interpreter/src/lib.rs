@@ -174,6 +174,12 @@ impl TryFrom<&str> for Program {
     }
 }
 
+impl From<Expression> for Program {
+    fn from(expression: Expression) -> Self {
+        Program { expression }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::context::Context;
