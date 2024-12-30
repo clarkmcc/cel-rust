@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1](https://github.com/clarkmcc/cel-rust/compare/cel-interpreter-v0.9.0...cel-interpreter-v0.9.1) - 2024-12-30
+
+### Added
+
+- Implement Short-Circuit Evaluation for AND Expressions to Fix Issue #117 (#118)
+
+### Other
+
+- Add custom Duration and Timestamp types for conversion with serde ([#89](https://github.com/clarkmcc/cel-rust/pull/89))
+- Export timestamp and duration fn as they were ([#112](https://github.com/clarkmcc/cel-rust/pull/112))
+- ValueType copy & debug ([#113](https://github.com/clarkmcc/cel-rust/pull/113))
+- Expose Serialization and ToJson errors ([#114](https://github.com/clarkmcc/cel-rust/pull/114))
+- Fix compilation without chrono ([#111](https://github.com/clarkmcc/cel-rust/pull/111))
+- Fix default features, cleanup dependencies & other minor code improvements ([#109](https://github.com/clarkmcc/cel-rust/pull/109))
+- Added missing timestamp macros ([#106](https://github.com/clarkmcc/cel-rust/pull/106))
+
 ## [0.9.0](https://github.com/clarkmcc/cel-rust/compare/cel-interpreter-v0.8.1...cel-interpreter-v0.9.0) - 2024-10-30
 
 ### Other
