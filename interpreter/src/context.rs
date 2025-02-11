@@ -140,6 +140,17 @@ impl Context<'_> {
         }
     }
 
+    pub fn clear_variables(&mut self) {
+        match self {
+            Context::Root { variables, .. } => {
+                variables.clear();
+            }
+            Context::Child { variables, .. } => {
+                variables.clear();
+            }
+        }
+    }
+
     /// Constructs a new empty context with no variables or functions.
     ///
     /// If you're looking for a context that has all the standard methods, functions
