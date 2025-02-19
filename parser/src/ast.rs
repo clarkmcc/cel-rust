@@ -47,7 +47,10 @@ pub enum Expression {
 
     Atom(Atom),
     Ident(Arc<String>),
+
+    TemplateLiteral(Vec<Expression>),
 }
+
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Member {
@@ -198,6 +201,7 @@ impl Expression {
             Expression::Ident(v) => {
                 variables.insert(v.as_str());
             }
+            Expression::TemplateLiteral(_) => {} // TODO:
         }
     }
 }

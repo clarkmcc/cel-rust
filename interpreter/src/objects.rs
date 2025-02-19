@@ -174,6 +174,29 @@ pub enum Value {
     Null,
 }
 
+impl Display for Value {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::List(l) => write!(
+                f,
+                "[{}]",
+                l.as_ref()
+                    .iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<String>>()
+                    .join(",")
+            ),
+            Value::Int(i) => write!(f, "{}", i),
+            Value::UInt(u) => write!(f, "{}", u),
+            Value::Float(fl) => write!(f, "{}", fl),
+            Value::String(s) => write!(f, "{}", s),
+            Value::Bool(b) => write!(f, "{}", b),
+            Value::Null => write!(f, "null"),
+            o => write!(f, "{:?}", o),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum ValueType {
     List,
@@ -417,6 +440,16 @@ impl Value {
     #[inline(always)]
     pub fn resolve(expr: &Expression, ctx: &Context) -> ResolveResult {
         match expr {
+            Expression::TemplateLiteral(t) => {
+                let concatenated: Vec<String> = t
+                    .iter()
+                    .map(|e| {
+                        let b = Value::resolve(e, ctx).unwrap();
+                        b.to_string()
+                    })
+                    .collect();
+                Ok(Value::String(concatenated.join("").into()))
+            }
             Expression::Atom(atom) => Ok(atom.into()),
             Expression::Arithmetic(left, op, right) => {
                 let left = Value::resolve(left, ctx)?;
@@ -990,5 +1023,76 @@ mod tests {
             value.is_ok(),
             "The AND expression should support short-circuit evaluation."
         );
+    }
+
+    #[test]
+    fn test_template_string_basic() {
+        let mut context = Context::default();
+        context.add_variable_from_value("foo", "bar");
+        let program = Program::compile(r"`beep ${foo}`").unwrap();
+        let value = program.execute(&context);
+        assert!(value.is_ok());
+        assert_eq!(value.unwrap(), "beep bar".into());
+    }
+
+    #[test]
+    fn test_template_nested_path() {
+        let mut context = Context::default();
+        let mut map: HashMap<String, Value> = HashMap::new();
+        let mut nested: HashMap<String, Value> = HashMap::new();
+        nested.insert("baz".to_string(), "qux".into());
+        let nested: Value = Value::Map(nested.into());
+        map.insert("bar".to_string(), nested.into());
+        let map = Value::Map(map.into());
+        context.add_variable_from_value("foo", map);
+        let program = Program::compile(r"`beep ${foo.bar.baz}`").unwrap();
+        let value = program.execute(&context);
+        assert!(value.is_ok());
+        assert_eq!(value.unwrap(), "beep qux".into());
+    }
+
+    #[test]
+    fn test_negation() {
+        let mut context = Context::default();
+        context.add_variable_from_value("foo", Value::Int(5));
+        let program = Program::compile(r"`-5 == ${-foo}`").unwrap();
+        let value = program.execute(&context);
+        assert!(value.is_ok());
+        assert_eq!(value.unwrap(), "-5 == -5".into());
+    }
+
+    #[test]
+    fn test_array_access() {
+        let mut context = Context::default();
+        let arr = Value::List(Arc::new(
+            vec![Value::Int(1), Value::Int(2), Value::Int(3)].into(),
+        ));
+        context.add_variable("foo", arr).unwrap();
+        let program = Program::compile(r"`${foo[0]}`").unwrap();
+        let value = program.execute(&context);
+        assert!(value.is_ok());
+        assert_eq!(value.unwrap(), "1".into());
+    }
+
+    #[test]
+    fn test_bool_eval() {
+        let mut context = Context::default();
+        let b = Value::Bool(true);
+        context.add_variable("foo", b).unwrap();
+        let program = Program::compile(r"`false != ${foo}`").unwrap();
+        let value = program.execute(&context);
+        assert!(value.is_ok());
+        assert_eq!(value.unwrap(), "false != true".into());
+    }
+
+    #[test]
+    fn test_null_eval() {
+        let mut context = Context::default();
+        let n = Value::Null;
+        context.add_variable("foo", n).unwrap();
+        let program = Program::compile(r"`I am ${foo}`").unwrap();
+        let value = program.execute(&context);
+        assert!(value.is_ok());
+        assert_eq!(value.unwrap(), "I am null".into());
     }
 }

@@ -1,4 +1,4 @@
-use crate::{RelationOp, ArithmeticOp, Expression, UnaryOp, Member, Atom, parse_bytes, parse_string};
+use crate::{RelationOp, ArithmeticOp, Expression, UnaryOp, Member, Atom, parse_bytes, parse_string, parse};
 use std::sync::Arc;
 
 grammar;
@@ -66,6 +66,7 @@ pub Primary: Expression = {
            Expression::FunctionCall(Expression::Ident(identifier).into(), None, arguments).into()
     },
     Atom => Expression::Atom(<>).into(),
+    TemplateLiteral,
     "[" <members:CommaSeparated<Expression>> "]" => Expression::List(<>).into(),
     "{" <fields:CommaSeparated<MapInits>> "}" => Expression::Map(<>).into(),
     "(" <Expression> ")"
@@ -119,6 +120,70 @@ RelationOp: RelationOp = {
     "in" => RelationOp::In
 }
 
+TemplateLiteral: Expression = {
+    // Template literal - handle as a single regex pattern
+    // The pattern captures the entire template literal including expressions
+    r"`([^`\\$]*(?:\\.[^`\\$]*)*(?:\$\{(?:[^{}]|\{[^{}]*\})*\}[^`\\$]*)*)*`" => {
+        let template_str = <>;
+        let mut parts = Vec::new();
+        let mut current = String::new();
+        let mut chars = template_str[1..template_str.len()-1].chars().peekable();
+        
+        while let Some(c) = chars.next() {
+            match c {
+                '\\' => {
+                    if let Some(next) = chars.next() {
+                        current.push(next);
+                    }
+                },
+                '$' => {
+                    if let Some('{') = chars.next() {
+                        // Save current text if any
+                        if !current.is_empty() {
+                            parts.push(Expression::Atom(Atom::String(current.into())));
+                            current = String::new();
+                        }
+                        
+                        // Collect expression string
+                        let mut expr_str = String::new();
+                        let mut brace_count = 1;
+                        
+                        while brace_count > 0 {
+                            if let Some(ch) = chars.next() {
+                                match ch {
+                                    '{' => brace_count += 1,
+                                    '}' => brace_count -= 1,
+                                    _ => {}
+                                }
+                                if brace_count > 0 {
+                                    expr_str.push(ch);
+                                }
+                            }
+                        }
+                        
+                        // Parse expression using the grammar
+                        match parse(&expr_str) {
+                            Ok(expr) => {
+                                parts.push(expr)
+                            },
+                            Err(_) => return Expression::Atom(Atom::String(Arc::new(template_str.to_string())))  // Fallback if expression parsing fails
+                        }
+                    } else {
+                        current.push('$');
+                    }
+                },
+                _ => current.push(c)
+            }
+        }
+        
+        // Add any remaining text
+        if !current.is_empty() {
+            parts.push(Expression::Atom(Atom::String(current.into())));
+        }
+        
+        Expression::TemplateLiteral(parts)
+    },
+}
 Atom: Atom = {
     // Integer literals. Annoying to parse :/
     r"-?[0-9]+" => Atom::Int(<>.parse().unwrap()),
@@ -162,11 +227,15 @@ Atom: Atom = {
     r#"[bB]'(\\.|[^'\n])*'"# => Atom::Bytes(parse_bytes(&<>[2..<>.len()-1]).unwrap().into()),
     // r#"[bB]'''(\\.|[^'{3}])*'''"# => Atom::Bytes(Vec::from(<>.as_bytes()).into()),
 
+
     "true" => Atom::Bool(true),
     "false" => Atom::Bool(false),
     "null" => Atom::Null,
 };
 
+
 Ident: Arc<String> = {
     r"[_a-zA-Z][_a-zA-Z0-9]*" => Arc::from(<>.to_string())
 }
+
+
