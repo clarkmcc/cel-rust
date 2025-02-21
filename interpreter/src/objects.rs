@@ -682,6 +682,8 @@ impl ops::Add<Value> for Value {
         match (self, rhs) {
             (Value::Int(l), Value::Int(r)) => Value::Int(l + r).into(),
             (Value::UInt(l), Value::UInt(r)) => Value::UInt(l + r).into(),
+            (Value::Int(l), Value::UInt(r)) => Value::Int(l + r as i64).into(),
+            (Value::UInt(l), Value::Int(r)) => Value::Int(l as i64 + r).into(),
 
             // Float matrix
             (Value::Float(l), Value::Float(r)) => Value::Float(l + r).into(),
@@ -731,6 +733,8 @@ impl ops::Sub<Value> for Value {
         match (self, rhs) {
             (Value::Int(l), Value::Int(r)) => Value::Int(l - r).into(),
             (Value::UInt(l), Value::UInt(r)) => Value::UInt(l - r).into(),
+            (Value::Int(l), Value::UInt(r)) => Value::Int(l - r as i64).into(),
+            (Value::UInt(l), Value::Int(r)) => Value::Int(l as i64 - r).into(),
 
             // Float matrix
             (Value::Float(l), Value::Float(r)) => Value::Float(l - r).into(),
@@ -760,6 +764,8 @@ impl ops::Div<Value> for Value {
         match (self, rhs) {
             (Value::Int(l), Value::Int(r)) => Value::Int(l / r).into(),
             (Value::UInt(l), Value::UInt(r)) => Value::UInt(l / r).into(),
+            (Value::Int(l), Value::UInt(r)) => Value::Int(l / r as i64).into(),
+            (Value::UInt(l), Value::Int(r)) => Value::Int(l as i64 / r).into(),
 
             // Float matrix
             (Value::Float(l), Value::Float(r)) => Value::Float(l / r).into(),
@@ -783,6 +789,8 @@ impl ops::Mul<Value> for Value {
         match (self, rhs) {
             (Value::Int(l), Value::Int(r)) => Value::Int(l * r).into(),
             (Value::UInt(l), Value::UInt(r)) => Value::UInt(l * r).into(),
+            (Value::Int(l), Value::UInt(r)) => Value::Int(l * r as i64).into(),
+            (Value::UInt(l), Value::Int(r)) => Value::Int(l as i64 * r).into(),
 
             // Float matrix
             (Value::Float(l), Value::Float(r)) => Value::Float(l * r).into(),
@@ -806,6 +814,8 @@ impl ops::Rem<Value> for Value {
         match (self, rhs) {
             (Value::Int(l), Value::Int(r)) => Value::Int(l % r).into(),
             (Value::UInt(l), Value::UInt(r)) => Value::UInt(l % r).into(),
+            (Value::Int(l), Value::UInt(r)) => Value::Int(l % r as i64).into(),
+            (Value::UInt(l), Value::Int(r)) => Value::Int(l as i64 % r).into(),
 
             // Float matrix
             (Value::Float(l), Value::Float(r)) => Value::Float(l % r).into(),
@@ -823,6 +833,7 @@ impl ops::Rem<Value> for Value {
 
 #[cfg(test)]
 mod tests {
+    use crate::testing::assert_script;
     use crate::{objects::Key, Context, ExecutionError, Program, Value};
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -990,5 +1001,38 @@ mod tests {
             value.is_ok(),
             "The AND expression should support short-circuit evaluation."
         );
+    }
+
+    #[test]
+    fn test_cel_has_conditional() {
+        let expr = "headers['accept-language'] ? headers['accept-language'].exists(h, h.contains('en')) : false";
+        let program = Program::compile(expr).unwrap();
+
+        // Test 1: headers without accept-language
+        let mut ctx = Context::default();
+        let mut headers = std::collections::HashMap::new();
+        headers.insert("accept-language".to_string(), vec!["en"]);
+        ctx.add_variable("headers", headers).unwrap();
+
+        let result1 = program.execute(&ctx).unwrap();
+        assert_eq!(result1, Value::Bool(true),);
+    }
+
+    #[test]
+    fn test_add_uint_int() {
+        [
+            ("add: uint to int", "uint(1) + int(1) == int(2)"),
+            ("add: int to uint", "int(1) + uint(1) == int(2)"),
+            ("sub: uint to int", "uint(1) - int(1) == int(0)"),
+            ("sub: int to uint", "int(1) - uint(1) == int(0)"),
+            ("mul: uint to int", "uint(2) * int(2) == int(4)"),
+            ("mul: int to uint", "int(2) * uint(2) == int(4)"),
+            ("div: uint to int", "uint(4) / int(2) == int(2)"),
+            ("div: int to uint", "int(4) / uint(2) == int(2)"),
+            ("rem: uint to int", "uint(5) % int(2) == int(1)"),
+            ("rem: int to uint", "int(5) % uint(2) == int(1)"),
+        ]
+        .iter()
+        .for_each(assert_script);
     }
 }

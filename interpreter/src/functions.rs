@@ -650,11 +650,7 @@ pub fn max(Arguments(args): Arguments) -> Result<Value> {
 #[cfg(test)]
 mod tests {
     use crate::context::Context;
-    use crate::tests::test_script;
-
-    fn assert_script(input: &(&str, &str)) {
-        assert_eq!(test_script(input.1, None), Ok(true.into()), "{}", input.0);
-    }
+    use crate::testing::{assert_script, test_script};
 
     #[test]
     fn test_size() {
