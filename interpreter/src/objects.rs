@@ -979,7 +979,7 @@ mod tests {
     }
 
     #[test]
-    fn test_short_curcuit_and() {
+    fn test_short_circuit_and() {
         let mut context = Context::default();
         let data: HashMap<String, String> = HashMap::new();
         context.add_variable_from_value("data", data);

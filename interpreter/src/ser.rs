@@ -55,7 +55,7 @@ pub struct Duration(pub chrono::Duration);
 impl Duration {
     // Since serde can't natively represent durations, we serialize a special
     // newtype to indicate we want to rebuild the duration in the result, while
-    // remaining compatible with most other Serializer implemenations.
+    // remaining compatible with most other Serializer implementations.
     const NAME: &str = "$__cel_private_Duration";
     const STRUCT_NAME: &str = "Duration";
     const SECS_FIELD: &str = "secs";
@@ -141,7 +141,7 @@ pub struct Timestamp(pub chrono::DateTime<FixedOffset>);
 impl Timestamp {
     // Since serde can't natively represent timestamps, we serialize a special
     // newtype to indicate we want to rebuild the timestamp in the result,
-    // while remaining compatible with most other Serializer implemenations.
+    // while remaining compatible with most other Serializer implementations.
     const NAME: &str = "$__cel_private_Timestamp";
 }
 
