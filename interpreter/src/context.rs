@@ -45,7 +45,7 @@ impl Context<'_> {
         &mut self,
         name: S,
         value: V,
-    ) -> Result<(), Box<dyn std::error::Error>>
+    ) -> Result<(), <V as TryIntoValue>::Error>
     where
         S: Into<String>,
         V: TryIntoValue,

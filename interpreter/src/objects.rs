@@ -136,7 +136,7 @@ impl<K: Into<Key>, V: Into<Value>> From<HashMap<K, V>> for Map {
 }
 
 pub trait TryIntoValue {
-    type Error: std::error::Error + 'static;
+    type Error: std::error::Error + 'static + Send + Sync;
     fn try_into_value(self) -> Result<Value, Self::Error>;
 }
 
