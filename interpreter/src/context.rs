@@ -1,7 +1,7 @@
 use crate::magic::{Function, FunctionRegistry, Handler};
 use crate::objects::{TryIntoValue, Value};
 use crate::{functions, ExecutionError};
-use cel_parser::Expression;
+use cel_parser::{Expression, ExpressionInner};
 use std::collections::HashMap;
 
 /// Context is a collection of variables and functions that can be used
@@ -125,7 +125,7 @@ impl Context<'_> {
         };
     }
 
-    pub fn resolve(&self, expr: &Expression) -> Result<Value, ExecutionError> {
+    pub fn resolve(&self, expr: &ExpressionInner) -> Result<Value, ExecutionError> {
         Value::resolve(expr, self)
     }
 

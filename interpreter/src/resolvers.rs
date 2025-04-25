@@ -18,7 +18,7 @@ pub trait Resolver {
 
 impl Resolver for Expression {
     fn resolve(&self, ctx: &FunctionContext) -> ResolveResult {
-        Value::resolve(self, ctx.ptx)
+        Value::resolve(&self.inner, ctx.ptx)
     }
 }
 
@@ -40,7 +40,7 @@ impl Resolver for Argument {
                 index + 1,
                 ctx.args.len(),
             ))?;
-        Value::resolve(arg, ctx.ptx)
+        Value::resolve(&arg.inner, ctx.ptx)
     }
 }
 
@@ -57,7 +57,7 @@ impl Resolver for AllArguments {
     fn resolve(&self, ctx: &FunctionContext) -> ResolveResult {
         let mut args = Vec::with_capacity(ctx.args.len());
         for arg in ctx.args.iter() {
-            args.push(Value::resolve(arg, ctx.ptx)?);
+            args.push(Value::resolve(&arg.inner, ctx.ptx)?);
         }
         Ok(Value::List(args.into()))
     }

@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::ops::Range;
 use std::sync::Arc;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -29,8 +30,30 @@ pub enum UnaryOp {
     DoubleMinus,
 }
 
+#[derive(Debug, Clone)]
+pub struct Expression {
+    pub inner: ExpressionInner,
+    pub span: Option<Range<usize>>,
+}
+
+impl ExpressionInner {
+    pub(crate) fn into_expression(self) -> Expression {
+        Expression {
+            inner: self,
+            span: None,
+        }
+    }
+}
+
+impl PartialEq for Expression {
+    fn eq(&self, other: &Self) -> bool {
+        (self.span.is_none() || other.span.is_none() || self.span == other.span)
+            && self.inner == other.inner
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
-pub enum Expression {
+pub enum ExpressionInner {
     Arithmetic(Box<Expression>, ArithmeticOp, Box<Expression>),
     Relation(Box<Expression>, RelationOp, Box<Expression>),
 
@@ -157,23 +180,23 @@ impl Expression {
         variables: &mut HashSet<&'expr str>,
         functions: &mut HashSet<&'expr str>,
     ) {
-        match self {
-            Expression::Arithmetic(e1, _, e2)
-            | Expression::Relation(e1, _, e2)
-            | Expression::Ternary(e1, _, e2)
-            | Expression::Or(e1, e2)
-            | Expression::And(e1, e2) => {
+        match &self.inner {
+            ExpressionInner::Arithmetic(e1, _, e2)
+            | ExpressionInner::Relation(e1, _, e2)
+            | ExpressionInner::Ternary(e1, _, e2)
+            | ExpressionInner::Or(e1, e2)
+            | ExpressionInner::And(e1, e2) => {
                 e1._references(variables, functions);
                 e2._references(variables, functions);
             }
-            Expression::Unary(_, e) => {
+            ExpressionInner::Unary(_, e) => {
                 e._references(variables, functions);
             }
-            Expression::Member(e, _) => {
+            ExpressionInner::Member(e, _) => {
                 e._references(variables, functions);
             }
-            Expression::FunctionCall(name, target, args) => {
-                if let Expression::Ident(v) = &**name {
+            ExpressionInner::FunctionCall(name, target, args) => {
+                if let ExpressionInner::Ident(v) = &name.inner {
                     functions.insert(v.as_str());
                 }
                 if let Some(target) = target {
@@ -183,19 +206,19 @@ impl Expression {
                     e._references(variables, functions);
                 }
             }
-            Expression::List(e) => {
+            ExpressionInner::List(e) => {
                 for e in e {
                     e._references(variables, functions);
                 }
             }
-            Expression::Map(v) => {
+            ExpressionInner::Map(v) => {
                 for (e1, e2) in v {
                     e1._references(variables, functions);
                     e2._references(variables, functions);
                 }
             }
-            Expression::Atom(_) => {}
-            Expression::Ident(v) => {
+            ExpressionInner::Atom(_) => {}
+            ExpressionInner::Ident(v) => {
                 variables.insert(v.as_str());
             }
         }

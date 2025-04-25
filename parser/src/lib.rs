@@ -40,15 +40,20 @@ pub fn parse(input: &str) -> Result<Expression, ParseError> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        ArithmeticOp, Atom, Atom::*, Expression, Expression::*, Member::*, RelationOp, UnaryOp,
+        ArithmeticOp,
+        Atom::{self, *},
+        Expression,
+        ExpressionInner::{self, *},
+        Member::*,
+        RelationOp, UnaryOp,
     };
 
     fn parse(input: &str) -> Expression {
         crate::parse(input).unwrap_or_else(|e| panic!("{}", e))
     }
 
-    fn assert_parse_eq(input: &str, expected: Expression) {
-        assert_eq!(parse(input), expected);
+    fn assert_parse_eq(input: &str, expected: ExpressionInner) {
+        assert_eq!(parse(input).inner, expected);
     }
 
     #[test]
@@ -69,9 +74,9 @@ mod tests {
 
     #[test]
     fn other_floats() {
-        assert_parse_eq("1e3", Expression::Atom(Atom::Float(1000.0)));
-        assert_parse_eq("1e-3", Expression::Atom(Atom::Float(0.001)));
-        assert_parse_eq("1.4e-3", Expression::Atom(Atom::Float(0.0014)));
+        assert_parse_eq("1e3", ExpressionInner::Atom(Atom::Float(1000.0)));
+        assert_parse_eq("1e-3", ExpressionInner::Atom(Atom::Float(0.001)));
+        assert_parse_eq("1.4e-3", ExpressionInner::Atom(Atom::Float(0.0014)));
     }
 
     #[test]
@@ -88,7 +93,7 @@ mod tests {
     // fn single_quote_raw_str() {
     //     assert_parse_eq(
     //         "r'\n'",
-    //         Expression::Atom(String("\n".to_string().into())),
+    //         ExpressionInner::Atom(String("\n".to_string().into())),
     //     );
     // }
 
@@ -131,19 +136,23 @@ mod tests {
         assert_parse_eq(
             "[1, 2, 3].map(x, x * 2)",
             FunctionCall(
-                Box::new(Ident("map".to_string().into())),
-                Some(Box::new(List(vec![
-                    Atom(Int(1)),
-                    Atom(Int(2)),
-                    Atom(Int(3)),
-                ]))),
+                Box::new(Ident("map".to_string().into()).into_expression()),
+                Some(Box::new(
+                    List(vec![
+                        Atom(Int(1)).into_expression(),
+                        Atom(Int(2)).into_expression(),
+                        Atom(Int(3)).into_expression(),
+                    ])
+                    .into_expression(),
+                )),
                 vec![
-                    Ident("x".to_string().into()),
+                    Ident("x".to_string().into()).into_expression(),
                     Arithmetic(
-                        Box::new(Ident("x".to_string().into())),
+                        Box::new(Ident("x".to_string().into()).into_expression()),
                         ArithmeticOp::Multiply,
-                        Box::new(Atom(Int(2))),
-                    ),
+                        Box::new(Atom(Int(2)).into_expression()),
+                    )
+                    .into_expression(),
                 ],
             ),
         )
@@ -155,11 +164,12 @@ mod tests {
             "a.b[1]",
             Member(
                 Member(
-                    Ident("a".to_string().into()).into(),
+                    Ident("a".to_string().into()).into_expression().into(),
                     Attribute("b".to_string().into()).into(),
                 )
+                .into_expression()
                 .into(),
-                Index(Atom(Int(1)).into()).into(),
+                Index(Atom(Int(1)).into_expression().into()).into(),
             ),
         )
     }
@@ -168,7 +178,11 @@ mod tests {
     fn function_call_no_args() {
         assert_parse_eq(
             "a()",
-            FunctionCall(Box::new(Ident("a".to_string().into())), None, vec![]),
+            FunctionCall(
+                Box::new(Ident("a".to_string().into()).into_expression()),
+                None,
+                vec![],
+            ),
         );
     }
 
@@ -176,11 +190,17 @@ mod tests {
     fn test_parser_bool_unary_ops() {
         assert_parse_eq(
             "!false",
-            Unary(UnaryOp::Not, Box::new(Expression::Atom(Atom::Bool(false)))),
+            Unary(
+                UnaryOp::Not,
+                Box::new(ExpressionInner::Atom(Atom::Bool(false)).into_expression()),
+            ),
         );
         assert_parse_eq(
             "!true",
-            Unary(UnaryOp::Not, Box::new(Expression::Atom(Atom::Bool(true)))),
+            Unary(
+                UnaryOp::Not,
+                Box::new(ExpressionInner::Atom(Atom::Bool(true)).into_expression()),
+            ),
         );
     }
 
@@ -189,9 +209,9 @@ mod tests {
         assert_parse_eq(
             "true == true",
             Relation(
-                Box::new(Expression::Atom(Atom::Bool(true))),
+                Box::new(ExpressionInner::Atom(Atom::Bool(true)).into_expression()),
                 RelationOp::Equals,
-                Box::new(Expression::Atom(Atom::Bool(true))),
+                Box::new(ExpressionInner::Atom(Atom::Bool(true)).into_expression()),
             ),
         );
     }
@@ -202,8 +222,9 @@ mod tests {
             parse("!!true"),
             (Unary(
                 UnaryOp::DoubleNot,
-                Box::new(Expression::Atom(Atom::Bool(true))),
-            ))
+                Box::new(ExpressionInner::Atom(Atom::Bool(true)).into_expression()),
+            )
+            .into_expression())
         );
     }
 
@@ -211,13 +232,16 @@ mod tests {
     fn delimited_expressions() {
         assert_parse_eq(
             "(-((1)))",
-            Unary(UnaryOp::Minus, Box::new(Expression::Atom(Atom::Int(1)))),
+            Unary(
+                UnaryOp::Minus,
+                Box::new(ExpressionInner::Atom(Atom::Int(1)).into_expression()),
+            ),
         );
     }
 
     #[test]
     fn test_empty_list_parsing() {
-        assert_eq!(parse("[]"), (List(vec![])));
+        assert_eq!(parse("[]"), (List(vec![]).into_expression()));
     }
 
     #[test]
@@ -225,9 +249,9 @@ mod tests {
         assert_parse_eq(
             "[1,2,3]",
             List(vec![
-                Expression::Atom(Atom::Int(1)),
-                Expression::Atom(Atom::Int(2)),
-                Expression::Atom(Atom::Int(3)),
+                ExpressionInner::Atom(Atom::Int(1)).into_expression(),
+                ExpressionInner::Atom(Atom::Int(2)).into_expression(),
+                ExpressionInner::Atom(Atom::Int(3)).into_expression(),
             ]),
         );
     }
@@ -237,12 +261,17 @@ mod tests {
         assert_parse_eq(
             "[1,2,3][0]",
             Member(
-                Box::new(List(vec![
-                    Expression::Atom(Int(1)),
-                    Expression::Atom(Int(2)),
-                    Expression::Atom(Int(3)),
-                ])),
-                Box::new(Index(Box::new(Expression::Atom(Int(0))))),
+                Box::new(
+                    List(vec![
+                        ExpressionInner::Atom(Int(1)).into_expression(),
+                        ExpressionInner::Atom(Int(2)).into_expression(),
+                        ExpressionInner::Atom(Int(3)).into_expression(),
+                    ])
+                    .into_expression(),
+                ),
+                Box::new(Index(Box::new(
+                    ExpressionInner::Atom(Int(0)).into_expression(),
+                ))),
             ),
         );
     }
@@ -253,11 +282,11 @@ mod tests {
             "['0', 1, 3.0, null]",
             //"['0', 1, 2u, 3.0, null]",
             List(vec![
-                Expression::Atom(String("0".to_string().into())),
-                Expression::Atom(Int(1)),
-                //Expression::Atom(UInt(2)),
-                Expression::Atom(Float(3.0)),
-                Expression::Atom(Null),
+                ExpressionInner::Atom(String("0".to_string().into())).into_expression(),
+                ExpressionInner::Atom(Int(1)).into_expression(),
+                //ExpressiInExpressionInneron::Atom(UInt(2)).into_expression(),
+                ExpressionInner::Atom(Float(3.0)).into_expression(),
+                ExpressionInner::Atom(Null).into_expression(),
             ]),
         );
     }
@@ -267,9 +296,13 @@ mod tests {
         assert_parse_eq(
             "[[], [], [[1]]]",
             List(vec![
-                List(vec![]),
-                List(vec![]),
-                List(vec![List(vec![Expression::Atom(Int(1))])]),
+                List(vec![]).into_expression(),
+                List(vec![]).into_expression(),
+                List(vec![List(vec![
+                    ExpressionInner::Atom(Int(1)).into_expression()
+                ])
+                .into_expression()])
+                .into_expression(),
             ]),
         );
     }
@@ -279,16 +312,18 @@ mod tests {
         assert_parse_eq(
             "2 in [2]",
             Relation(
-                Box::new(Expression::Atom(Int(2))),
+                Box::new(ExpressionInner::Atom(Int(2)).into_expression()),
                 RelationOp::In,
-                Box::new(List(vec![Expression::Atom(Int(2))])),
+                Box::new(
+                    List(vec![ExpressionInner::Atom(Int(2)).into_expression()]).into_expression(),
+                ),
             ),
         );
     }
 
     #[test]
     fn test_empty_map_parsing() {
-        assert_eq!(parse("{}"), (Map(vec![])));
+        assert_eq!(parse("{}"), (Map(vec![]).into_expression()));
     }
 
     #[test]
@@ -297,12 +332,12 @@ mod tests {
             "{'a': 1, 'b': 2}",
             Map(vec![
                 (
-                    Expression::Atom(String("a".to_string().into())),
-                    Expression::Atom(Int(1)),
+                    ExpressionInner::Atom(String("a".to_string().into())).into_expression(),
+                    ExpressionInner::Atom(Int(1)).into_expression(),
                 ),
                 (
-                    Expression::Atom(String("b".to_string().into())),
-                    Expression::Atom(Int(2)),
+                    ExpressionInner::Atom(String("b".to_string().into())).into_expression(),
+                    ExpressionInner::Atom(Int(2)).into_expression(),
                 ),
             ]),
         );
@@ -313,17 +348,22 @@ mod tests {
         assert_parse_eq(
             "{'a': 1, 'b': 2}[0]",
             Member(
-                Box::new(Map(vec![
-                    (
-                        Expression::Atom(String("a".to_string().into())),
-                        Expression::Atom(Int(1)),
-                    ),
-                    (
-                        Expression::Atom(String("b".to_string().into())),
-                        Expression::Atom(Int(2)),
-                    ),
-                ])),
-                Box::new(Index(Box::new(Expression::Atom(Int(0))))),
+                Box::new(
+                    Map(vec![
+                        (
+                            ExpressionInner::Atom(String("a".to_string().into())).into_expression(),
+                            ExpressionInner::Atom(Int(1)).into_expression(),
+                        ),
+                        (
+                            ExpressionInner::Atom(String("b".to_string().into())).into_expression(),
+                            ExpressionInner::Atom(Int(2)).into_expression(),
+                        ),
+                    ])
+                    .into_expression(),
+                ),
+                Box::new(Index(Box::new(
+                    ExpressionInner::Atom(Int(0)).into_expression(),
+                ))),
             ),
         );
     }
@@ -333,35 +373,35 @@ mod tests {
         assert_parse_eq(
             "2 != 3",
             Relation(
-                Box::new(Expression::Atom(Int(2))),
+                Box::new(ExpressionInner::Atom(Int(2)).into_expression()),
                 RelationOp::NotEquals,
-                Box::new(Expression::Atom(Int(3))),
+                Box::new(ExpressionInner::Atom(Int(3)).into_expression()),
             ),
         );
         assert_parse_eq(
             "2 == 3",
             Relation(
-                Box::new(Expression::Atom(Int(2))),
+                Box::new(ExpressionInner::Atom(Int(2)).into_expression()),
                 RelationOp::Equals,
-                Box::new(Expression::Atom(Int(3))),
+                Box::new(ExpressionInner::Atom(Int(3)).into_expression()),
             ),
         );
 
         assert_parse_eq(
             "2 < 3",
             Relation(
-                Box::new(Expression::Atom(Int(2))),
+                Box::new(ExpressionInner::Atom(Int(2)).into_expression()),
                 RelationOp::LessThan,
-                Box::new(Expression::Atom(Int(3))),
+                Box::new(ExpressionInner::Atom(Int(3)).into_expression()),
             ),
         );
 
         assert_parse_eq(
             "2 <= 3",
             Relation(
-                Box::new(Expression::Atom(Int(2))),
+                Box::new(ExpressionInner::Atom(Int(2)).into_expression()),
                 RelationOp::LessThanEq,
-                Box::new(Expression::Atom(Int(3))),
+                Box::new(ExpressionInner::Atom(Int(3)).into_expression()),
             ),
         );
     }
@@ -371,9 +411,9 @@ mod tests {
         assert_parse_eq(
             "2 * 3",
             Arithmetic(
-                Box::new(Expression::Atom(Atom::Int(2))),
+                Box::new(ExpressionInner::Atom(Atom::Int(2)).into_expression()),
                 ArithmeticOp::Multiply,
-                Box::new(Expression::Atom(Atom::Int(3))),
+                Box::new(ExpressionInner::Atom(Atom::Int(3)).into_expression()),
             ),
         );
     }
@@ -383,11 +423,11 @@ mod tests {
     //     assert_parse_eq(
     //         "2 * -3",
     //         Arithmetic(
-    //             Box::new(Expression::Atom(Atom::Int(2))),
+    //             Box::new(ExpressionInner::Atom(Atom::Int(2))),
     //             ArithmeticOp::Multiply,
     //             Box::new(Unary(
     //                 UnaryOp::Minus,
-    //                 Box::new(Expression::Atom(Atom::Int(3))),
+    //                 Box::new(ExpressionInner::Atom(Atom::Int(3))),
     //             )),
     //         ),
     //     );
@@ -395,11 +435,11 @@ mod tests {
     //     assert_parse_eq(
     //         "2 / -3",
     //         Arithmetic(
-    //             Box::new(Expression::Atom(Int(2))),
+    //             Box::new(ExpressionInner::Atom(Int(2))),
     //             ArithmeticOp::Divide,
     //             Box::new(Unary(
     //                 UnaryOp::Minus,
-    //                 Box::new(Expression::Atom(Int(3))),
+    //                 Box::new(ExpressionInner::Atom(Int(3))),
     //             )),
     //         ),
     //     );
@@ -410,20 +450,20 @@ mod tests {
         assert_parse_eq(
             "2 + 3",
             Arithmetic(
-                Box::new(Expression::Atom(Atom::Int(2))),
+                Box::new(ExpressionInner::Atom(Atom::Int(2)).into_expression()),
                 ArithmeticOp::Add,
-                Box::new(Expression::Atom(Atom::Int(3))),
+                Box::new(ExpressionInner::Atom(Atom::Int(3)).into_expression()),
             ),
         );
 
         // assert_parse_eq(
         //     "2 - -3",
         //     Arithmetic(
-        //         Box::new(Expression::Atom(Atom::Int(2))),
+        //         Box::new(ExpressionInner::Atom(Atom::Int(2)).into_expression()),
         //         ArithmeticOp::Subtract,
         //         Box::new(Unary(
         //             UnaryOp::Minus,
-        //             Box::new(Expression::Atom(Atom::Int(3))),
+        //             Box::new(ExpressionInner::Atom(Atom::Int(3)).into_expression()),
         //         )),
         //     ),
         // );
@@ -434,15 +474,15 @@ mod tests {
         assert_parse_eq(
             "true && true",
             And(
-                Box::new(Expression::Atom(Bool(true))),
-                Box::new(Expression::Atom(Bool(true))),
+                Box::new(ExpressionInner::Atom(Bool(true)).into_expression()),
+                Box::new(ExpressionInner::Atom(Bool(true)).into_expression()),
             ),
         );
         assert_parse_eq(
             "false || true",
             Or(
-                Box::new(Expression::Atom(Bool(false))),
-                Box::new(Expression::Atom(Bool(true))),
+                Box::new(ExpressionInner::Atom(Bool(false)).into_expression()),
+                Box::new(ExpressionInner::Atom(Bool(true)).into_expression()),
             ),
         );
     }
@@ -451,18 +491,24 @@ mod tests {
         assert_parse_eq(
             "true ? 'result_true' : 'result_false'",
             Ternary(
-                Box::new(Expression::Atom(Bool(true))),
-                Box::new(Expression::Atom(String("result_true".to_string().into()))),
-                Box::new(Expression::Atom(String("result_false".to_string().into()))),
+                Box::new(ExpressionInner::Atom(Bool(true)).into_expression()),
+                Box::new(
+                    ExpressionInner::Atom(String("result_true".to_string().into()))
+                        .into_expression(),
+                ),
+                Box::new(
+                    ExpressionInner::Atom(String("result_false".to_string().into()))
+                        .into_expression(),
+                ),
             ),
         );
 
         assert_parse_eq(
             "true ? 100 : 200",
             Ternary(
-                Box::new(Expression::Atom(Bool(true))),
-                Box::new(Expression::Atom(Int(100))),
-                Box::new(Expression::Atom(Int(200))),
+                Box::new(ExpressionInner::Atom(Bool(true)).into_expression()),
+                Box::new(ExpressionInner::Atom(Int(100)).into_expression()),
+                Box::new(ExpressionInner::Atom(Int(200)).into_expression()),
             ),
         );
     }
@@ -472,9 +518,15 @@ mod tests {
         assert_parse_eq(
             "false ? 'result_true' : 'result_false'",
             Ternary(
-                Box::new(Expression::Atom(Bool(false))),
-                Box::new(Expression::Atom(String("result_true".to_string().into()))),
-                Box::new(Expression::Atom(String("result_false".to_string().into()))),
+                Box::new(ExpressionInner::Atom(Bool(false)).into_expression()),
+                Box::new(
+                    ExpressionInner::Atom(String("result_true".to_string().into()))
+                        .into_expression(),
+                ),
+                Box::new(
+                    ExpressionInner::Atom(String("result_false".to_string().into()))
+                        .into_expression(),
+                ),
             ),
         );
     }
@@ -484,12 +536,18 @@ mod tests {
         assert_parse_eq(
             "a && b == 'string'",
             And(
-                Box::new(Ident("a".to_string().into())),
-                Box::new(Relation(
-                    Box::new(Ident("b".to_string().into())),
-                    RelationOp::Equals,
-                    Box::new(Expression::Atom(String("string".to_string().into()))),
-                )),
+                Box::new(Ident("a".to_string().into()).into_expression()),
+                Box::new(
+                    Relation(
+                        Box::new(Ident("b".to_string().into()).into_expression()),
+                        RelationOp::Equals,
+                        Box::new(
+                            ExpressionInner::Atom(String("string".to_string().into()))
+                                .into_expression(),
+                        ),
+                    )
+                    .into_expression(),
+                ),
             ),
         );
     }

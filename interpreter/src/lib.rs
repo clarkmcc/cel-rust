@@ -147,7 +147,7 @@ impl Program {
     }
 
     pub fn execute(&self, context: &Context) -> ResolveResult {
-        Value::resolve(&self.expression, context)
+        Value::resolve(&self.expression.inner, context)
     }
 
     /// Returns the variables and functions referenced by the CEL program

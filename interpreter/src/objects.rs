@@ -409,18 +409,18 @@ impl Value {
     pub fn resolve_all(expr: &[Expression], ctx: &Context) -> ResolveResult {
         let mut res = Vec::with_capacity(expr.len());
         for expr in expr {
-            res.push(Value::resolve(expr, ctx)?);
+            res.push(Value::resolve(&expr.inner, ctx)?);
         }
         Ok(Value::List(res.into()))
     }
 
     #[inline(always)]
-    pub fn resolve(expr: &Expression, ctx: &Context) -> ResolveResult {
-        match expr {
-            Expression::Atom(atom) => Ok(atom.into()),
-            Expression::Arithmetic(left, op, right) => {
-                let left = Value::resolve(left, ctx)?;
-                let right = Value::resolve(right, ctx)?;
+    pub fn resolve(expr_inner: &ExpressionInner, ctx: &Context) -> ResolveResult {
+        match expr_inner {
+            ExpressionInner::Atom(atom) => Ok(atom.into()),
+            ExpressionInner::Arithmetic(left, op, right) => {
+                let left = Value::resolve(&left.inner, ctx)?;
+                let right = Value::resolve(&right.inner, ctx)?;
 
                 match op {
                     ArithmeticOp::Add => left + right,
@@ -430,9 +430,9 @@ impl Value {
                     ArithmeticOp::Modulus => left % right,
                 }
             }
-            Expression::Relation(left, op, right) => {
-                let left = Value::resolve(left, ctx)?;
-                let right = Value::resolve(right, ctx)?;
+            ExpressionInner::Relation(left, op, right) => {
+                let left = Value::resolve(&left.inner, ctx)?;
+                let right = Value::resolve(&right.inner, ctx)?;
                 let res = match op {
                     RelationOp::LessThan => {
                         left.partial_cmp(&right)
@@ -468,33 +468,33 @@ impl Value {
                 };
                 Value::Bool(res).into()
             }
-            Expression::Ternary(cond, left, right) => {
-                let cond = Value::resolve(cond, ctx)?;
+            ExpressionInner::Ternary(cond, left, right) => {
+                let cond = Value::resolve(&cond.inner, ctx)?;
                 if cond.to_bool() {
-                    Value::resolve(left, ctx)
+                    Value::resolve(&left.inner, ctx)
                 } else {
-                    Value::resolve(right, ctx)
+                    Value::resolve(&right.inner, ctx)
                 }
             }
-            Expression::Or(left, right) => {
-                let left = Value::resolve(left, ctx)?;
+            ExpressionInner::Or(left, right) => {
+                let left = Value::resolve(&left.inner, ctx)?;
                 if left.to_bool() {
                     left.into()
                 } else {
-                    Value::resolve(right, ctx)
+                    Value::resolve(&right.inner, ctx)
                 }
             }
-            Expression::And(left, right) => {
-                let left = Value::resolve(left, ctx)?;
+            ExpressionInner::And(left, right) => {
+                let left = Value::resolve(&left.inner, ctx)?;
                 if !left.to_bool() {
                     Value::Bool(false).into()
                 } else {
-                    let right = Value::resolve(right, ctx)?;
+                    let right = Value::resolve(&right.inner, ctx)?;
                     Value::Bool(right.to_bool()).into()
                 }
             }
-            Expression::Unary(op, expr) => {
-                let expr = Value::resolve(expr, ctx)?;
+            ExpressionInner::Unary(op, expr) => {
+                let expr = Value::resolve(&expr.inner, ctx)?;
                 match op {
                     UnaryOp::Not => Ok(Value::Bool(!expr.to_bool())),
                     UnaryOp::DoubleNot => Ok(Value::Bool(expr.to_bool())),
@@ -511,33 +511,33 @@ impl Value {
                     },
                 }
             }
-            Expression::Member(left, right) => {
-                let left = Value::resolve(left, ctx)?;
+            ExpressionInner::Member(left, right) => {
+                let left = Value::resolve(&left.inner, ctx)?;
                 left.member(right, ctx)
             }
-            Expression::List(items) => {
+            ExpressionInner::List(items) => {
                 let list = items
                     .iter()
-                    .map(|i| Value::resolve(i, ctx))
+                    .map(|i| Value::resolve(&i.inner, ctx))
                     .collect::<Result<Vec<_>, _>>()?;
                 Value::List(list.into()).into()
             }
-            Expression::Map(items) => {
+            ExpressionInner::Map(items) => {
                 let mut map = HashMap::default();
                 for (k, v) in items.iter() {
-                    let key = Value::resolve(k, ctx)?
+                    let key = Value::resolve(&k.inner, ctx)?
                         .try_into()
                         .map_err(ExecutionError::UnsupportedKeyType)?;
-                    let value = Value::resolve(v, ctx)?;
+                    let value = Value::resolve(&v.inner, ctx)?;
                     map.insert(key, value);
                 }
                 Ok(Value::Map(Map {
                     map: Arc::from(map),
                 }))
             }
-            Expression::Ident(name) => ctx.get_variable(&***name),
-            Expression::FunctionCall(name, target, args) => {
-                if let Expression::Ident(name) = &**name {
+            ExpressionInner::Ident(name) => ctx.get_variable(&***name),
+            ExpressionInner::FunctionCall(name, target, args) => {
+                if let ExpressionInner::Ident(name) = &name.inner {
                     let func = ctx
                         .get_function(&**name)
                         .ok_or_else(|| ExecutionError::UndeclaredReference(Arc::clone(name)))?;
@@ -550,7 +550,7 @@ impl Value {
                         Some(target) => {
                             let mut ctx = FunctionContext::new(
                                 name.clone(),
-                                Some(Value::resolve(target, ctx)?),
+                                Some(Value::resolve(&target.inner, ctx)?),
                                 ctx,
                                 args.clone(),
                             );
@@ -577,7 +577,7 @@ impl Value {
     fn member(self, member: &Member, ctx: &Context) -> ResolveResult {
         match member {
             Member::Index(idx) => {
-                let idx = Value::resolve(idx, ctx)?;
+                let idx = Value::resolve(&idx.inner, ctx)?;
                 match (self, idx) {
                     (Value::List(items), Value::Int(idx)) => items
                         .get(idx as usize)

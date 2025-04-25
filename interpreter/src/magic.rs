@@ -1,7 +1,7 @@
 use crate::macros::{impl_conversions, impl_handler};
 use crate::resolvers::{AllArguments, Argument};
 use crate::{ExecutionError, FunctionContext, ResolveResult, Value};
-use cel_parser::Expression;
+use cel_parser::ExpressionInner;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -183,7 +183,7 @@ impl<'a, 'context> FromContext<'a, 'context> for Identifier {
         Self: Sized,
     {
         match arg_expr_from_context(ctx) {
-            Expression::Ident(ident) => Ok(Identifier(ident.clone())),
+            ExpressionInner::Ident(ident) => Ok(Identifier(ident.clone())),
             expr => Err(ExecutionError::UnexpectedType {
                 got: format!("{:?}", expr),
                 want: "identifier".to_string(),
@@ -251,7 +251,7 @@ impl<'a, 'context> FromContext<'a, 'context> for Value {
     }
 }
 
-impl<'a, 'context> FromContext<'a, 'context> for Expression {
+impl<'a, 'context> FromContext<'a, 'context> for ExpressionInner {
     fn from_context(ctx: &'a mut FunctionContext<'context>) -> Result<Self, ExecutionError>
     where
         Self: Sized,
@@ -267,10 +267,10 @@ impl<'a, 'context> FromContext<'a, 'context> for Expression {
 /// Calling this function when there are no more arguments will result in a panic. Since this
 /// function is only ever called within the context of a controlled macro that calls it once
 /// for each argument, this should never happen.
-fn arg_expr_from_context(ctx: &mut FunctionContext) -> Expression {
+fn arg_expr_from_context(ctx: &mut FunctionContext) -> ExpressionInner {
     let idx = ctx.arg_idx;
     ctx.arg_idx += 1;
-    ctx.args[idx].clone()
+    ctx.args[idx].clone().inner
 }
 
 /// Returns the next argument specified by the context's `arg_idx` field as after resolving

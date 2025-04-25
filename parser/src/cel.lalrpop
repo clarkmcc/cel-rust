@@ -1,4 +1,4 @@
-use crate::{RelationOp, ArithmeticOp, Expression, UnaryOp, Member, Atom, parse_bytes, parse_string};
+use crate::{RelationOp, ArithmeticOp, ExpressionInner, Expression, UnaryOp, Member, Atom, parse_bytes, parse_string};
 use std::sync::Arc;
 
 grammar;
@@ -12,63 +12,67 @@ match {
 }
 
 pub Expression: Expression = {
+    <start: @L> <inner: ExpressionInner> <end: @R> => Expression{span: Some(start..end), inner}
+};
+
+pub ExpressionInner: ExpressionInner = {
     Conditional
 };
 
-pub Conditional: Expression = {
-    <condition:LogicalOr> "?" <if_true:LogicalOr> ":" <if_false:Conditional> => Expression::Ternary(condition.into(), if_true.into(), if_false.into()),
+pub Conditional: ExpressionInner = {
+    <condition:LogicalOr> "?" <if_true:LogicalOr> ":" <if_false:Conditional> => ExpressionInner::Ternary(condition.into_expression().into(), if_true.into_expression().into(), if_false.into_expression().into()),
     LogicalOr
 };
 
-pub LogicalOr: Expression = {
-    <left:LogicalOr> "||" <right:LogicalAnd> => Expression::Or(left.into(), right.into()),
+pub LogicalOr: ExpressionInner = {
+    <left:LogicalOr> "||" <right:LogicalAnd> => ExpressionInner::Or(left.into_expression().into(), right.into_expression().into()),
     LogicalAnd
 };
 
-pub LogicalAnd: Expression = {
-    <left:LogicalAnd> "&&" <right:Relations> => Expression::And(left.into(), right.into()),
+pub LogicalAnd: ExpressionInner = {
+    <left:LogicalAnd> "&&" <right:Relations> => ExpressionInner::And(left.into_expression().into(), right.into_expression().into()),
     Relations
 };
 
-pub Relations: Expression = {
-    <left:ArithmeticAddSub> <op:RelationOp> <right:ArithmeticAddSub> => Expression::Relation(left.into(), op, right.into()),
+pub Relations: ExpressionInner = {
+    <left:ArithmeticAddSub> <op:RelationOp> <right:ArithmeticAddSub> => ExpressionInner::Relation(left.into_expression().into(), op, right.into_expression().into()),
     ArithmeticAddSub
 };
 
-pub ArithmeticAddSub: Expression = {
-    <left:ArithmeticAddSub> <op:ArithmeticOpAddSub> <right:ArithmeticMulDivMod> => Expression::Arithmetic(left.into(), op, right.into()),
+pub ArithmeticAddSub: ExpressionInner = {
+    <left:ArithmeticAddSub> <op:ArithmeticOpAddSub> <right:ArithmeticMulDivMod> => ExpressionInner::Arithmetic(left.into_expression().into(), op, right.into_expression().into()),
     ArithmeticMulDivMod
 };
 
-pub ArithmeticMulDivMod: Expression = {
-    <left:ArithmeticMulDivMod> <op:ArithmeticOpMulDivMod> <right:Unary> => Expression::Arithmetic(left.into(), op, right.into()),
+pub ArithmeticMulDivMod: ExpressionInner = {
+    <left:ArithmeticMulDivMod> <op:ArithmeticOpMulDivMod> <right:Unary> => ExpressionInner::Arithmetic(left.into_expression().into(), op, right.into_expression().into()),
     Unary
 };
 
-pub Unary: Expression = {
-    <op:UnaryOp> <right:Member> => Expression::Unary(op, right.into()),
+pub Unary: ExpressionInner = {
+    <op:UnaryOp> <right:Member> => ExpressionInner::Unary(op, right.into_expression().into()),
     Member
 };
 
-pub Member: Expression = {
-    <left:Member> "." <identifier:Ident> => Expression::Member(left.into(), Member::Attribute(identifier.into()).into()).into(),
+pub Member: ExpressionInner = {
+    <left:Member> "." <identifier:Ident> => ExpressionInner::Member(left.into_expression().into(), Member::Attribute(identifier.into()).into()).into(),
     <left:Member> "." <identifier:Ident> "(" <arguments:CommaSeparated<Expression>> ")" => {
-           Expression::FunctionCall(Expression::Ident(identifier).into(), Some(left.into()), arguments).into()
+           ExpressionInner::FunctionCall(ExpressionInner::Ident(identifier).into_expression().into(), Some(left.into_expression().into()), arguments).into()
    },
-    <left:Member> "[" <expression:Expression> "]" => Expression::Member(left.into(), Member::Index(expression.into()).into()).into(),
-    <left:Member> "{" <fields:CommaSeparated<FieldInits>> "}" => Expression::Member(left.into(), Member::Fields(fields.into()).into()).into(),
+    <left:Member> "[" <expression:Expression> "]" => ExpressionInner::Member(left.into_expression().into(), Member::Index(expression.into()).into()).into(),
+    <left:Member> "{" <fields:CommaSeparated<FieldInits>> "}" => ExpressionInner::Member(left.into_expression().into(), Member::Fields(fields.into()).into()).into(),
     Primary,
 }
 
-pub Primary: Expression = {
-    "."? <Ident> => Expression::Ident(<>.into()).into(),
+pub Primary: ExpressionInner = {
+    "."? <Ident> => ExpressionInner::Ident(<>.into()).into(),
     "."? <identifier:Ident> "(" <arguments:CommaSeparated<Expression>> ")" => {
-           Expression::FunctionCall(Expression::Ident(identifier).into(), None, arguments).into()
+           ExpressionInner::FunctionCall(ExpressionInner::Ident(identifier).into_expression().into(), None, arguments).into()
     },
-    Atom => Expression::Atom(<>).into(),
-    "[" <members:CommaSeparated<Expression>> "]" => Expression::List(<>).into(),
-    "{" <fields:CommaSeparated<MapInits>> "}" => Expression::Map(<>).into(),
-    "(" <Expression> ")"
+    Atom => ExpressionInner::Atom(<>).into(),
+    "[" <members:CommaSeparated<Expression>> "]" => ExpressionInner::List(<>).into(),
+    "{" <fields:CommaSeparated<MapInits>> "}" => ExpressionInner::Map(<>).into(),
+    "(" <ExpressionInner> ")"
 }
 
 pub FieldInits: (Arc<String>, Expression) = {
