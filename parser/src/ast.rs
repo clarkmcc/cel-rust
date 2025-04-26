@@ -92,7 +92,6 @@ pub trait SpanExtension: Sized {
 }
 
 impl SpanExtension for Expression {}
-impl SpanExtension for Atom {}
 impl SpanExtension for ArithmeticOp {}
 impl SpanExtension for UnaryOp {}
 impl SpanExtension for RelationOp {}
@@ -100,8 +99,16 @@ impl SpanExtension for String {}
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Expression {
-    Arithmetic(Box<SpannedExpression>, ArithmeticOp, Box<SpannedExpression>),
-    Relation(Box<SpannedExpression>, RelationOp, Box<SpannedExpression>),
+    Arithmetic(
+        Box<SpannedExpression>,
+        Spanned<ArithmeticOp>,
+        Box<SpannedExpression>,
+    ),
+    Relation(
+        Box<SpannedExpression>,
+        Spanned<RelationOp>,
+        Box<SpannedExpression>,
+    ),
 
     Ternary(
         Box<SpannedExpression>,
@@ -110,7 +117,7 @@ pub enum Expression {
     ),
     Or(Box<SpannedExpression>, Box<SpannedExpression>),
     And(Box<SpannedExpression>, Box<SpannedExpression>),
-    Unary(UnaryOp, Box<SpannedExpression>),
+    Unary(Spanned<UnaryOp>, Box<SpannedExpression>),
 
     Member(Box<SpannedExpression>, Box<Member>),
     FunctionCall(

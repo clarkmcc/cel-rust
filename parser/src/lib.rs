@@ -148,7 +148,7 @@ mod tests {
                     Ident("x".to_string().unspanned().into()).unspanned(),
                     Arithmetic(
                         Box::new(Ident("x".to_string().unspanned().into()).unspanned()),
-                        ArithmeticOp::Multiply,
+                        ArithmeticOp::Multiply.unspanned(),
                         Box::new(Atom(Int(2)).unspanned()),
                     )
                     .unspanned(),
@@ -190,14 +190,14 @@ mod tests {
         assert_parse_eq(
             "!false",
             Unary(
-                UnaryOp::Not,
+                UnaryOp::Not.unspanned(),
                 Box::new(Expression::Atom(Atom::Bool(false)).unspanned()),
             ),
         );
         assert_parse_eq(
             "!true",
             Unary(
-                UnaryOp::Not,
+                UnaryOp::Not.unspanned(),
                 Box::new(Expression::Atom(Atom::Bool(true)).unspanned()),
             ),
         );
@@ -209,7 +209,7 @@ mod tests {
             "true == true",
             Relation(
                 Box::new(Expression::Atom(Atom::Bool(true)).unspanned()),
-                RelationOp::Equals,
+                RelationOp::Equals.unspanned(),
                 Box::new(Expression::Atom(Atom::Bool(true)).unspanned()),
             ),
         );
@@ -220,7 +220,7 @@ mod tests {
         assert_eq!(
             parse("!!true"),
             (Unary(
-                UnaryOp::DoubleNot,
+                UnaryOp::DoubleNot.unspanned(),
                 Box::new(Expression::Atom(Atom::Bool(true)).unspanned()),
             )
             .unspanned())
@@ -232,7 +232,7 @@ mod tests {
         assert_parse_eq(
             "(-((1)))",
             Unary(
-                UnaryOp::Minus,
+                UnaryOp::Minus.unspanned(),
                 Box::new(Expression::Atom(Atom::Int(1)).unspanned()),
             ),
         );
@@ -309,7 +309,7 @@ mod tests {
             "2 in [2]",
             Relation(
                 Box::new(Expression::Atom(Int(2)).unspanned()),
-                RelationOp::In,
+                RelationOp::In.unspanned(),
                 Box::new(List(vec![Expression::Atom(Int(2)).unspanned()]).unspanned()),
             ),
         );
@@ -366,7 +366,7 @@ mod tests {
             "2 != 3",
             Relation(
                 Box::new(Expression::Atom(Int(2)).unspanned()),
-                RelationOp::NotEquals,
+                RelationOp::NotEquals.unspanned(),
                 Box::new(Expression::Atom(Int(3)).unspanned()),
             ),
         );
@@ -374,7 +374,7 @@ mod tests {
             "2 == 3",
             Relation(
                 Box::new(Expression::Atom(Int(2)).unspanned()),
-                RelationOp::Equals,
+                RelationOp::Equals.unspanned(),
                 Box::new(Expression::Atom(Int(3)).unspanned()),
             ),
         );
@@ -383,7 +383,7 @@ mod tests {
             "2 < 3",
             Relation(
                 Box::new(Expression::Atom(Int(2)).unspanned()),
-                RelationOp::LessThan,
+                RelationOp::LessThan.unspanned(),
                 Box::new(Expression::Atom(Int(3)).unspanned()),
             ),
         );
@@ -392,7 +392,7 @@ mod tests {
             "2 <= 3",
             Relation(
                 Box::new(Expression::Atom(Int(2)).unspanned()),
-                RelationOp::LessThanEq,
+                RelationOp::LessThanEq.unspanned(),
                 Box::new(Expression::Atom(Int(3)).unspanned()),
             ),
         );
@@ -404,7 +404,7 @@ mod tests {
             "2 * 3",
             Arithmetic(
                 Box::new(Expression::Atom(Atom::Int(2)).unspanned()),
-                ArithmeticOp::Multiply,
+                ArithmeticOp::Multiply.unspanned(),
                 Box::new(Expression::Atom(Atom::Int(3)).unspanned()),
             ),
         );
@@ -443,7 +443,7 @@ mod tests {
             "2 + 3",
             Arithmetic(
                 Box::new(Expression::Atom(Atom::Int(2)).unspanned()),
-                ArithmeticOp::Add,
+                ArithmeticOp::Add.unspanned(),
                 Box::new(Expression::Atom(Atom::Int(3)).unspanned()),
             ),
         );
@@ -520,7 +520,7 @@ mod tests {
                 Box::new(
                     Relation(
                         Box::new(Ident("b".to_string().unspanned().into()).unspanned()),
-                        RelationOp::Equals,
+                        RelationOp::Equals.unspanned(),
                         Box::new(Expression::Atom(String("string".to_string().into())).unspanned()),
                     )
                     .unspanned(),

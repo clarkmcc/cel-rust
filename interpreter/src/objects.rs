@@ -422,7 +422,7 @@ impl Value {
                 let left = Value::resolve(&left.inner, ctx)?;
                 let right = Value::resolve(&right.inner, ctx)?;
 
-                match op {
+                match op.inner {
                     ArithmeticOp::Add => left + right,
                     ArithmeticOp::Subtract => left - right,
                     ArithmeticOp::Divide => left / right,
@@ -433,7 +433,7 @@ impl Value {
             Expression::Relation(left, op, right) => {
                 let left = Value::resolve(&left.inner, ctx)?;
                 let right = Value::resolve(&right.inner, ctx)?;
-                let res = match op {
+                let res = match op.inner {
                     RelationOp::LessThan => {
                         left.partial_cmp(&right)
                             .ok_or(ExecutionError::ValuesNotComparable(left, right))?
@@ -495,7 +495,7 @@ impl Value {
             }
             Expression::Unary(op, expr) => {
                 let expr = Value::resolve(&expr.inner, ctx)?;
-                match op {
+                match op.inner {
                     UnaryOp::Not => Ok(Value::Bool(!expr.to_bool())),
                     UnaryOp::DoubleNot => Ok(Value::Bool(expr.to_bool())),
                     UnaryOp::Minus => match expr {

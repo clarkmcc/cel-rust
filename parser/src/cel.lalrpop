@@ -35,22 +35,22 @@ pub LogicalAnd: Expression = {
 };
 
 pub Relations: Expression = {
-    <left:ArithmeticAddSub> <op:RelationOp> <right:ArithmeticAddSub> => Expression::Relation(left.unspanned().into(), op, right.unspanned().into()),
+    <left:ArithmeticAddSub> <op:SpannedRelationOp> <right:ArithmeticAddSub> => Expression::Relation(left.unspanned().into(), op, right.unspanned().into()),
     ArithmeticAddSub
 };
 
 pub ArithmeticAddSub: Expression = {
-    <left:ArithmeticAddSub> <op:ArithmeticOpAddSub> <right:ArithmeticMulDivMod> => Expression::Arithmetic(left.unspanned().into(), op, right.unspanned().into()),
+    <left:ArithmeticAddSub> <op:SpannedArithmeticOpAddSub> <right:ArithmeticMulDivMod> => Expression::Arithmetic(left.unspanned().into(), op, right.unspanned().into()),
     ArithmeticMulDivMod
 };
 
 pub ArithmeticMulDivMod: Expression = {
-    <left:ArithmeticMulDivMod> <op:ArithmeticOpMulDivMod> <right:Unary> => Expression::Arithmetic(left.unspanned().into(), op, right.unspanned().into()),
+    <left:ArithmeticMulDivMod> <op:SpannedArithmeticOpMulDivMod> <right:Unary> => Expression::Arithmetic(left.unspanned().into(), op, right.unspanned().into()),
     Unary
 };
 
 pub Unary: Expression = {
-    <op:UnaryOp> <right:Member> => Expression::Unary(op, right.unspanned().into()),
+    <op:SpannedUnaryOp> <right:Member> => Expression::Unary(op, right.unspanned().into()),
     Member
 };
 
@@ -94,9 +94,17 @@ CommaSeparated<T>: Vec<T> = {
     }
 };
 
+SpannedArithmeticOpAddSub: Spanned<ArithmeticOp> = {
+    <start: @L> <op: ArithmeticOpAddSub> <end: @R> => op.spanned(start..end)
+};
+
 ArithmeticOpAddSub: ArithmeticOp = {
     "+" => ArithmeticOp::Add,
     "-" => ArithmeticOp::Subtract
+};
+
+SpannedArithmeticOpMulDivMod: Spanned<ArithmeticOp> = {
+    <start: @L> <op: ArithmeticOpMulDivMod> <end: @R> => op.spanned(start..end)
 };
 
 ArithmeticOpMulDivMod: ArithmeticOp = {
@@ -106,12 +114,20 @@ ArithmeticOpMulDivMod: ArithmeticOp = {
 };
 
 
+SpannedUnaryOp: Spanned<UnaryOp> = {
+    <start: @L> <op: UnaryOp> <end: @R> => op.spanned(start..end)
+};
+
 UnaryOp: UnaryOp = {
     "!" => UnaryOp::Not,
     "!!" => UnaryOp::DoubleNot,
     "-" => UnaryOp::Minus,
     "--" => UnaryOp::DoubleMinus,
-}
+};
+
+SpannedRelationOp: Spanned<RelationOp> = {
+    <start: @L> <op: RelationOp> <end: @R> => op.spanned(start..end)
+};
 
 RelationOp: RelationOp = {
     "<" => RelationOp::LessThan,
@@ -121,7 +137,7 @@ RelationOp: RelationOp = {
     "==" => RelationOp::Equals,
     "!=" => RelationOp::NotEquals,
     "in" => RelationOp::In
-}
+};
 
 Atom: Atom = {
     // Integer literals. Annoying to parse :/
