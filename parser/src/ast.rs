@@ -34,13 +34,19 @@ pub enum UnaryOp {
 #[derive(Debug, Clone)]
 pub struct Spanned<T> {
     pub inner: T,
+    #[cfg(feature = "preserve_spans")]
     pub span: Option<Range<usize>>,
 }
 
 impl<T: PartialEq> PartialEq for Spanned<T> {
+    #[cfg(feature = "preserve_spans")]
     fn eq(&self, other: &Self) -> bool {
         (self.span.is_none() || other.span.is_none() || self.span == other.span)
             && self.inner == other.inner
+    }
+    #[cfg(not(feature = "preserve_spans"))]
+    fn eq(&self, other: &Self) -> bool {
+        self.inner == other.inner
     }
 }
 
@@ -70,13 +76,16 @@ pub trait SpanExtension: Sized {
     fn unspanned(self) -> Spanned<Self> {
         Spanned {
             inner: self,
+            #[cfg(feature = "preserve_spans")]
             span: None,
         }
     }
 
+    #[allow(unused)]
     fn spanned(self, span: Range<usize>) -> Spanned<Self> {
         Spanned {
             inner: self,
+            #[cfg(feature = "preserve_spans")]
             span: Some(span),
         }
     }
