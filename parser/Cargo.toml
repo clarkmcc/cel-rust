@@ -9,6 +9,7 @@ license = "MIT"
 categories = ["parsing"]
 
 [features]
+default = ["preserve_spans"]
 preserve_spans = []
 
 [dependencies]

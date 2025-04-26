@@ -581,4 +581,38 @@ mod tests {
         assert_eq!(err.span.end.as_ref().unwrap().line, 1);
         assert_eq!(err.span.end.as_ref().unwrap().column, 31);
     }
+
+    #[test]
+    fn spanned_expressions() {
+        assert_eq!(parse("5"), Expression::Atom(Atom::Int(5)).spanned(0..1));
+        assert_eq!(
+            parse("5 + 4"),
+            Expression::Arithmetic(
+                Box::new(Expression::Atom(Atom::Int(5)).spanned(0..1)),
+                ArithmeticOp::Add.spanned(2..3),
+                Box::new(Expression::Atom(Atom::Int(4)).spanned(4..5))
+            )
+            .spanned(0..5)
+        );
+
+        assert_eq!(
+            parse("5+4"),
+            Expression::Arithmetic(
+                Box::new(Expression::Atom(Atom::Int(5)).spanned(0..1)),
+                ArithmeticOp::Add.spanned(1..2),
+                Box::new(Expression::Atom(Atom::Int(4)).spanned(2..3))
+            )
+            .spanned(0..3)
+        );
+
+        assert_eq!(
+            parse("5 +      4"),
+            Expression::Arithmetic(
+                Box::new(Expression::Atom(Atom::Int(5)).spanned(0..1)),
+                ArithmeticOp::Add.spanned(2..3),
+                Box::new(Expression::Atom(Atom::Int(4)).spanned(9..10))
+            )
+            .spanned(0..10)
+        );
+    }
 }
