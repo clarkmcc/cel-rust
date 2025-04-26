@@ -81,7 +81,6 @@ impl Context<'_> {
     where
         S: Deref<Target = Spanned<String>>,
     {
-        // let name = name.as_ref();
         match self {
             Context::Child { variables, parent } => variables
                 .get(&name.deref().inner)
