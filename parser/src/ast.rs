@@ -45,12 +45,6 @@ impl<T> Spanned<T> {
 }
 
 impl<T: PartialEq> PartialEq for Spanned<T> {
-    #[cfg(feature = "preserve_spans")]
-    fn eq(&self, other: &Self) -> bool {
-        (self.span.is_none() || other.span.is_none() || self.span == other.span)
-            && self.inner == other.inner
-    }
-    #[cfg(not(feature = "preserve_spans"))]
     fn eq(&self, other: &Self) -> bool {
         self.inner == other.inner
     }

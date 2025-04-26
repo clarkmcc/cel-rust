@@ -582,47 +582,53 @@ mod tests {
         assert_eq!(err.span.end.as_ref().unwrap().column, 31);
     }
 
+    macro_rules! assert_span {
+        ($a:expr, $f:tt .. $t:tt) => {
+            assert_eq!($a.span, Some($f..$t), "spans are not equal");
+        };
+    }
+
+    macro_rules! assert_matches {
+        ($expression:expr, $pattern:pat $(if $guard:expr)? $(,)? => $content:tt) => {
+            if let $pattern = $expression {
+                $content
+            } else {
+                panic!(
+                    "{} does not match {}",
+                    stringify!($expression),
+                    stringify!($pattern)
+                )
+            }
+        };
+    }
+
     #[test]
     fn spanned_expressions() {
-        assert_eq!(parse("5"), Expression::Atom(Atom::Int(5)).spanned(0..1));
-        assert_eq!(
-            parse("5 + 4"),
-            Expression::Arithmetic(
-                Box::new(Expression::Atom(Atom::Int(5)).spanned(0..1)),
-                ArithmeticOp::Add.spanned(2..3),
-                Box::new(Expression::Atom(Atom::Int(4)).spanned(4..5))
-            )
-            .spanned(0..5)
-        );
+        assert_span!(parse("5 + 4"), 0..5);
 
-        assert_eq!(
-            parse("5+4"),
-            Expression::Arithmetic(
-                Box::new(Expression::Atom(Atom::Int(5)).spanned(0..1)),
-                ArithmeticOp::Add.spanned(1..2),
-                Box::new(Expression::Atom(Atom::Int(4)).spanned(2..3))
-            )
-            .spanned(0..3)
-        );
+        assert_matches!(parse("5 + 4").inner, Expression::Arithmetic(five, plus, four) => {
+            assert_span!(five, 0..1);
+            assert_span!(plus, 2..3);
+            assert_span!(four, 4..5);
+        });
 
-        assert_eq!(
-            parse("5 +      4"),
-            Expression::Arithmetic(
-                Box::new(Expression::Atom(Atom::Int(5)).spanned(0..1)),
-                ArithmeticOp::Add.spanned(2..3),
-                Box::new(Expression::Atom(Atom::Int(4)).spanned(9..10))
-            )
-            .spanned(0..10)
-        );
+        assert_matches!(parse("5+4").inner, Expression::Arithmetic(five, plus, four) => {
+            assert_span!(five, 0..1);
+            assert_span!(plus, 1..2);
+            assert_span!(four, 2..3);
+        });
 
-        assert_eq!(
-            parse("true ? 4 : 5"),
-            Expression::Ternary(
-                Box::new(Expression::Atom(Atom::Bool(true)).spanned(0..4)),
-                Box::new(Expression::Atom(Atom::Int(4)).spanned(7..8)),
-                Box::new(Expression::Atom(Atom::Int(5)).spanned(11..12)),
-            )
-            .spanned(0..12)
+        assert_matches!(parse("5 +     4").inner, Expression::Arithmetic(five, plus, four) => {
+            assert_span!(five, 0..1);
+            assert_span!(plus, 2..3);
+            assert_span!(four, 8..9);
+        });
+
+        assert_matches!(parse("true ? 4 : 5").inner, Expression::Ternary(i, t, e) => {
+                assert_span!(i, 0..4);
+                assert_span!(t, 7..8);
+                assert_span!(e, 11..12);
+            }
         );
     }
 }
