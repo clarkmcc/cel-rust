@@ -3,7 +3,7 @@ use crate::magic::{Arguments, Identifier, This};
 use crate::objects::{Value, ValueType};
 use crate::resolvers::{Argument, Resolver};
 use crate::ExecutionError;
-use cel_parser::{Expression, ExpressionInner};
+use cel_parser::{Expression, Spanned, SpannedExpression};
 use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::sync::Arc;
@@ -17,19 +17,19 @@ type Result<T> = std::result::Result<T, ExecutionError>;
 /// to variables, and the arguments to the function call.
 #[derive(Clone)]
 pub struct FunctionContext<'context> {
-    pub name: Arc<String>,
+    pub name: Arc<Spanned<String>>,
     pub this: Option<Value>,
     pub ptx: &'context Context<'context>,
-    pub args: Vec<Expression>,
+    pub args: Vec<SpannedExpression>,
     pub arg_idx: usize,
 }
 
 impl<'context> FunctionContext<'context> {
     pub fn new(
-        name: Arc<String>,
+        name: Arc<Spanned<String>>,
         this: Option<Value>,
         ptx: &'context Context<'context>,
-        args: Vec<Expression>,
+        args: Vec<SpannedExpression>,
     ) -> Self {
         Self {
             name,
@@ -301,7 +301,7 @@ pub fn map(
     ftx: &FunctionContext,
     This(this): This<Value>,
     ident: Identifier,
-    expr: ExpressionInner,
+    expr: Expression,
 ) -> Result<Value> {
     match this {
         Value::List(items) => {
@@ -344,7 +344,7 @@ pub fn filter(
     ftx: &FunctionContext,
     This(this): This<Value>,
     ident: Identifier,
-    expr: ExpressionInner,
+    expr: Expression,
 ) -> Result<Value> {
     match this {
         Value::List(items) => {
@@ -379,7 +379,7 @@ pub fn all(
     ftx: &FunctionContext,
     This(this): This<Value>,
     ident: Identifier,
-    expr: ExpressionInner,
+    expr: Expression,
 ) -> Result<bool> {
     match this {
         Value::List(items) => {
@@ -423,7 +423,7 @@ pub fn exists(
     ftx: &FunctionContext,
     This(this): This<Value>,
     ident: Identifier,
-    expr: ExpressionInner,
+    expr: Expression,
 ) -> Result<bool> {
     match this {
         Value::List(items) => {
@@ -468,7 +468,7 @@ pub fn exists_one(
     ftx: &FunctionContext,
     This(this): This<Value>,
     ident: Identifier,
-    expr: ExpressionInner,
+    expr: Expression,
 ) -> Result<bool> {
     match this {
         Value::List(items) => {

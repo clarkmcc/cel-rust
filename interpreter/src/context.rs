@@ -1,8 +1,9 @@
 use crate::magic::{Function, FunctionRegistry, Handler};
 use crate::objects::{TryIntoValue, Value};
 use crate::{functions, ExecutionError};
-use cel_parser::{Expression, ExpressionInner};
+use cel_parser::{Expression, Spanned, SpannedExpression};
 use std::collections::HashMap;
+use std::ops::Deref;
 
 /// Context is a collection of variables and functions that can be used
 /// by the interpreter to resolve expressions.
@@ -78,19 +79,19 @@ impl Context<'_> {
 
     pub fn get_variable<S>(&self, name: S) -> Result<Value, ExecutionError>
     where
-        S: Into<String>,
+        S: Deref<Target = Spanned<String>>,
     {
-        let name = name.into();
+        // let name = name.as_ref();
         match self {
             Context::Child { variables, parent } => variables
-                .get(&name)
+                .get(&name.deref().inner)
                 .cloned()
-                .or_else(|| parent.get_variable(&name).ok())
-                .ok_or_else(|| ExecutionError::UndeclaredReference(name.into())),
+                .or_else(|| parent.get_variable(name.deref()).ok())
+                .ok_or_else(|| ExecutionError::UndeclaredReference(name.deref().clone().into())),
             Context::Root { variables, .. } => variables
-                .get(&name)
+                .get(&name.deref().inner)
                 .cloned()
-                .ok_or_else(|| ExecutionError::UndeclaredReference(name.into())),
+                .ok_or_else(|| ExecutionError::UndeclaredReference(name.deref().clone().into())),
         }
     }
 
@@ -125,11 +126,11 @@ impl Context<'_> {
         };
     }
 
-    pub fn resolve(&self, expr: &ExpressionInner) -> Result<Value, ExecutionError> {
+    pub fn resolve(&self, expr: &Expression) -> Result<Value, ExecutionError> {
         Value::resolve(expr, self)
     }
 
-    pub fn resolve_all(&self, exprs: &[Expression]) -> Result<Value, ExecutionError> {
+    pub fn resolve_all(&self, exprs: &[SpannedExpression]) -> Result<Value, ExecutionError> {
         Value::resolve_all(exprs, self)
     }
 

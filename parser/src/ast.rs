@@ -1,5 +1,6 @@
 use std::collections::HashSet;
-use std::ops::Range;
+use std::fmt::Display;
+use std::ops::{Deref, DerefMut, Range};
 use std::sync::Arc;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -31,52 +32,96 @@ pub enum UnaryOp {
 }
 
 #[derive(Debug, Clone)]
-pub struct Expression {
-    pub inner: ExpressionInner,
+pub struct Spanned<T> {
+    pub inner: T,
     pub span: Option<Range<usize>>,
 }
 
-impl ExpressionInner {
-    pub(crate) fn into_expression(self) -> Expression {
-        Expression {
-            inner: self,
-            span: None,
-        }
-    }
-}
-
-impl PartialEq for Expression {
+impl<T: PartialEq> PartialEq for Spanned<T> {
     fn eq(&self, other: &Self) -> bool {
         (self.span.is_none() || other.span.is_none() || self.span == other.span)
             && self.inner == other.inner
     }
 }
 
+impl<T> Deref for Spanned<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<T> DerefMut for Spanned<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl<T: Display> Display for Spanned<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.inner.fmt(f)
+    }
+}
+
+pub type SpannedExpression = Spanned<Expression>;
+
+pub trait SpanExtension: Sized {
+    fn unspanned(self) -> Spanned<Self> {
+        Spanned {
+            inner: self,
+            span: None,
+        }
+    }
+
+    fn spanned(self, span: Range<usize>) -> Spanned<Self> {
+        Spanned {
+            inner: self,
+            span: Some(span),
+        }
+    }
+}
+
+impl SpanExtension for Expression {}
+impl SpanExtension for Atom {}
+impl SpanExtension for ArithmeticOp {}
+impl SpanExtension for UnaryOp {}
+impl SpanExtension for RelationOp {}
+impl SpanExtension for String {}
+
 #[derive(Debug, PartialEq, Clone)]
-pub enum ExpressionInner {
-    Arithmetic(Box<Expression>, ArithmeticOp, Box<Expression>),
-    Relation(Box<Expression>, RelationOp, Box<Expression>),
+pub enum Expression {
+    Arithmetic(Box<SpannedExpression>, ArithmeticOp, Box<SpannedExpression>),
+    Relation(Box<SpannedExpression>, RelationOp, Box<SpannedExpression>),
 
-    Ternary(Box<Expression>, Box<Expression>, Box<Expression>),
-    Or(Box<Expression>, Box<Expression>),
-    And(Box<Expression>, Box<Expression>),
-    Unary(UnaryOp, Box<Expression>),
+    Ternary(
+        Box<SpannedExpression>,
+        Box<SpannedExpression>,
+        Box<SpannedExpression>,
+    ),
+    Or(Box<SpannedExpression>, Box<SpannedExpression>),
+    And(Box<SpannedExpression>, Box<SpannedExpression>),
+    Unary(UnaryOp, Box<SpannedExpression>),
 
-    Member(Box<Expression>, Box<Member>),
-    FunctionCall(Box<Expression>, Option<Box<Expression>>, Vec<Expression>),
+    Member(Box<SpannedExpression>, Box<Member>),
+    FunctionCall(
+        Box<SpannedExpression>,
+        Option<Box<SpannedExpression>>,
+        Vec<SpannedExpression>,
+    ),
 
-    List(Vec<Expression>),
-    Map(Vec<(Expression, Expression)>),
+    List(Vec<SpannedExpression>),
+    Map(Vec<(SpannedExpression, SpannedExpression)>),
 
     Atom(Atom),
-    Ident(Arc<String>),
+    Ident(Arc<Spanned<String>>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Member {
-    Attribute(Arc<String>),
-    Index(Box<Expression>),
-    Fields(Vec<(Arc<String>, Expression)>),
+    Attribute(Arc<Spanned<String>>),
+    Index(Box<SpannedExpression>),
+    Fields(Vec<(Arc<Spanned<String>>, SpannedExpression)>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -150,7 +195,7 @@ impl ExpressionReferences<'_> {
     }
 }
 
-impl Expression {
+impl SpannedExpression {
     /// Returns a set of all variables referenced in the expression. Variable identifiers
     /// are represented internally as [`Arc<String>`] and this function simply clones those
     /// references into a [`HashSet`].
@@ -181,22 +226,22 @@ impl Expression {
         functions: &mut HashSet<&'expr str>,
     ) {
         match &self.inner {
-            ExpressionInner::Arithmetic(e1, _, e2)
-            | ExpressionInner::Relation(e1, _, e2)
-            | ExpressionInner::Ternary(e1, _, e2)
-            | ExpressionInner::Or(e1, e2)
-            | ExpressionInner::And(e1, e2) => {
+            Expression::Arithmetic(e1, _, e2)
+            | Expression::Relation(e1, _, e2)
+            | Expression::Ternary(e1, _, e2)
+            | Expression::Or(e1, e2)
+            | Expression::And(e1, e2) => {
                 e1._references(variables, functions);
                 e2._references(variables, functions);
             }
-            ExpressionInner::Unary(_, e) => {
+            Expression::Unary(_, e) => {
                 e._references(variables, functions);
             }
-            ExpressionInner::Member(e, _) => {
+            Expression::Member(e, _) => {
                 e._references(variables, functions);
             }
-            ExpressionInner::FunctionCall(name, target, args) => {
-                if let ExpressionInner::Ident(v) = &name.inner {
+            Expression::FunctionCall(name, target, args) => {
+                if let Expression::Ident(v) = &name.inner {
                     functions.insert(v.as_str());
                 }
                 if let Some(target) = target {
@@ -206,19 +251,19 @@ impl Expression {
                     e._references(variables, functions);
                 }
             }
-            ExpressionInner::List(e) => {
+            Expression::List(e) => {
                 for e in e {
                     e._references(variables, functions);
                 }
             }
-            ExpressionInner::Map(v) => {
+            Expression::Map(v) => {
                 for (e1, e2) in v {
                     e1._references(variables, functions);
                     e2._references(variables, functions);
                 }
             }
-            ExpressionInner::Atom(_) => {}
-            ExpressionInner::Ident(v) => {
+            Expression::Atom(_) => {}
+            Expression::Ident(v) => {
                 variables.insert(v.as_str());
             }
         }

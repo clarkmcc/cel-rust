@@ -1,5 +1,5 @@
 use crate::{ExecutionError, FunctionContext, ResolveResult, Value};
-use cel_parser::Expression;
+use cel_parser::SpannedExpression;
 
 /// Resolver knows how to resolve a [`Value`] from a [`FunctionContext`].
 /// At their core, resolvers are responsible for taking Expressions and
@@ -16,7 +16,7 @@ pub trait Resolver {
     fn resolve(&self, ctx: &FunctionContext) -> ResolveResult;
 }
 
-impl Resolver for Expression {
+impl Resolver for SpannedExpression {
     fn resolve(&self, ctx: &FunctionContext) -> ResolveResult {
         Value::resolve(&self.inner, ctx.ptx)
     }

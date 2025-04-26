@@ -1,7 +1,7 @@
 use crate::macros::{impl_conversions, impl_handler};
 use crate::resolvers::{AllArguments, Argument};
 use crate::{ExecutionError, FunctionContext, ResolveResult, Value};
-use cel_parser::ExpressionInner;
+use cel_parser::{Expression, Spanned};
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -175,7 +175,7 @@ where
 /// ) -> Result<Value>;
 /// ```
 #[derive(Clone)]
-pub struct Identifier(pub Arc<String>);
+pub struct Identifier(pub Arc<Spanned<String>>);
 
 impl<'a, 'context> FromContext<'a, 'context> for Identifier {
     fn from_context(ctx: &'a mut FunctionContext<'context>) -> Result<Self, ExecutionError>
@@ -183,7 +183,7 @@ impl<'a, 'context> FromContext<'a, 'context> for Identifier {
         Self: Sized,
     {
         match arg_expr_from_context(ctx) {
-            ExpressionInner::Ident(ident) => Ok(Identifier(ident.clone())),
+            Expression::Ident(ident) => Ok(Identifier(ident.clone())),
             expr => Err(ExecutionError::UnexpectedType {
                 got: format!("{:?}", expr),
                 want: "identifier".to_string(),
@@ -200,7 +200,7 @@ impl From<&Identifier> for String {
 
 impl From<Identifier> for String {
     fn from(value: Identifier) -> Self {
-        value.0.as_ref().clone()
+        value.0.as_ref().inner.clone()
     }
 }
 
@@ -251,7 +251,7 @@ impl<'a, 'context> FromContext<'a, 'context> for Value {
     }
 }
 
-impl<'a, 'context> FromContext<'a, 'context> for ExpressionInner {
+impl<'a, 'context> FromContext<'a, 'context> for Expression {
     fn from_context(ctx: &'a mut FunctionContext<'context>) -> Result<Self, ExecutionError>
     where
         Self: Sized,
@@ -267,7 +267,7 @@ impl<'a, 'context> FromContext<'a, 'context> for ExpressionInner {
 /// Calling this function when there are no more arguments will result in a panic. Since this
 /// function is only ever called within the context of a controlled macro that calls it once
 /// for each argument, this should never happen.
-fn arg_expr_from_context(ctx: &mut FunctionContext) -> ExpressionInner {
+fn arg_expr_from_context(ctx: &mut FunctionContext) -> Expression {
     let idx = ctx.arg_idx;
     ctx.arg_idx += 1;
     ctx.args[idx].clone().inner

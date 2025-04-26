@@ -19,7 +19,7 @@ lalrpop_mod!(#[allow(clippy::all)] pub parser, "/cel.rs");
 /// let expr = parse("1 + 1").unwrap();
 /// println!("{:?}", expr);
 /// ```
-pub fn parse(input: &str) -> Result<Expression, ParseError> {
+pub fn parse(input: &str) -> Result<SpannedExpression, ParseError> {
     // Wrap the internal parser function - whether larlpop or chumsky
 
     // Example for a possible new chumsky based parser...
@@ -32,7 +32,7 @@ pub fn parse(input: &str) -> Result<Expression, ParseError> {
     //     })
 
     // Existing Larlpop Parser:
-    crate::parser::ExpressionParser::new()
+    crate::parser::SpannedExpressionParser::new()
         .parse(input)
         .map_err(|e| ParseError::from_lalrpop(input, e))
 }
@@ -42,24 +42,23 @@ mod tests {
     use crate::{
         ArithmeticOp,
         Atom::{self, *},
-        Expression,
-        ExpressionInner::{self, *},
+        Expression::{self, *},
         Member::*,
-        RelationOp, UnaryOp,
+        RelationOp, SpanExtension, SpannedExpression, UnaryOp,
     };
 
-    fn parse(input: &str) -> Expression {
+    fn parse(input: &str) -> SpannedExpression {
         crate::parse(input).unwrap_or_else(|e| panic!("{}", e))
     }
 
-    fn assert_parse_eq(input: &str, expected: ExpressionInner) {
+    fn assert_parse_eq(input: &str, expected: Expression) {
         assert_eq!(parse(input).inner, expected);
     }
 
     #[test]
     fn ident() {
-        assert_parse_eq("a", Ident("a".to_string().into()));
-        assert_parse_eq("hello ", Ident("hello".to_string().into()));
+        assert_parse_eq("a", Ident("a".to_string().unspanned().into()));
+        assert_parse_eq("hello ", Ident("hello".to_string().unspanned().into()));
     }
 
     #[test]
@@ -74,9 +73,9 @@ mod tests {
 
     #[test]
     fn other_floats() {
-        assert_parse_eq("1e3", ExpressionInner::Atom(Atom::Float(1000.0)));
-        assert_parse_eq("1e-3", ExpressionInner::Atom(Atom::Float(0.001)));
-        assert_parse_eq("1.4e-3", ExpressionInner::Atom(Atom::Float(0.0014)));
+        assert_parse_eq("1e3", Expression::Atom(Atom::Float(1000.0)));
+        assert_parse_eq("1e-3", Expression::Atom(Atom::Float(0.001)));
+        assert_parse_eq("1.4e-3", Expression::Atom(Atom::Float(0.0014)));
     }
 
     #[test]
@@ -136,23 +135,23 @@ mod tests {
         assert_parse_eq(
             "[1, 2, 3].map(x, x * 2)",
             FunctionCall(
-                Box::new(Ident("map".to_string().into()).into_expression()),
+                Box::new(Ident("map".to_string().unspanned().into()).unspanned()),
                 Some(Box::new(
                     List(vec![
-                        Atom(Int(1)).into_expression(),
-                        Atom(Int(2)).into_expression(),
-                        Atom(Int(3)).into_expression(),
+                        Atom(Int(1)).unspanned(),
+                        Atom(Int(2)).unspanned(),
+                        Atom(Int(3)).unspanned(),
                     ])
-                    .into_expression(),
+                    .unspanned(),
                 )),
                 vec![
-                    Ident("x".to_string().into()).into_expression(),
+                    Ident("x".to_string().unspanned().into()).unspanned(),
                     Arithmetic(
-                        Box::new(Ident("x".to_string().into()).into_expression()),
+                        Box::new(Ident("x".to_string().unspanned().into()).unspanned()),
                         ArithmeticOp::Multiply,
-                        Box::new(Atom(Int(2)).into_expression()),
+                        Box::new(Atom(Int(2)).unspanned()),
                     )
-                    .into_expression(),
+                    .unspanned(),
                 ],
             ),
         )
@@ -164,12 +163,12 @@ mod tests {
             "a.b[1]",
             Member(
                 Member(
-                    Ident("a".to_string().into()).into_expression().into(),
-                    Attribute("b".to_string().into()).into(),
+                    Ident("a".to_string().unspanned().into()).unspanned().into(),
+                    Attribute("b".to_string().unspanned().into()).into(),
                 )
-                .into_expression()
+                .unspanned()
                 .into(),
-                Index(Atom(Int(1)).into_expression().into()).into(),
+                Index(Atom(Int(1)).unspanned().into()).into(),
             ),
         )
     }
@@ -179,7 +178,7 @@ mod tests {
         assert_parse_eq(
             "a()",
             FunctionCall(
-                Box::new(Ident("a".to_string().into()).into_expression()),
+                Box::new(Ident("a".to_string().unspanned().into()).unspanned()),
                 None,
                 vec![],
             ),
@@ -192,14 +191,14 @@ mod tests {
             "!false",
             Unary(
                 UnaryOp::Not,
-                Box::new(ExpressionInner::Atom(Atom::Bool(false)).into_expression()),
+                Box::new(Expression::Atom(Atom::Bool(false)).unspanned()),
             ),
         );
         assert_parse_eq(
             "!true",
             Unary(
                 UnaryOp::Not,
-                Box::new(ExpressionInner::Atom(Atom::Bool(true)).into_expression()),
+                Box::new(Expression::Atom(Atom::Bool(true)).unspanned()),
             ),
         );
     }
@@ -209,9 +208,9 @@ mod tests {
         assert_parse_eq(
             "true == true",
             Relation(
-                Box::new(ExpressionInner::Atom(Atom::Bool(true)).into_expression()),
+                Box::new(Expression::Atom(Atom::Bool(true)).unspanned()),
                 RelationOp::Equals,
-                Box::new(ExpressionInner::Atom(Atom::Bool(true)).into_expression()),
+                Box::new(Expression::Atom(Atom::Bool(true)).unspanned()),
             ),
         );
     }
@@ -222,9 +221,9 @@ mod tests {
             parse("!!true"),
             (Unary(
                 UnaryOp::DoubleNot,
-                Box::new(ExpressionInner::Atom(Atom::Bool(true)).into_expression()),
+                Box::new(Expression::Atom(Atom::Bool(true)).unspanned()),
             )
-            .into_expression())
+            .unspanned())
         );
     }
 
@@ -234,14 +233,14 @@ mod tests {
             "(-((1)))",
             Unary(
                 UnaryOp::Minus,
-                Box::new(ExpressionInner::Atom(Atom::Int(1)).into_expression()),
+                Box::new(Expression::Atom(Atom::Int(1)).unspanned()),
             ),
         );
     }
 
     #[test]
     fn test_empty_list_parsing() {
-        assert_eq!(parse("[]"), (List(vec![]).into_expression()));
+        assert_eq!(parse("[]"), (List(vec![]).unspanned()));
     }
 
     #[test]
@@ -249,9 +248,9 @@ mod tests {
         assert_parse_eq(
             "[1,2,3]",
             List(vec![
-                ExpressionInner::Atom(Atom::Int(1)).into_expression(),
-                ExpressionInner::Atom(Atom::Int(2)).into_expression(),
-                ExpressionInner::Atom(Atom::Int(3)).into_expression(),
+                Expression::Atom(Atom::Int(1)).unspanned(),
+                Expression::Atom(Atom::Int(2)).unspanned(),
+                Expression::Atom(Atom::Int(3)).unspanned(),
             ]),
         );
     }
@@ -263,15 +262,13 @@ mod tests {
             Member(
                 Box::new(
                     List(vec![
-                        ExpressionInner::Atom(Int(1)).into_expression(),
-                        ExpressionInner::Atom(Int(2)).into_expression(),
-                        ExpressionInner::Atom(Int(3)).into_expression(),
+                        Expression::Atom(Int(1)).unspanned(),
+                        Expression::Atom(Int(2)).unspanned(),
+                        Expression::Atom(Int(3)).unspanned(),
                     ])
-                    .into_expression(),
+                    .unspanned(),
                 ),
-                Box::new(Index(Box::new(
-                    ExpressionInner::Atom(Int(0)).into_expression(),
-                ))),
+                Box::new(Index(Box::new(Expression::Atom(Int(0)).unspanned()))),
             ),
         );
     }
@@ -282,11 +279,11 @@ mod tests {
             "['0', 1, 3.0, null]",
             //"['0', 1, 2u, 3.0, null]",
             List(vec![
-                ExpressionInner::Atom(String("0".to_string().into())).into_expression(),
-                ExpressionInner::Atom(Int(1)).into_expression(),
+                Expression::Atom(String("0".to_string().into())).unspanned(),
+                Expression::Atom(Int(1)).unspanned(),
                 //ExpressiInExpressionInneron::Atom(UInt(2)).into_expression(),
-                ExpressionInner::Atom(Float(3.0)).into_expression(),
-                ExpressionInner::Atom(Null).into_expression(),
+                Expression::Atom(Float(3.0)).unspanned(),
+                Expression::Atom(Null).unspanned(),
             ]),
         );
     }
@@ -296,13 +293,12 @@ mod tests {
         assert_parse_eq(
             "[[], [], [[1]]]",
             List(vec![
-                List(vec![]).into_expression(),
-                List(vec![]).into_expression(),
-                List(vec![List(vec![
-                    ExpressionInner::Atom(Int(1)).into_expression()
+                List(vec![]).unspanned(),
+                List(vec![]).unspanned(),
+                List(vec![
+                    List(vec![Expression::Atom(Int(1)).unspanned()]).unspanned()
                 ])
-                .into_expression()])
-                .into_expression(),
+                .unspanned(),
             ]),
         );
     }
@@ -312,18 +308,16 @@ mod tests {
         assert_parse_eq(
             "2 in [2]",
             Relation(
-                Box::new(ExpressionInner::Atom(Int(2)).into_expression()),
+                Box::new(Expression::Atom(Int(2)).unspanned()),
                 RelationOp::In,
-                Box::new(
-                    List(vec![ExpressionInner::Atom(Int(2)).into_expression()]).into_expression(),
-                ),
+                Box::new(List(vec![Expression::Atom(Int(2)).unspanned()]).unspanned()),
             ),
         );
     }
 
     #[test]
     fn test_empty_map_parsing() {
-        assert_eq!(parse("{}"), (Map(vec![]).into_expression()));
+        assert_eq!(parse("{}"), (Map(vec![]).unspanned()));
     }
 
     #[test]
@@ -332,12 +326,12 @@ mod tests {
             "{'a': 1, 'b': 2}",
             Map(vec![
                 (
-                    ExpressionInner::Atom(String("a".to_string().into())).into_expression(),
-                    ExpressionInner::Atom(Int(1)).into_expression(),
+                    Expression::Atom(String("a".to_string().into())).unspanned(),
+                    Expression::Atom(Int(1)).unspanned(),
                 ),
                 (
-                    ExpressionInner::Atom(String("b".to_string().into())).into_expression(),
-                    ExpressionInner::Atom(Int(2)).into_expression(),
+                    Expression::Atom(String("b".to_string().into())).unspanned(),
+                    Expression::Atom(Int(2)).unspanned(),
                 ),
             ]),
         );
@@ -351,19 +345,17 @@ mod tests {
                 Box::new(
                     Map(vec![
                         (
-                            ExpressionInner::Atom(String("a".to_string().into())).into_expression(),
-                            ExpressionInner::Atom(Int(1)).into_expression(),
+                            Expression::Atom(String("a".to_string().into())).unspanned(),
+                            Expression::Atom(Int(1)).unspanned(),
                         ),
                         (
-                            ExpressionInner::Atom(String("b".to_string().into())).into_expression(),
-                            ExpressionInner::Atom(Int(2)).into_expression(),
+                            Expression::Atom(String("b".to_string().into())).unspanned(),
+                            Expression::Atom(Int(2)).unspanned(),
                         ),
                     ])
-                    .into_expression(),
+                    .unspanned(),
                 ),
-                Box::new(Index(Box::new(
-                    ExpressionInner::Atom(Int(0)).into_expression(),
-                ))),
+                Box::new(Index(Box::new(Expression::Atom(Int(0)).unspanned()))),
             ),
         );
     }
@@ -373,35 +365,35 @@ mod tests {
         assert_parse_eq(
             "2 != 3",
             Relation(
-                Box::new(ExpressionInner::Atom(Int(2)).into_expression()),
+                Box::new(Expression::Atom(Int(2)).unspanned()),
                 RelationOp::NotEquals,
-                Box::new(ExpressionInner::Atom(Int(3)).into_expression()),
+                Box::new(Expression::Atom(Int(3)).unspanned()),
             ),
         );
         assert_parse_eq(
             "2 == 3",
             Relation(
-                Box::new(ExpressionInner::Atom(Int(2)).into_expression()),
+                Box::new(Expression::Atom(Int(2)).unspanned()),
                 RelationOp::Equals,
-                Box::new(ExpressionInner::Atom(Int(3)).into_expression()),
+                Box::new(Expression::Atom(Int(3)).unspanned()),
             ),
         );
 
         assert_parse_eq(
             "2 < 3",
             Relation(
-                Box::new(ExpressionInner::Atom(Int(2)).into_expression()),
+                Box::new(Expression::Atom(Int(2)).unspanned()),
                 RelationOp::LessThan,
-                Box::new(ExpressionInner::Atom(Int(3)).into_expression()),
+                Box::new(Expression::Atom(Int(3)).unspanned()),
             ),
         );
 
         assert_parse_eq(
             "2 <= 3",
             Relation(
-                Box::new(ExpressionInner::Atom(Int(2)).into_expression()),
+                Box::new(Expression::Atom(Int(2)).unspanned()),
                 RelationOp::LessThanEq,
-                Box::new(ExpressionInner::Atom(Int(3)).into_expression()),
+                Box::new(Expression::Atom(Int(3)).unspanned()),
             ),
         );
     }
@@ -411,9 +403,9 @@ mod tests {
         assert_parse_eq(
             "2 * 3",
             Arithmetic(
-                Box::new(ExpressionInner::Atom(Atom::Int(2)).into_expression()),
+                Box::new(Expression::Atom(Atom::Int(2)).unspanned()),
                 ArithmeticOp::Multiply,
-                Box::new(ExpressionInner::Atom(Atom::Int(3)).into_expression()),
+                Box::new(Expression::Atom(Atom::Int(3)).unspanned()),
             ),
         );
     }
@@ -450,9 +442,9 @@ mod tests {
         assert_parse_eq(
             "2 + 3",
             Arithmetic(
-                Box::new(ExpressionInner::Atom(Atom::Int(2)).into_expression()),
+                Box::new(Expression::Atom(Atom::Int(2)).unspanned()),
                 ArithmeticOp::Add,
-                Box::new(ExpressionInner::Atom(Atom::Int(3)).into_expression()),
+                Box::new(Expression::Atom(Atom::Int(3)).unspanned()),
             ),
         );
 
@@ -474,15 +466,15 @@ mod tests {
         assert_parse_eq(
             "true && true",
             And(
-                Box::new(ExpressionInner::Atom(Bool(true)).into_expression()),
-                Box::new(ExpressionInner::Atom(Bool(true)).into_expression()),
+                Box::new(Expression::Atom(Bool(true)).unspanned()),
+                Box::new(Expression::Atom(Bool(true)).unspanned()),
             ),
         );
         assert_parse_eq(
             "false || true",
             Or(
-                Box::new(ExpressionInner::Atom(Bool(false)).into_expression()),
-                Box::new(ExpressionInner::Atom(Bool(true)).into_expression()),
+                Box::new(Expression::Atom(Bool(false)).unspanned()),
+                Box::new(Expression::Atom(Bool(true)).unspanned()),
             ),
         );
     }
@@ -491,24 +483,18 @@ mod tests {
         assert_parse_eq(
             "true ? 'result_true' : 'result_false'",
             Ternary(
-                Box::new(ExpressionInner::Atom(Bool(true)).into_expression()),
-                Box::new(
-                    ExpressionInner::Atom(String("result_true".to_string().into()))
-                        .into_expression(),
-                ),
-                Box::new(
-                    ExpressionInner::Atom(String("result_false".to_string().into()))
-                        .into_expression(),
-                ),
+                Box::new(Expression::Atom(Bool(true)).unspanned()),
+                Box::new(Expression::Atom(String("result_true".to_string().into())).unspanned()),
+                Box::new(Expression::Atom(String("result_false".to_string().into())).unspanned()),
             ),
         );
 
         assert_parse_eq(
             "true ? 100 : 200",
             Ternary(
-                Box::new(ExpressionInner::Atom(Bool(true)).into_expression()),
-                Box::new(ExpressionInner::Atom(Int(100)).into_expression()),
-                Box::new(ExpressionInner::Atom(Int(200)).into_expression()),
+                Box::new(Expression::Atom(Bool(true)).unspanned()),
+                Box::new(Expression::Atom(Int(100)).unspanned()),
+                Box::new(Expression::Atom(Int(200)).unspanned()),
             ),
         );
     }
@@ -518,15 +504,9 @@ mod tests {
         assert_parse_eq(
             "false ? 'result_true' : 'result_false'",
             Ternary(
-                Box::new(ExpressionInner::Atom(Bool(false)).into_expression()),
-                Box::new(
-                    ExpressionInner::Atom(String("result_true".to_string().into()))
-                        .into_expression(),
-                ),
-                Box::new(
-                    ExpressionInner::Atom(String("result_false".to_string().into()))
-                        .into_expression(),
-                ),
+                Box::new(Expression::Atom(Bool(false)).unspanned()),
+                Box::new(Expression::Atom(String("result_true".to_string().into())).unspanned()),
+                Box::new(Expression::Atom(String("result_false".to_string().into())).unspanned()),
             ),
         );
     }
@@ -536,17 +516,14 @@ mod tests {
         assert_parse_eq(
             "a && b == 'string'",
             And(
-                Box::new(Ident("a".to_string().into()).into_expression()),
+                Box::new(Ident("a".to_string().unspanned().into()).unspanned()),
                 Box::new(
                     Relation(
-                        Box::new(Ident("b".to_string().into()).into_expression()),
+                        Box::new(Ident("b".to_string().unspanned().into()).unspanned()),
                         RelationOp::Equals,
-                        Box::new(
-                            ExpressionInner::Atom(String("string".to_string().into()))
-                                .into_expression(),
-                        ),
+                        Box::new(Expression::Atom(String("string".to_string().into())).unspanned()),
                     )
-                    .into_expression(),
+                    .unspanned(),
                 ),
             ),
         );

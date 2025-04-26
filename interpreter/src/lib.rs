@@ -1,6 +1,7 @@
 extern crate core;
 
 use cel_parser::{parse, ExpressionReferences, Member};
+use cel_parser::{SpanExtension, Spanned};
 use std::convert::TryFrom;
 use std::sync::Arc;
 use thiserror::Error;
@@ -9,7 +10,7 @@ mod macros;
 
 pub mod context;
 pub use cel_parser::error::ParseError;
-pub use cel_parser::Expression;
+pub use cel_parser::SpannedExpression;
 pub use context::Context;
 pub use functions::FunctionContext;
 pub use objects::{ResolveResult, Value};
@@ -55,11 +56,11 @@ pub enum ExecutionError {
     /// Indicates that the script attempted to reference a key on a type that
     /// was missing the requested key.
     #[error("No such key: {0}")]
-    NoSuchKey(Arc<String>),
+    NoSuchKey(Arc<Spanned<String>>),
     /// Indicates that the script attempted to reference an undeclared variable
     /// method, or function.
     #[error("Undeclared reference to '{0}'")]
-    UndeclaredReference(Arc<String>),
+    UndeclaredReference(Arc<Spanned<String>>),
     /// Indicates that a function expected to be called as a method, or to be
     /// called with at least one parameter.
     #[error("Missing argument or target")]
@@ -86,7 +87,7 @@ pub enum ExecutionError {
     /// Indicates that a function call occurred without an [`Expression::Ident`]
     /// as the function identifier.
     #[error("Unsupported function call identifier type: {0:?}")]
-    UnsupportedFunctionCallIdentifierType(Expression),
+    UnsupportedFunctionCallIdentifierType(SpannedExpression),
     /// Indicates that a [`Member::Fields`] construction was attempted
     /// which is not yet supported.
     #[error("Unsupported fields construction: {0:?}")]
@@ -98,11 +99,11 @@ pub enum ExecutionError {
 
 impl ExecutionError {
     pub fn no_such_key(name: &str) -> Self {
-        ExecutionError::NoSuchKey(Arc::new(name.to_string()))
+        ExecutionError::NoSuchKey(Arc::new(name.to_string().unspanned()))
     }
 
     pub fn undeclared_reference(name: &str) -> Self {
-        ExecutionError::UndeclaredReference(Arc::new(name.to_string()))
+        ExecutionError::UndeclaredReference(Arc::new(name.to_string().unspanned()))
     }
 
     pub fn invalid_argument_count(expected: usize, actual: usize) -> Self {
@@ -138,7 +139,7 @@ impl ExecutionError {
 
 #[derive(Debug)]
 pub struct Program {
-    expression: Expression,
+    expression: SpannedExpression,
 }
 
 impl Program {
