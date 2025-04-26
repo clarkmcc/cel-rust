@@ -1,7 +1,7 @@
 extern crate core;
 
 use cel_parser::{parse, ExpressionReferences, Member};
-use cel_parser::{SpanExtension, Spanned};
+use cel_parser::{Expression, SpanExtension, Spanned};
 use std::convert::TryFrom;
 use std::sync::Arc;
 use thiserror::Error;
@@ -10,7 +10,6 @@ mod macros;
 
 pub mod context;
 pub use cel_parser::error::ParseError;
-pub use cel_parser::SpannedExpression;
 pub use context::Context;
 pub use functions::FunctionContext;
 pub use objects::{ResolveResult, Value};
@@ -87,7 +86,7 @@ pub enum ExecutionError {
     /// Indicates that a function call occurred without an [`Expression::Ident`]
     /// as the function identifier.
     #[error("Unsupported function call identifier type: {0:?}")]
-    UnsupportedFunctionCallIdentifierType(SpannedExpression),
+    UnsupportedFunctionCallIdentifierType(Spanned<Expression>),
     /// Indicates that a [`Member::Fields`] construction was attempted
     /// which is not yet supported.
     #[error("Unsupported fields construction: {0:?}")]
@@ -139,7 +138,7 @@ impl ExecutionError {
 
 #[derive(Debug)]
 pub struct Program {
-    expression: SpannedExpression,
+    expression: Spanned<Expression>,
 }
 
 impl Program {

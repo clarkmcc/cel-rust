@@ -3,7 +3,7 @@ use crate::magic::{Arguments, Identifier, This};
 use crate::objects::{Value, ValueType};
 use crate::resolvers::{Argument, Resolver};
 use crate::ExecutionError;
-use cel_parser::{Expression, Spanned, SpannedExpression};
+use cel_parser::{Expression, Spanned};
 use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::sync::Arc;
@@ -20,7 +20,7 @@ pub struct FunctionContext<'context> {
     pub name: Arc<Spanned<String>>,
     pub this: Option<Value>,
     pub ptx: &'context Context<'context>,
-    pub args: Vec<SpannedExpression>,
+    pub args: Vec<Spanned<Expression>>,
     pub arg_idx: usize,
 }
 
@@ -29,7 +29,7 @@ impl<'context> FunctionContext<'context> {
         name: Arc<Spanned<String>>,
         this: Option<Value>,
         ptx: &'context Context<'context>,
-        args: Vec<SpannedExpression>,
+        args: Vec<Spanned<Expression>>,
     ) -> Self {
         Self {
             name,

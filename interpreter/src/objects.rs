@@ -406,7 +406,7 @@ impl From<Value> for ResolveResult {
 }
 
 impl Value {
-    pub fn resolve_all(expr: &[SpannedExpression], ctx: &Context) -> ResolveResult {
+    pub fn resolve_all(expr: &[Spanned<Expression>], ctx: &Context) -> ResolveResult {
         let mut res = Vec::with_capacity(expr.len());
         for expr in expr {
             res.push(Value::resolve(&expr.inner, ctx)?);

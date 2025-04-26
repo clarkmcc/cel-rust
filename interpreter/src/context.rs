@@ -1,7 +1,7 @@
 use crate::magic::{Function, FunctionRegistry, Handler};
 use crate::objects::{TryIntoValue, Value};
 use crate::{functions, ExecutionError};
-use cel_parser::{Expression, Spanned, SpannedExpression};
+use cel_parser::{Expression, Spanned};
 use std::collections::HashMap;
 use std::ops::Deref;
 
@@ -130,7 +130,7 @@ impl Context<'_> {
         Value::resolve(expr, self)
     }
 
-    pub fn resolve_all(&self, exprs: &[SpannedExpression]) -> Result<Value, ExecutionError> {
+    pub fn resolve_all(&self, exprs: &[Spanned<Expression>]) -> Result<Value, ExecutionError> {
         Value::resolve_all(exprs, self)
     }
 

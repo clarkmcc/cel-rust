@@ -19,7 +19,7 @@ lalrpop_mod!(#[allow(clippy::all)] pub parser, "/cel.rs");
 /// let expr = parse("1 + 1").unwrap();
 /// println!("{:?}", expr);
 /// ```
-pub fn parse(input: &str) -> Result<SpannedExpression, ParseError> {
+pub fn parse(input: &str) -> Result<Spanned<Expression>, ParseError> {
     // Wrap the internal parser function - whether larlpop or chumsky
 
     // Example for a possible new chumsky based parser...
@@ -44,10 +44,10 @@ mod tests {
         Atom::{self, *},
         Expression::{self, *},
         Member::*,
-        RelationOp, SpanExtension, SpannedExpression, UnaryOp,
+        RelationOp, SpanExtension, Spanned, UnaryOp,
     };
 
-    fn parse(input: &str) -> SpannedExpression {
+    fn parse(input: &str) -> Spanned<Expression> {
         crate::parse(input).unwrap_or_else(|e| panic!("{}", e))
     }
 

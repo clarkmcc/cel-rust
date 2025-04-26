@@ -70,8 +70,6 @@ impl<T: Display> Display for Spanned<T> {
     }
 }
 
-pub type SpannedExpression = Spanned<Expression>;
-
 pub trait SpanExtension: Sized {
     fn unspanned(self) -> Spanned<Self> {
         Spanned {
@@ -100,34 +98,34 @@ impl SpanExtension for String {}
 #[derive(Debug, PartialEq, Clone)]
 pub enum Expression {
     Arithmetic(
-        Box<SpannedExpression>,
+        Box<Spanned<Expression>>,
         Spanned<ArithmeticOp>,
-        Box<SpannedExpression>,
+        Box<Spanned<Expression>>,
     ),
     Relation(
-        Box<SpannedExpression>,
+        Box<Spanned<Expression>>,
         Spanned<RelationOp>,
-        Box<SpannedExpression>,
+        Box<Spanned<Expression>>,
     ),
 
     Ternary(
-        Box<SpannedExpression>,
-        Box<SpannedExpression>,
-        Box<SpannedExpression>,
+        Box<Spanned<Expression>>,
+        Box<Spanned<Expression>>,
+        Box<Spanned<Expression>>,
     ),
-    Or(Box<SpannedExpression>, Box<SpannedExpression>),
-    And(Box<SpannedExpression>, Box<SpannedExpression>),
-    Unary(Spanned<UnaryOp>, Box<SpannedExpression>),
+    Or(Box<Spanned<Expression>>, Box<Spanned<Expression>>),
+    And(Box<Spanned<Expression>>, Box<Spanned<Expression>>),
+    Unary(Spanned<UnaryOp>, Box<Spanned<Expression>>),
 
-    Member(Box<SpannedExpression>, Box<Member>),
+    Member(Box<Spanned<Expression>>, Box<Member>),
     FunctionCall(
-        Box<SpannedExpression>,
-        Option<Box<SpannedExpression>>,
-        Vec<SpannedExpression>,
+        Box<Spanned<Expression>>,
+        Option<Box<Spanned<Expression>>>,
+        Vec<Spanned<Expression>>,
     ),
 
-    List(Vec<SpannedExpression>),
-    Map(Vec<(SpannedExpression, SpannedExpression)>),
+    List(Vec<Spanned<Expression>>),
+    Map(Vec<(Spanned<Expression>, Spanned<Expression>)>),
 
     Atom(Atom),
     Ident(Arc<Spanned<String>>),
@@ -136,8 +134,8 @@ pub enum Expression {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Member {
     Attribute(Arc<Spanned<String>>),
-    Index(Box<SpannedExpression>),
-    Fields(Vec<(Arc<Spanned<String>>, SpannedExpression)>),
+    Index(Box<Spanned<Expression>>),
+    Fields(Vec<(Arc<Spanned<String>>, Spanned<Expression>)>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -211,7 +209,7 @@ impl ExpressionReferences<'_> {
     }
 }
 
-impl SpannedExpression {
+impl Spanned<Expression> {
     /// Returns a set of all variables referenced in the expression. Variable identifiers
     /// are represented internally as [`Arc<String>`] and this function simply clones those
     /// references into a [`HashSet`].

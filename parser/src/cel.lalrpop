@@ -1,4 +1,4 @@
-use crate::{RelationOp, ArithmeticOp, Expression, SpannedExpression, Spanned, SpanExtension, UnaryOp, Member, Atom, parse_bytes, parse_string};
+use crate::{RelationOp, ArithmeticOp, Expression, Spanned, SpanExtension, UnaryOp, Member, Atom, parse_bytes, parse_string};
 use std::sync::Arc;
 
 grammar;
@@ -75,11 +75,11 @@ pub Primary: Expression = {
     "(" <Expression> ")"
 }
 
-pub FieldInits: (Arc<Spanned<String>>, SpannedExpression) = {
+pub FieldInits: (Arc<Spanned<String>>, Spanned<Expression>) = {
     <Ident> ":" <SpannedExpression>
 }
 
-pub MapInits: (SpannedExpression, SpannedExpression) = {
+pub MapInits: (Spanned<Expression>, Spanned<Expression>) = {
     <SpannedExpression> ":" <SpannedExpression>
 }
 
