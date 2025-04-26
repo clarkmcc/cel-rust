@@ -1,8 +1,9 @@
 extern crate core;
 
 use cel_parser::{parse, ExpressionReferences, Member};
-use cel_parser::{Expression, SpanExtension, Spanned};
+use cel_parser::{Expression, Spanned};
 use std::convert::TryFrom;
+use std::ops::Range;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -97,12 +98,12 @@ pub enum ExecutionError {
 }
 
 impl ExecutionError {
-    pub fn no_such_key(name: &str) -> Self {
-        ExecutionError::NoSuchKey(Arc::new(name.to_string().unspanned()))
+    pub fn no_such_key(name: &str, span: Option<Range<usize>>) -> Self {
+        ExecutionError::NoSuchKey(Arc::new(Spanned::new(name.to_string(), span)))
     }
 
-    pub fn undeclared_reference(name: &str) -> Self {
-        ExecutionError::UndeclaredReference(Arc::new(name.to_string().unspanned()))
+    pub fn undeclared_reference(name: &str, span: Option<Range<usize>>) -> Self {
+        ExecutionError::UndeclaredReference(Arc::new(Spanned::new(name.to_string(), span)))
     }
 
     pub fn invalid_argument_count(expected: usize, actual: usize) -> Self {
@@ -235,22 +236,22 @@ mod tests {
             (
                 "no such key",
                 "foo.baz.bar == 1",
-                ExecutionError::no_such_key("baz"),
+                ExecutionError::no_such_key("baz", Some(4..7)),
             ),
             (
                 "undeclared reference",
                 "missing == 1",
-                ExecutionError::undeclared_reference("missing"),
+                ExecutionError::undeclared_reference("missing", Some(0..7)),
             ),
             (
                 "undeclared method",
                 "1.missing()",
-                ExecutionError::undeclared_reference("missing"),
+                ExecutionError::undeclared_reference("missing", Some(2..9)),
             ),
             (
                 "undeclared function",
                 "missing(1)",
-                ExecutionError::undeclared_reference("missing"),
+                ExecutionError::undeclared_reference("missing", Some(0..7)),
             ),
             (
                 "unsupported key type",

@@ -614,5 +614,15 @@ mod tests {
             )
             .spanned(0..10)
         );
+
+        assert_eq!(
+            parse("true ? 4 : 5"),
+            Expression::Ternary(
+                Box::new(Expression::Atom(Atom::Bool(true)).spanned(0..4)),
+                Box::new(Expression::Atom(Atom::Int(4)).spanned(7..8)),
+                Box::new(Expression::Atom(Atom::Int(5)).spanned(11..12)),
+            )
+            .spanned(0..12)
+        );
     }
 }

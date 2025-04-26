@@ -38,6 +38,12 @@ pub struct Spanned<T> {
     pub span: Option<Range<usize>>,
 }
 
+impl<T> Spanned<T> {
+    pub fn new(inner: T, span: Option<Range<usize>>) -> Self {
+        Self { inner, span }
+    }
+}
+
 impl<T: PartialEq> PartialEq for Spanned<T> {
     #[cfg(feature = "preserve_spans")]
     fn eq(&self, other: &Self) -> bool {
