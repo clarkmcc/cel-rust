@@ -791,6 +791,7 @@ mod tests {
             ("min multiple", "min(1, 2, 3) == 1"),
             ("min negative", "min(-1, 0) == -1"),
             ("min float", "min(-1.0, 0.0) == -1.0"),
+            ("min float multiple", "min(1.61803, 3.1415, 2.71828, 1.41421) == 1.41421"),
             ("min list", "min([1, 2, 3]) == 1"),
             ("min empty list", "min([]) == null"),
             ("min no args", "min() == null"),
