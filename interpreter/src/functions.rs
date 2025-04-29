@@ -647,6 +647,30 @@ pub fn max(Arguments(args): Arguments) -> Result<Value> {
         .cloned()
 }
 
+pub fn min(Arguments(args): Arguments) -> Result<Value> {
+    // If items is a list of values, then operate on the list
+    let items = if args.len() == 1 {
+        match &args[0] {
+            Value::List(values) => values,
+            _ => return Ok(args[0].clone()),
+        }
+    } else {
+        &args
+    };
+
+    items
+        .iter()
+        .skip(1)
+        .try_fold(items.first().unwrap_or(&Value::Null), |acc, x| {
+            match acc.partial_cmp(x) {
+                Some(Ordering::Less) => Ok(acc),
+                Some(_) => Ok(x),
+                None => Err(ExecutionError::ValuesNotComparable(acc.clone(), x.clone())),
+            }
+        })
+        .cloned()
+}
+
 #[cfg(test)]
 mod tests {
     use crate::context::Context;
@@ -755,6 +779,25 @@ mod tests {
             ("max list", "max([1, 2, 3]) == 3"),
             ("max empty list", "max([]) == null"),
             ("max no args", "max() == null"),
+        ]
+        .iter()
+        .for_each(assert_script);
+    }
+
+    #[test]
+    fn test_min() {
+        [
+            ("min single", "min(1) == 1"),
+            ("min multiple", "min(1, 2, 3) == 1"),
+            ("min negative", "min(-1, 0) == -1"),
+            ("min float", "min(-1.0, 0.0) == -1.0"),
+            (
+                "min float multiple",
+                "min(1.61803, 3.1415, 2.71828, 1.41421) == 1.41421",
+            ),
+            ("min list", "min([1, 2, 3]) == 1"),
+            ("min empty list", "min([]) == null"),
+            ("min no args", "min() == null"),
         ]
         .iter()
         .for_each(assert_script);
