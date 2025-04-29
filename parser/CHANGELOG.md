@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1](https://github.com/clarkmcc/cel-rust/compare/cel-parser-v0.8.0...cel-parser-v0.8.1) - 2025-04-29
+
+### Added
+
+- Implement Short-Circuit Evaluation for AND Expressions to Fix Issue #117 ([#118](https://github.com/clarkmcc/cel-rust/pull/118))
+
 ## [0.8.0](https://github.com/clarkmcc/cel-rust/compare/cel-parser-v0.7.1...cel-parser-v0.8.0) - 2024-10-30
 
 ### Other
