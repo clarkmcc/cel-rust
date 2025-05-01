@@ -272,30 +272,30 @@ mod tests {
     fn test_type_fn_basic() {
         let ctx = Context::default();
 
-        // type(1) == int
-        let prog = Program::compile("type(1)").unwrap();
-        let result = prog.execute(&ctx).unwrap();
-        assert_eq!(result, Value::Type(CelType::Int));
-
-        // type(1) != 'int'
-        let prog = Program::compile("type(1) != 'int'").unwrap();
+        // type(1) == 'int'
+        let prog = Program::compile("type(1) == 'int'").unwrap();
         let result = prog.execute(&ctx).unwrap();
         assert_eq!(result, Value::Bool(true));
 
         // type('a') == string
         let prog = Program::compile("type('a')").unwrap();
         let result = prog.execute(&ctx).unwrap();
-        assert_eq!(result, Value::Type(CelType::String));
+        assert_eq!(result, Value::String("string".to_string().into()));
 
         // type(true) == bool
         let prog = Program::compile("type(true)").unwrap();
         let result = prog.execute(&ctx).unwrap();
-        assert_eq!(result, Value::Type(CelType::Bool));
+        assert_eq!(result, Value::String("bool".to_string().into()));
 
-        // type(type(1)) == type
-        let prog = Program::compile("type(type(1))").unwrap();
+        // type(1) == type('a')
+        let prog = Program::compile("type(1) == type('a')").unwrap();
         let result = prog.execute(&ctx).unwrap();
-        assert_eq!(result, Value::Type(CelType::Type));
+        assert_eq!(result, Value::Bool(false));
+
+        // type(type(1)) == 'string'
+        let prog = Program::compile("type(type(1)) == 'string'").unwrap();
+        let result = prog.execute(&ctx).unwrap();
+        assert_eq!(result, Value::Bool(true));
 
         // type(type(1)) == type(type(2))
         let prog = Program::compile("type(type(1)) == type(type(2))").unwrap();

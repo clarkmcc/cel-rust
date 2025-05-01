@@ -12,7 +12,33 @@ type Result<T> = std::result::Result<T, ExecutionError>;
 
 /// Returns the CEL type of the argument as a first-class value.
 pub fn type_fn(_ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
-    Ok(Value::Type(this.as_cel_type()))
+    match this {
+        Value::Type(_) => Ok(Value::String("type".to_string().into())),
+        Value::Null => Ok(Value::String("null".to_string().into())),
+        Value::Bool(_) => Ok(Value::String("bool".to_string().into())),
+        Value::Int(_) => Ok(Value::String("int".to_string().into())),
+        Value::UInt(_) => Ok(Value::String("uint".to_string().into())),
+        Value::Float(_) => Ok(Value::String("float".to_string().into())),
+        Value::String(_) => Ok(Value::String("string".to_string().into())),
+        Value::Bytes(_) => Ok(Value::String("bytes".to_string().into())),
+        Value::List(_) => Ok(Value::String("list".to_string().into())),
+        Value::Map(_) => Ok(Value::String("map".to_string().into())),
+        #[cfg(feature = "chrono")]
+        Value::Timestamp(_) => Ok(Value::String("timestamp".to_string().into())),
+        #[cfg(feature = "chrono")]
+        Value::Duration(_) => Ok(Value::String("duration".to_string().into())),
+        Value::Function(name, _) => {
+            // Special case for type identifiers in expressions like type(string)
+            let type_str = name.as_str();
+            match type_str {
+                "string" | "int" | "uint" | "bool" | "bytes" | "list" | "map" | "null" | "type"
+                | "float" | "timestamp" | "duration" => {
+                    Ok(Value::String(type_str.to_string().into()))
+                }
+                _ => Ok(Value::String("function".to_string().into())),
+            }
+        }
+    }
 }
 
 /// `FunctionContext` is a context object passed to functions when they are called.

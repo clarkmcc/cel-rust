@@ -250,7 +250,7 @@ impl Display for ValueType {
 impl Value {
     pub fn type_of(&self) -> ValueType {
         match self {
-            Value::Type(_) => ValueType::Null, // or introduce ValueType::Type if desired
+            Value::Type(_) => ValueType::String, // Type values are represented as strings in CEL
             Value::List(_) => ValueType::List,
             Value::Map(_) => ValueType::Map,
             Value::Function(_, _) => ValueType::Function,
@@ -265,27 +265,6 @@ impl Value {
             #[cfg(feature = "chrono")]
             Value::Timestamp(_) => ValueType::Timestamp,
             Value::Null => ValueType::Null,
-        }
-    }
-
-    /// Returns the CEL type of this value as a CelType (for type(x))
-    pub fn as_cel_type(&self) -> CelType {
-        match self {
-            Value::Type(_) => CelType::Type,
-            Value::Int(_) => CelType::Int,
-            Value::UInt(_) => CelType::UInt,
-            Value::Float(_) => CelType::Float,
-            Value::String(_) => CelType::String,
-            Value::Bytes(_) => CelType::Bytes,
-            Value::Bool(_) => CelType::Bool,
-            Value::List(_) => CelType::List,
-            Value::Map(_) => CelType::Map,
-            Value::Function(_, _) => CelType::Function,
-            #[cfg(feature = "chrono")]
-            Value::Duration(_) => CelType::Duration,
-            #[cfg(feature = "chrono")]
-            Value::Timestamp(_) => CelType::Timestamp,
-            Value::Null => CelType::Null,
         }
     }
 
