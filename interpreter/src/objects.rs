@@ -153,46 +153,9 @@ impl TryIntoValue for Value {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CelType {
-    Int,
-    UInt,
-    Float,
-    String,
-    Bytes,
-    Bool,
-    List,
-    Map,
-    Function,
-    Duration,
-    Timestamp,
-    Null,
-    Type, // The type of types
-}
-
-impl std::fmt::Display for CelType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CelType::Int => write!(f, "int"),
-            CelType::UInt => write!(f, "uint"),
-            CelType::Float => write!(f, "float"),
-            CelType::String => write!(f, "string"),
-            CelType::Bytes => write!(f, "bytes"),
-            CelType::Bool => write!(f, "bool"),
-            CelType::List => write!(f, "list"),
-            CelType::Map => write!(f, "map"),
-            CelType::Function => write!(f, "function"),
-            CelType::Duration => write!(f, "duration"),
-            CelType::Timestamp => write!(f, "timestamp"),
-            CelType::Null => write!(f, "null"),
-            CelType::Type => write!(f, "type"),
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum Value {
-    Type(CelType),
+    Type(Arc<String>),
     List(Arc<Vec<Value>>),
     Map(Map),
 

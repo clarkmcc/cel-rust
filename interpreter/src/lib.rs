@@ -177,11 +177,10 @@ impl TryFrom<&str> for Program {
 #[cfg(test)]
 mod tests {
     use crate::context::Context;
-    use crate::objects::{CelType, ResolveResult, Value};
+    use crate::objects::{ResolveResult, Value};
     use crate::{ExecutionError, Program};
     use std::collections::HashMap;
     use std::convert::TryInto;
-    use std::sync::Arc;
 
     /// Tests the provided script and returns the result. An optional context can be provided.
     pub(crate) fn test_script(script: &str, ctx: Option<Context>) -> ResolveResult {
