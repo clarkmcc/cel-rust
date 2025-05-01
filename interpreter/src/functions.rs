@@ -761,6 +761,28 @@ mod tests {
                 "type equality with string",
                 "type(type(1)) == type(type('foo'))",
             ),
+            ("type(1) equals 'int'", "type(1) == 'int'"),
+            ("type('a') returns string", "type('a') == 'string'"),
+            ("type(true) returns bool", "type(true) == 'bool'"),
+            ("type(1) not equal to type('a')", "type(1) != type('a')"),
+            ("type(type(1)) equals 'string'", "type(type(1)) == 'string'"),
+            (
+                "type(type(1)) equals type(type(2))",
+                "type(type(1)) == type(type(2))",
+            ),
+            (
+                "type(type(1)) equals type(type('a'))",
+                "type(type(1)) == type(type('a'))",
+            ),
+            (
+                "type(type(1)) equals type(string)",
+                "type(type(1)) == type(string)",
+            ),
+            // NOT EQUALS
+            (
+                "type(type(1)) not equals type('a')",
+                "type(type(1)) != type('a')",
+            ),
         ]
         .iter()
         .for_each(|test| {
