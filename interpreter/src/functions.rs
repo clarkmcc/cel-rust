@@ -15,7 +15,6 @@ pub fn type_fn(_ftx: &FunctionContext, This(this): This<Value>) -> Result<Value>
     Ok(Value::Type(this.as_cel_type()))
 }
 
-
 /// `FunctionContext` is a context object passed to functions when they are called.
 ///
 /// It contains references to the target object (if the function is called as
@@ -714,6 +713,40 @@ mod tests {
             ctx.add_variable_from_value("foo", std::collections::HashMap::from([("bar", 1)]));
             assert_eq!(test_script(script, Some(ctx)), Ok(true.into()), "{}", name);
         }
+    }
+
+    #[test]
+    fn test_type() {
+        [
+            ("type of int", "type(1) == type(2)"),
+            ("type of uint", "type(1u) == type(2u)"),
+            ("type of float", "type(1.0) == type(2.0)"),
+            ("type of string", "type('foo') == type('bar')"),
+            ("type of bytes", "type(b'foo') == type(b'bar')"),
+            ("type of bool", "type(true) == type(false)"),
+            ("type of list", "type([1, 2]) == type([3, 4])"),
+            ("type of map", "type({'a': 1}) == type({'b': 2})"),
+            ("type of null", "type(null) == type(null)"),
+            ("type equality", "type(1) == type(1)"),
+            ("type inequality", "type(1) != type('foo')"),
+            ("type of type", "type(type(1)) == type(type('foo'))"),
+            ("type function with variable", "type(foo) == type(1)"),
+            (
+                "type equality with string",
+                "type(type(1)) == type(type('foo'))",
+            ),
+        ]
+        .iter()
+        .for_each(|test| {
+            let mut ctx = Context::default();
+            ctx.add_variable_from_value("foo", 42);
+            assert_eq!(
+                test_script(test.1, Some(ctx)),
+                Ok(true.into()),
+                "{}",
+                test.0
+            );
+        });
     }
 
     #[test]

@@ -190,7 +190,6 @@ impl std::fmt::Display for CelType {
     }
 }
 
-
 #[derive(Debug, Clone)]
 pub enum Value {
     Type(CelType),
