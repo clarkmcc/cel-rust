@@ -181,6 +181,7 @@ mod tests {
     use crate::{ExecutionError, Program};
     use std::collections::HashMap;
     use std::convert::TryInto;
+    use std::sync::Arc;
 
     /// Tests the provided script and returns the result. An optional context can be provided.
     pub(crate) fn test_script(script: &str, ctx: Option<Context>) -> ResolveResult {
@@ -270,38 +271,39 @@ mod tests {
     #[test]
     fn test_type_fn_basic() {
         let ctx = Context::default();
-        // int
+
+        // type(1) == int
         let prog = Program::compile("type(1)").unwrap();
         let result = prog.execute(&ctx).unwrap();
         assert_eq!(result, Value::Type(CelType::Int));
-        // string
-        let prog = Program::compile("type('a')").unwrap();
-        let result = prog.execute(&ctx).unwrap();
-        assert_eq!(result, Value::Type(CelType::String));
-        // bool
-        let prog = Program::compile("type(true)").unwrap();
-        let result = prog.execute(&ctx).unwrap();
-        assert_eq!(result, Value::Type(CelType::Bool));
-    }
 
-    #[test]
-    fn test_type_fn_type_of_type() {
-        let ctx = Context::default();
-        let prog = Program::compile("type(type(1))").unwrap();
-        let result = prog.execute(&ctx).unwrap();
-        assert_eq!(result, Value::Type(CelType::Type));
-    }
-
-    #[test]
-    fn test_type_fn_equality() {
-        let ctx = Context::default();
-        // Test that type(1) returns a value that's not equal to a string 'int'
+        // type(1) != 'int'
         let prog = Program::compile("type(1) != 'int'").unwrap();
         let result = prog.execute(&ctx).unwrap();
         assert_eq!(result, Value::Bool(true));
 
-        // Test that type(type(1)) equals type(type(2))
+        // type('a') == string
+        let prog = Program::compile("type('a')").unwrap();
+        let result = prog.execute(&ctx).unwrap();
+        assert_eq!(result, Value::Type(CelType::String));
+
+        // type(true) == bool
+        let prog = Program::compile("type(true)").unwrap();
+        let result = prog.execute(&ctx).unwrap();
+        assert_eq!(result, Value::Type(CelType::Bool));
+
+        // type(type(1)) == type
+        let prog = Program::compile("type(type(1))").unwrap();
+        let result = prog.execute(&ctx).unwrap();
+        assert_eq!(result, Value::Type(CelType::Type));
+
+        // type(type(1)) == type(type(2))
         let prog = Program::compile("type(type(1)) == type(type(2))").unwrap();
+        let result = prog.execute(&ctx).unwrap();
+        assert_eq!(result, Value::Bool(true));
+
+        // type(type(1)) == type(type("a"))
+        let prog = Program::compile("type(type(1)) == type(type('a'))").unwrap();
         let result = prog.execute(&ctx).unwrap();
         assert_eq!(result, Value::Bool(true));
     }
