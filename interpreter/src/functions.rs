@@ -679,7 +679,9 @@ pub fn min(Arguments(args): Arguments) -> Result<Value> {
 #[cfg(test)]
 mod tests {
     use crate::context::Context;
+    use crate::objects::CelType;
     use crate::tests::test_script;
+    use crate::{Program, Value};
 
     fn assert_script(input: &(&str, &str)) {
         assert_eq!(test_script(input.1, None), Ok(true.into()), "{}", input.0);
@@ -747,6 +749,45 @@ mod tests {
                 test.0
             );
         });
+    }
+
+    #[test]
+    fn test_type_fn_basic() {
+        let ctx = Context::default();
+        // int
+        let prog = Program::compile("type(1)").unwrap();
+        let result = prog.execute(&ctx).unwrap();
+        assert_eq!(result, Value::Type(CelType::Int));
+        // string
+        let prog = Program::compile("type('a')").unwrap();
+        let result = prog.execute(&ctx).unwrap();
+        assert_eq!(result, Value::Type(CelType::String));
+        // bool
+        let prog = Program::compile("type(true)").unwrap();
+        let result = prog.execute(&ctx).unwrap();
+        assert_eq!(result, Value::Type(CelType::Bool));
+    }
+
+    #[test]
+    fn test_type_fn_type_of_type() {
+        let ctx = Context::default();
+        let prog = Program::compile("type(type(1))").unwrap();
+        let result = prog.execute(&ctx).unwrap();
+        assert_eq!(result, Value::Type(CelType::Type));
+    }
+
+    #[test]
+    fn test_type_fn_equality() {
+        let ctx = Context::default();
+        // Test that type(1) returns a value that's not equal to a string 'int'
+        let prog = Program::compile("type(1) != 'int'").unwrap();
+        let result = prog.execute(&ctx).unwrap();
+        assert_eq!(result, Value::Bool(true));
+
+        // Test that type(type(1)) equals type(type(2))
+        let prog = Program::compile("type(type(1)) == type(type(2))").unwrap();
+        let result = prog.execute(&ctx).unwrap();
+        assert_eq!(result, Value::Bool(true));
     }
 
     #[test]
