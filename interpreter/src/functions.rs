@@ -841,7 +841,7 @@ mod tests {
             ),
             ("type(b'foo') equals 'bytes'", "type(b'foo') == 'bytes'"),
             ("type(1u) equals 'uint'", "type(1u) == 'uint'"),
-        }
+        ]
         .iter()
         .for_each(|test| {
             let mut ctx = Context::default();
