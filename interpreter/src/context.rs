@@ -183,6 +183,7 @@ impl Default for Context<'_> {
         ctx.add_function("exists_one", functions::exists_one);
         ctx.add_function("int", functions::int);
         ctx.add_function("uint", functions::uint);
+        ctx.add_function("type", functions::type_fn);
 
         #[cfg(feature = "regex")]
         ctx.add_function("matches", functions::matches);

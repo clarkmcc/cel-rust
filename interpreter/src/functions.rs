@@ -10,6 +10,12 @@ use std::sync::Arc;
 
 type Result<T> = std::result::Result<T, ExecutionError>;
 
+/// Returns the CEL type of the argument as a first-class value.
+pub fn type_fn(_ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
+    Ok(Value::Type(this.as_cel_type()))
+}
+
+
 /// `FunctionContext` is a context object passed to functions when they are called.
 ///
 /// It contains references to the target object (if the function is called as

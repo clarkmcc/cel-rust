@@ -153,8 +153,47 @@ impl TryIntoValue for Value {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CelType {
+    Int,
+    UInt,
+    Float,
+    String,
+    Bytes,
+    Bool,
+    List,
+    Map,
+    Function,
+    Duration,
+    Timestamp,
+    Null,
+    Type, // The type of types
+}
+
+impl std::fmt::Display for CelType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CelType::Int => write!(f, "int"),
+            CelType::UInt => write!(f, "uint"),
+            CelType::Float => write!(f, "float"),
+            CelType::String => write!(f, "string"),
+            CelType::Bytes => write!(f, "bytes"),
+            CelType::Bool => write!(f, "bool"),
+            CelType::List => write!(f, "list"),
+            CelType::Map => write!(f, "map"),
+            CelType::Function => write!(f, "function"),
+            CelType::Duration => write!(f, "duration"),
+            CelType::Timestamp => write!(f, "timestamp"),
+            CelType::Null => write!(f, "null"),
+            CelType::Type => write!(f, "type"),
+        }
+    }
+}
+
+
 #[derive(Debug, Clone)]
 pub enum Value {
+    Type(CelType),
     List(Arc<Vec<Value>>),
     Map(Map),
 
@@ -212,6 +251,7 @@ impl Display for ValueType {
 impl Value {
     pub fn type_of(&self) -> ValueType {
         match self {
+            Value::Type(_) => ValueType::Null, // or introduce ValueType::Type if desired
             Value::List(_) => ValueType::List,
             Value::Map(_) => ValueType::Map,
             Value::Function(_, _) => ValueType::Function,
@@ -226,6 +266,27 @@ impl Value {
             #[cfg(feature = "chrono")]
             Value::Timestamp(_) => ValueType::Timestamp,
             Value::Null => ValueType::Null,
+        }
+    }
+
+    /// Returns the CEL type of this value as a CelType (for type(x))
+    pub fn as_cel_type(&self) -> CelType {
+        match self {
+            Value::Type(_) => CelType::Type,
+            Value::Int(_) => CelType::Int,
+            Value::UInt(_) => CelType::UInt,
+            Value::Float(_) => CelType::Float,
+            Value::String(_) => CelType::String,
+            Value::Bytes(_) => CelType::Bytes,
+            Value::Bool(_) => CelType::Bool,
+            Value::List(_) => CelType::List,
+            Value::Map(_) => CelType::Map,
+            Value::Function(_, _) => CelType::Function,
+            #[cfg(feature = "chrono")]
+            Value::Duration(_) => CelType::Duration,
+            #[cfg(feature = "chrono")]
+            Value::Timestamp(_) => CelType::Timestamp,
+            Value::Null => CelType::Null,
         }
     }
 
@@ -246,6 +307,8 @@ impl From<&Value> for Value {
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
+            (Value::Type(a), Value::Type(b)) => a == b,
+            // Existing matches below...
             (Value::Map(a), Value::Map(b)) => a == b,
             (Value::List(a), Value::List(b)) => a == b,
             (Value::Function(a1, a2), Value::Function(b1, b2)) => a1 == b1 && a2 == b2,
@@ -641,6 +704,7 @@ impl Value {
     #[inline(always)]
     fn to_bool(&self) -> bool {
         match self {
+            Value::Type(_) => true, // Types are always truthy
             Value::List(v) => !v.is_empty(),
             Value::Map(v) => !v.map.is_empty(),
             Value::Int(v) => *v != 0,
