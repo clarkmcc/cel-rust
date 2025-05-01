@@ -1,25 +1,60 @@
 use crate::context::Context;
 use crate::magic::{Arguments, Identifier, This};
-use crate::objects::{Value, ValueType};
+use crate::objects::{CelType, ValueType};
 use crate::resolvers::{Argument, Resolver};
-use crate::ExecutionError;
+use crate::{ExecutionError, Value};
 use cel_parser::Expression;
 use std::cmp::Ordering;
 use std::convert::TryInto;
+use std::result::Result as StdResult;
 use std::sync::Arc;
 
-type Result<T> = std::result::Result<T, ExecutionError>;
+type Result<T> = StdResult<T, ExecutionError>;
 
 /// Returns the CEL type of the argument as a first-class value.
-pub fn type_fn(_ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
+pub fn type_fn(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
+    // Special case handling for type(string), type(int), etc. when passed as bare identifiers
+    // This handles the case where we call type() with a type name as a bare identifier
+    if let Value::Function(name, _) = &this {
+        // Check if this is not truly a function call but a bare identifier of a type name
+        if let Some(cel_type) = CelType::from_str(name.as_str()) {
+            // For bare type identifiers, return the type as a Type value
+            return Ok(Value::Type(CelType::Type));
+        }
+    }
+
+    // Check argument expressions to handle direct type identifiers
+    // This is a fallback for when the argument expression failed to resolve
+    if let Some(expr) = ftx.args.get(ftx.arg_idx.saturating_sub(1)) {
+        if let Expression::Ident(name) = expr {
+            if let Some(_) = CelType::from_str(name.as_str()) {
+                // For bare type identifiers, return the type as a Type value
+                return Ok(Value::Type(CelType::Type));
+            }
+        }
+    }
+
     match this {
-        Value::Type(_) => Ok(Value::String("type".to_string().into())),
+        // When type() is called on a type (like type(int)), it should return "type" as a Type value
+        Value::Type(_) => Ok(Value::Type(CelType::Type)),
+
+        // Special case for strings that are type names
+        Value::String(s) => {
+            if let Some(_) = CelType::from_str(s.as_str()) {
+                // When the string is a type name, return "type" as a Type value
+                // This matches the behavior in cel-go for type("string")
+                Ok(Value::Type(CelType::Type))
+            } else {
+                Ok(Value::String("string".to_string().into()))
+            }
+        }
+
+        // For other values, return their type as a string
         Value::Null => Ok(Value::String("null".to_string().into())),
         Value::Bool(_) => Ok(Value::String("bool".to_string().into())),
         Value::Int(_) => Ok(Value::String("int".to_string().into())),
         Value::UInt(_) => Ok(Value::String("uint".to_string().into())),
         Value::Float(_) => Ok(Value::String("float".to_string().into())),
-        Value::String(_) => Ok(Value::String("string".to_string().into())),
         Value::Bytes(_) => Ok(Value::String("bytes".to_string().into())),
         Value::List(_) => Ok(Value::String("list".to_string().into())),
         Value::Map(_) => Ok(Value::String("map".to_string().into())),
@@ -29,13 +64,12 @@ pub fn type_fn(_ftx: &FunctionContext, This(this): This<Value>) -> Result<Value>
         Value::Duration(_) => Ok(Value::String("duration".to_string().into())),
         Value::Function(name, _) => {
             // Special case for type identifiers in expressions like type(string)
-            let type_str = name.as_str();
-            match type_str {
-                "string" | "int" | "uint" | "bool" | "bytes" | "list" | "map" | "null" | "type"
-                | "float" | "timestamp" | "duration" => {
-                    Ok(Value::String(type_str.to_string().into()))
-                }
-                _ => Ok(Value::String("function".to_string().into())),
+            if let Some(_) = CelType::from_str(name.as_str()) {
+                // When the argument is a type identifier, return "type" as a Type value
+                // This matches the behavior in cel-go for type(string)
+                Ok(Value::Type(CelType::Type))
+            } else {
+                Ok(Value::String("function".to_string().into()))
             }
         }
     }
@@ -761,11 +795,18 @@ mod tests {
                 "type equality with string",
                 "type(type(1)) == type(type('foo'))",
             ),
-            ("type(1) equals 'int'", "type(1) == 'int'"),
-            ("type('a') returns string", "type('a') == 'string'"),
-            ("type(true) returns bool", "type(true) == 'bool'"),
-            ("type(1) not equal to type('a')", "type(1) != type('a')"),
-            ("type(type(1)) equals 'string'", "type(type(1)) == 'string'"),
+            (
+                "type(type(true)) equals type(type('foo'))",
+                "type(type(true)) == type(type('foo'))",
+            ),
+            (
+                "type(type(3.3)) equals type(type(true))",
+                "type(type(3.3)) == type(type(true))",
+            ),
+            (
+                "type(type(3)) equals type(type('foo'))",
+                "type(type(3)) == type(type('foo'))",
+            ),
             (
                 "type(type(1)) equals type(type(2))",
                 "type(type(1)) == type(type(2))",
@@ -783,7 +824,24 @@ mod tests {
                 "type(type(1)) not equals type('a')",
                 "type(type(1)) != type('a')",
             ),
-        ]
+            ("type(1) not equal to type('a')", "type(1) != type('a')"),
+            ("type(1) not equal to type(3.2)", "type(1) != type(3.2)"),
+            ("type(1) not equal to type(true)", "type(1) != type(true)"),
+            ("type(1) not equal to type(null)", "type(1) != type(null)"),
+            // RAW
+            ("type(1) equals 'int'", "type(1) == 'int'"),
+            ("type('a') equals 'string'", "type('a') == 'string'"),
+            ("type(true) equals 'bool'", "type(true) == 'bool'"),
+            ("type(null) equals 'null'", "type(null) == 'null'"),
+            ("type(1.0) equals 'float'", "type(1.0) == 'float'"),
+            ("type([1, 2, 3]) equals 'list'", "type([1, 2, 3]) == 'list'"),
+            (
+                "type({'a': 1, 'b': 2}) equals 'map'",
+                "type({'a': 1, 'b': 2}) == 'map'",
+            ),
+            ("type(b'foo') equals 'bytes'", "type(b'foo') == 'bytes'"),
+            ("type(1u) equals 'uint'", "type(1u) == 'uint'"),
+        }
         .iter()
         .for_each(|test| {
             let mut ctx = Context::default();
