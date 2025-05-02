@@ -862,6 +862,10 @@ mod tests {
             ("type(1) not equal to type(3.2)", "type(1) != type(3.2)"),
             ("type(1) not equal to type(true)", "type(1) != type(true)"),
             ("type(1) not equal to type(null)", "type(1) != type(null)"),
+            (
+                "type(string) not equal to type('foobar')",
+                "type(string) != type('foobar')",
+            ),
             // RAW
             ("type(1) equals 'int'", "type(1) == 'int'"),
             ("type('a') equals 'string'", "type('a') == 'string'"),
