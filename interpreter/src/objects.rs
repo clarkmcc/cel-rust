@@ -713,13 +713,6 @@ impl Value {
                         .unwrap_or(Value::Null)
                         .into(),
                     (Value::Map(_), index) => Err(ExecutionError::UnsupportedMapIndex(index)),
-                    // Only throw error for List when index is not an Int type but a valid index type
-                    // Out-of-bounds integer accesses are already handled above
-                    (Value::List(_), _index) => {
-                        // For the test out_of_bound_list_access, we need to return Null
-                        // to maintain backward compatibility with the test
-                        Ok(Value::Null)
-                    }
                     (value, index) => Err(ExecutionError::UnsupportedIndex(value, index)),
                 }
             }
