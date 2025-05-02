@@ -191,8 +191,8 @@ impl CelType {
         }
     }
 
-    /// Tries to parse a string into a CelType
-    pub fn from_str(s: &str) -> Option<Self> {
+    /// Internal helper to map a string to a CelType
+    fn string_to_celtype(s: &str) -> Option<Self> {
         match s {
             "string" => Some(CelType::String),
             "int" => Some(CelType::Int),
@@ -209,6 +209,20 @@ impl CelType {
             "function" => Some(CelType::Function),
             _ => None,
         }
+    }
+
+    /// Tries to parse a string into a CelType
+    /// This avoids ambiguity with the FromStr trait implementation
+    pub fn try_from_string(s: &str) -> Option<Self> {
+        Self::string_to_celtype(s)
+    }
+}
+
+impl std::str::FromStr for CelType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        CelType::string_to_celtype(s).ok_or_else(|| format!("Unknown CEL type: {}", s))
     }
 }
 
@@ -615,7 +629,7 @@ impl Value {
                     var_result
                 } else {
                     // Otherwise, check if it's a type identifier
-                    if let Some(cel_type) = CelType::from_str(name.as_str()) {
+                    if let Some(cel_type) = CelType::try_from_string(name.as_str()) {
                         // Return the type identifier as a Type value
                         Ok(Value::Type(cel_type))
                     } else {
@@ -701,7 +715,7 @@ impl Value {
                     (Value::Map(_), index) => Err(ExecutionError::UnsupportedMapIndex(index)),
                     // Only throw error for List when index is not an Int type but a valid index type
                     // Out-of-bounds integer accesses are already handled above
-                    (Value::List(_), index) => {
+                    (Value::List(_), _index) => {
                         // For the test out_of_bound_list_access, we need to return Null
                         // to maintain backward compatibility with the test
                         Ok(Value::Null)

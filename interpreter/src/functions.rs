@@ -12,44 +12,34 @@ use std::sync::Arc;
 type Result<T> = StdResult<T, ExecutionError>;
 
 /// Returns the CEL type of the argument as a first-class value.
-pub fn type_fn(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
-    // Special case handling for type(string), type(int), etc. when passed as bare identifiers
-    // This handles the case where we call type() with a type name as a bare identifier
-    if let Value::Function(name, _) = &this {
-        // Check if this is not truly a function call but a bare identifier of a type name
-        if let Some(cel_type) = CelType::from_str(name.as_str()) {
-            // For bare type identifiers, return the type as a Type value
-            return Ok(Value::Type(CelType::Type));
-        }
-    }
-
-    // Check argument expressions to handle direct type identifiers
-    // This is a fallback for when the argument expression failed to resolve
-    if let Some(expr) = ftx.args.get(ftx.arg_idx.saturating_sub(1)) {
-        if let Expression::Ident(name) = expr {
-            if let Some(_) = CelType::from_str(name.as_str()) {
-                // For bare type identifiers, return the type as a Type value
-                return Ok(Value::Type(CelType::Type));
-            }
-        }
-    }
-
+///
+/// This function implements the standard CEL `type()` function, which returns
+/// the type of its argument in accordance with the CEL specification:
+///
+/// - When called on a type itself (like `type(int)` or `type(string)`), this returns the
+//    "type" type.
+/// - For other values, returns the type name as a string (e.g., `type(1)` returns "int")
+///
+/// This implementation also handles special cases for proper evaluation of expressions
+/// like `type(type(1)) == type(string)`.
+pub fn type_fn(_ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
+    // For the value itself, we have two distinct cases:
+    // 1. If the value is a Type, we return the type of a type (which is "type" as a Type value)
+    // 2. If the value is a string, we need to check if it represents a type name (e.g., `type(string)`)
+    // 3. For all other values, we return their type name as a String value
     match this {
         // When type() is called on a type (like type(int)), it should return "type" as a Type value
         Value::Type(_) => Ok(Value::Type(CelType::Type)),
-
-        // Special case for strings that are type names
+        // For strings, we need to check if they represent a type name
         Value::String(s) => {
-            if let Some(_) = CelType::from_str(s.as_str()) {
-                // When the string is a type name, return "type" as a Type value
-                // This matches the behavior in cel-go for type("string")
+            // If the string value is a type name (like "string", "int", etc.),
+            // we should return the Type type for consistency with type(string), type(int), etc.
+            if CelType::try_from_string(s.as_str()).is_some() {
                 Ok(Value::Type(CelType::Type))
             } else {
                 Ok(Value::String("string".to_string().into()))
             }
         }
-
-        // For other values, return their type as a string
         Value::Null => Ok(Value::String("null".to_string().into())),
         Value::Bool(_) => Ok(Value::String("bool".to_string().into())),
         Value::Int(_) => Ok(Value::String("int".to_string().into())),
@@ -64,7 +54,7 @@ pub fn type_fn(ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> 
         Value::Duration(_) => Ok(Value::String("duration".to_string().into())),
         Value::Function(name, _) => {
             // Special case for type identifiers in expressions like type(string)
-            if let Some(_) = CelType::from_str(name.as_str()) {
+            if CelType::try_from_string(name.as_str()).is_some() {
                 // When the argument is a type identifier, return "type" as a Type value
                 // This matches the behavior in cel-go for type(string)
                 Ok(Value::Type(CelType::Type))
@@ -776,6 +766,38 @@ mod tests {
     }
 
     #[test]
+    fn test_type_property_access() {
+        // Test accessing a property named "type" from a context object
+        // This verifies that accessing a field named "type" works correctly
+        let mut ctx = Context::default();
+        ctx.add_variable_from_value(
+            "account",
+            std::collections::HashMap::from([("type", "savings")]),
+        );
+
+        // Test accessing the "type" property directly
+        assert_eq!(
+            test_script("account.type == 'savings'", Some(ctx)),
+            Ok(true.into()),
+            "access type property"
+        );
+
+        // Create a new context for the second test
+        let mut ctx2 = Context::default();
+        ctx2.add_variable_from_value(
+            "account",
+            std::collections::HashMap::from([("type", "savings")]),
+        );
+
+        // Test the type of the "type" property
+        assert_eq!(
+            test_script("type(account.type) == 'string'", Some(ctx2)),
+            Ok(true.into()),
+            "type of type property"
+        );
+    }
+
+    #[test]
     fn test_type() {
         [
             ("type of int", "type(1) == type(2)"),
@@ -789,8 +811,28 @@ mod tests {
             ("type of null", "type(null) == type(null)"),
             ("type equality", "type(1) == type(1)"),
             ("type inequality", "type(1) != type('foo')"),
-            ("type of type", "type(type(1)) == type(type('foo'))"),
             ("type function with variable", "type(foo) == type(1)"),
+            // TYPE OF TYPE
+            (
+                "string type equals type of type of int literal",
+                "type(string) == type(type(1))",
+            ),
+            (
+                "string type equals type of type of string literal",
+                "type(string) == type(type('foobar'))",
+            ),
+            (
+                "int type equals type of type of int literal",
+                "type(int) == type(type(3))",
+            ),
+            (
+                "string type equals type of type of int literal",
+                "type(type(1)) == type(string)",
+            ),
+            (
+                "bool type equals type of type of bool literal",
+                "type(bool) == type(type(true))",
+            ),
             (
                 "type equality with string",
                 "type(type(1)) == type(type('foo'))",
@@ -804,20 +846,12 @@ mod tests {
                 "type(type(3.3)) == type(type(true))",
             ),
             (
-                "type(type(3)) equals type(type('foo'))",
-                "type(type(3)) == type(type('foo'))",
-            ),
-            (
                 "type(type(1)) equals type(type(2))",
                 "type(type(1)) == type(type(2))",
             ),
             (
                 "type(type(1)) equals type(type('a'))",
                 "type(type(1)) == type(type('a'))",
-            ),
-            (
-                "type(type(1)) equals type(string)",
-                "type(type(1)) == type(string)",
             ),
             // NOT EQUALS
             (
