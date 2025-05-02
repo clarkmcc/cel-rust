@@ -328,9 +328,6 @@ impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Value::Type(a), Value::Type(b)) => a == b,
-            // Allow comparison between Type and String when their content matches (per CEL spec)
-            (Value::Type(a), Value::String(b)) => b.as_str() == a.as_str(),
-            (Value::String(a), Value::Type(b)) => a.as_str() == b.as_str(),
             // Existing matches below...
             (Value::Map(a), Value::Map(b)) => a == b,
             (Value::List(a), Value::List(b)) => a == b,
