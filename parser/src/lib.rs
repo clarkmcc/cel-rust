@@ -47,7 +47,7 @@ mod tests {
         RelationOp, SpanExtension, Spanned, UnaryOp,
     };
 
-    fn parse(input: &str) -> Spanned<Expression> {
+    pub fn parse(input: &str) -> Spanned<Expression> {
         crate::parse(input).unwrap_or_else(|e| panic!("{}", e))
     }
 
@@ -581,6 +581,15 @@ mod tests {
         assert_eq!(err.span.end.as_ref().unwrap().line, 1);
         assert_eq!(err.span.end.as_ref().unwrap().column, 31);
     }
+}
+
+#[cfg(test)]
+#[cfg(feature = "preserve_spans")]
+mod span_tests {
+
+    use crate::{Expression, Member};
+
+    use super::tests::parse;
 
     macro_rules! assert_span {
         ($a:expr, $f:tt .. $t:tt) => {
@@ -600,6 +609,12 @@ mod tests {
                 )
             }
         };
+    }
+
+    #[test]
+    fn spanned_atoms() {
+        assert_span!(parse("543"), 0..3);
+        assert_span!(parse("  543  "), 2..5);
     }
 
     #[test]
@@ -630,5 +645,61 @@ mod tests {
                 assert_span!(e, 11..12);
             }
         );
+    }
+
+    #[test]
+    fn spanned_ident() {
+        let ident = parse("my_ident");
+        assert_span!(ident, 0..8);
+        assert_matches!(ident.inner, Expression::Ident(my_ident) => {
+            assert_span!(my_ident, 0..8);
+        })
+    }
+
+    #[test]
+    fn spanned_linebreak() {
+        assert_span!(parse("5\n+\n4"), 0..5);
+    }
+
+    #[test]
+    fn spanned_members_attribute() {
+        let fields = parse("foo.bar");
+        assert_span!(fields, 0..7);
+        assert_matches!(fields.inner, Expression::Member(foo, bar) => {
+            assert_span!(foo, 0..3);
+            assert_matches!(*bar, Member::Attribute(f) => {
+                assert_span!(f, 4..7);
+            });
+        })
+    }
+
+    #[test]
+    fn spanned_members_index() {
+        let fields = parse("foo[0]");
+        assert_span!(fields, 0..6);
+        assert_matches!(fields.inner, Expression::Member(foo, bar) => {
+            assert_span!(foo, 0..3);
+            assert_matches!(*bar, Member::Index(f) => {
+                assert_span!(f, 4..5);
+            });
+        })
+    }
+
+    #[test]
+    fn spanned_members_members() {
+        let fields = parse("Class {foo: 5, bar: false}");
+        assert_span!(fields, 0..26);
+        assert_matches!(fields.inner, Expression::Member(class, bar) => {
+            assert_span!(class, 0..5);
+            assert_matches!(*bar, Member::Fields(fields) => {
+                let (foo, five) = &fields[0];
+                assert_span!(foo, 7..10);
+                assert_span!(five, 12..13);
+
+                let (bar, fals) = &fields[1];
+                assert_span!(bar, 15..18);
+                assert_span!(fals, 20..25);
+            });
+        })
     }
 }
