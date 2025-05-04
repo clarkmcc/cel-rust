@@ -71,6 +71,9 @@ impl<T: Display> Display for Spanned<T> {
 }
 
 pub trait SpanExtension: Sized {
+    /// Create a new [Spanned<T>] without any span information
+    /// e.g. for synthetic variables that do not originate from
+    /// actual source code.
     fn unspanned(self) -> Spanned<Self> {
         Spanned {
             inner: self,
@@ -80,6 +83,9 @@ pub trait SpanExtension: Sized {
     }
 
     #[allow(unused)]
+    /// Create a new [Spanned<T>] with a given span. If the
+    /// `preserve_spans` feature is turned off, the span is
+    ///  just dropped
     fn spanned(self, span: Range<usize>) -> Spanned<Self> {
         Spanned {
             inner: self,
