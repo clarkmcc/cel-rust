@@ -618,7 +618,7 @@ mod span_tests {
     }
 
     #[test]
-    fn spanned_expressions() {
+    fn spanned_arithmatic() {
         assert_span!(parse("5 + 4"), 0..5);
 
         assert_matches!(parse("5 + 4").inner, Expression::Arithmetic(five, plus, four) => {
@@ -638,7 +638,15 @@ mod span_tests {
             assert_span!(plus, 2..3);
             assert_span!(four, 8..9);
         });
+    }
 
+    #[test]
+    fn spanned_relation() {
+        assert_span!(parse("5 == 4"), 0..6);
+    }
+
+    #[test]
+    fn spanned_ternary() {
         assert_matches!(parse("true ? 4 : 5").inner, Expression::Ternary(i, t, e) => {
                 assert_span!(i, 0..4);
                 assert_span!(t, 7..8);
@@ -653,6 +661,16 @@ mod span_tests {
         assert_span!(ident, 0..8);
         assert_matches!(ident.inner, Expression::Ident(my_ident) => {
             assert_span!(my_ident, 0..8);
+        })
+    }
+
+    #[test]
+    fn spanned_unary() {
+        let ident = parse("-my_ident");
+        assert_span!(ident, 0..9);
+        assert_matches!(ident.inner, Expression::Unary(op, target) => {
+            assert_span!(op, 0..1);
+            assert_span!(target, 1..9);
         })
     }
 
