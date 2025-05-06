@@ -3,7 +3,6 @@ use crate::resolvers::{AllArguments, Argument};
 use crate::{ExecutionError, FunctionContext, ResolveResult, Value};
 use cel_parser::Expression;
 use std::collections::HashMap;
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 impl_conversions!(
@@ -304,26 +303,21 @@ impl_handler!(C1, C2, C3, C4, C5, C6, C7, C8, C9);
 
 #[derive(Default)]
 pub struct FunctionRegistry {
-    functions: HashMap<String, Box<dyn Function>>,
+    functions: HashMap<String, Function>,
 }
 
 impl FunctionRegistry {
-    pub(crate) fn add<H, T>(&mut self, name: &str, handler: H)
+    pub(crate) fn add<F, T>(&mut self, name: &str, function: F)
     where
-        H: Handler<T> + 'static + Send + Sync,
+        F: IntoFunction<T> + 'static + Send + Sync,
         T: 'static,
     {
-        self.functions.insert(
-            name.to_string(),
-            Box::new(HandlerFunction {
-                handler,
-                into_callable: |h, ctx| Box::new(HandlerCallable::new(h, ctx)),
-            }),
-        );
+        self.functions
+            .insert(name.to_string(), function.into_function());
     }
 
-    pub(crate) fn get(&self, name: &str) -> Option<Box<dyn Function>> {
-        self.functions.get(name).map(|f| f.clone_box())
+    pub(crate) fn get(&self, name: &str) -> Option<&Function> {
+        self.functions.get(name)
     }
 
     pub(crate) fn has(&self, name: &str) -> bool {
@@ -331,73 +325,8 @@ impl FunctionRegistry {
     }
 }
 
-pub trait Function: Send + Sync {
-    fn clone_box(&self) -> Box<dyn Function>;
-    fn into_callable<'a>(self: Box<Self>, ctx: &'a mut FunctionContext) -> Box<dyn Callable + 'a>;
-    fn call_with_context(self: Box<Self>, ctx: &mut FunctionContext) -> ResolveResult;
-}
+pub type Function = Box<dyn Fn(&mut FunctionContext) -> ResolveResult + Send + Sync>;
 
-pub struct HandlerFunction<H: Clone + Send + Sync> {
-    pub handler: H,
-    pub into_callable: for<'a> fn(H, &'a mut FunctionContext) -> Box<dyn Callable + 'a>,
-}
-
-impl<H: Clone + Send + Sync> Clone for HandlerFunction<H> {
-    fn clone(&self) -> Self {
-        Self {
-            handler: self.handler.clone(),
-            into_callable: self.into_callable,
-        }
-    }
-}
-
-impl<H> Function for HandlerFunction<H>
-where
-    H: Clone + Send + Sync + 'static,
-{
-    fn clone_box(&self) -> Box<dyn Function> {
-        Box::new(self.clone())
-    }
-
-    fn into_callable<'a>(self: Box<Self>, ctx: &'a mut FunctionContext) -> Box<dyn Callable + 'a> {
-        (self.into_callable)(self.handler, ctx)
-    }
-
-    fn call_with_context(self: Box<Self>, ctx: &mut FunctionContext) -> ResolveResult {
-        self.into_callable(ctx).call()
-    }
-}
-
-// Callable and HandlerCallable
-pub trait Callable {
-    fn call(&mut self) -> ResolveResult;
-}
-
-pub struct HandlerCallable<'a, 'context, H, T> {
-    handler: H,
-    context: &'a mut FunctionContext<'context>,
-    _marker: PhantomData<fn() -> T>,
-}
-
-impl<'a, 'context, H, T> HandlerCallable<'a, 'context, H, T> {
-    pub fn new(handler: H, ctx: &'a mut FunctionContext<'context>) -> Self {
-        Self {
-            handler,
-            context: ctx,
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<H, T> Callable for HandlerCallable<'_, '_, H, T>
-where
-    H: Handler<T> + Clone + 'static,
-{
-    fn call(&mut self) -> ResolveResult {
-        self.handler.clone().call(self.context)
-    }
-}
-
-pub trait Handler<T>: Clone {
-    fn call(self, ctx: &mut FunctionContext) -> ResolveResult;
+pub trait IntoFunction<T> {
+    fn into_function(self) -> Function;
 }
