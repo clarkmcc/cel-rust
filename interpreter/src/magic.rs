@@ -312,10 +312,8 @@ impl FunctionRegistry {
         F: IntoFunction<T> + 'static + Send + Sync,
         T: 'static,
     {
-        self.functions.insert(
-            name.to_string(),
-            function.into_function(),
-        );
+        self.functions
+            .insert(name.to_string(), function.into_function());
     }
 
     pub(crate) fn get(&self, name: &str) -> Option<&Function> {
