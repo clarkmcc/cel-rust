@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2](https://github.com/clarkmcc/cel-rust/compare/cel-interpreter-v0.9.1...cel-interpreter-v0.9.2) - 2025-05-06
+
+### Other
+
+- simplify function binding magic as an IntoFunction trait ([#133](https://github.com/clarkmcc/cel-rust/pull/133))
+
 ## [0.9.1](https://github.com/clarkmcc/cel-rust/compare/cel-interpreter-v0.9.0...cel-interpreter-v0.9.1) - 2025-04-29
 
 ### Added
