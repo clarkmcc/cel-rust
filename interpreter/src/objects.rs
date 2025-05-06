@@ -619,20 +619,20 @@ impl Value {
                 }))
             }
             Expression::Ident(name) => {
-                // First check if this is a variable in the context
-                let var_result = ctx.get_variable(&***name);
-                if var_result.is_ok() {
-                    // If it's a variable, use that value
-                    var_result
-                } else {
-                    // Otherwise, check if it's a type identifier
-                    if let Some(cel_type) = CelType::try_from_string(name.as_str()) {
+                // Check if it's a type identifier
+                if let Some(cel_type) = CelType::try_from_string(name.as_str()) {
+                    // Check if a variable with the same name exists
+                    let var_result = ctx.get_variable(&***name);
+                    if var_result.is_ok() {
+                        // If it's also a variable, return an error
+                        Err(ExecutionError::OverlappingIdentifier(name.to_string()))
+                    } else {
                         // Return the type identifier as a Type value
                         Ok(Value::Type(cel_type))
-                    } else {
-                        // Pass through the original error
-                        var_result
                     }
+                } else {
+                    // Just a regular variable
+                    ctx.get_variable(&***name)
                 }
             }
             Expression::FunctionCall(name, target, args) => {
@@ -678,11 +678,17 @@ impl Value {
             Member::Index(idx) => {
                 let idx = Value::resolve(idx, ctx)?;
                 match (self, idx) {
-                    (Value::List(items), Value::Int(idx)) => items
-                        .get(idx as usize)
-                        .cloned()
-                        .unwrap_or(Value::Null)
-                        .into(),
+                    (Value::List(items), Value::Int(idx)) => {
+                        if idx < 0 || idx as usize >= items.len() {
+                            Err(ExecutionError::IndexOutOfBounds(idx, items.len()))
+                        } else {
+                            items
+                                .get(idx as usize)
+                                .cloned()
+                                .unwrap_or(Value::Null)
+                                .into()
+                        }
+                    }
                     (Value::String(str), Value::Int(idx)) => {
                         match str.get(idx as usize..(idx + 1) as usize) {
                             None => Ok(Value::Null),
@@ -1063,7 +1069,7 @@ mod tests {
     }
 
     #[test]
-    fn test_overlapping_identifer() {
+    fn test_overlapping_identifier() {
         let program = Program::compile("list").unwrap();
         let mut context = Context::default();
         context
@@ -1072,6 +1078,24 @@ mod tests {
 
         let result = program.execute(&context);
         assert!(result.is_err(), "overlapping identifier should fail");
+    }
+
+    #[test]
+    fn test_overlapping_identifier_as_nested_variable() {
+        let program = Program::compile("true").unwrap();
+        let mut context = Context::default();
+        context
+            .add_variable(
+                "person",
+                Value::Map(crate::objects::Map {
+                    map: Arc::new(HashMap::from([(Key::from("age"), Value::Int(1))])),
+                }),
+            )
+            .unwrap();
+
+        let result = program.execute(&context);
+        // The result should succeed.
+        assert!(result.is_ok());
     }
 
     #[test]

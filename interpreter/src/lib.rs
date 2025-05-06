@@ -91,6 +91,12 @@ pub enum ExecutionError {
     /// which is not yet supported.
     #[error("Unsupported fields construction: {0:?}")]
     UnsupportedFieldsConstruction(Member),
+    /// Indicates that an index is out of bounds for a list
+    #[error("Index out of bounds: {0} (length {1})")]
+    IndexOutOfBounds(i64, usize),
+    /// Indicates that a variable name conflicts with a type name
+    #[error("Variable name '{0}' conflicts with a type name")]
+    OverlappingIdentifier(String),
     /// Indicates that a function had an error during execution.
     #[error("Error executing function '{function}': {message}")]
     FunctionError { function: String, message: String },
