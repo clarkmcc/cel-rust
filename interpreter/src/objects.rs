@@ -545,7 +545,7 @@ impl Value {
                         None => {
                             let mut ctx =
                                 FunctionContext::new(name.clone(), None, ctx, args.clone());
-                            func.call_with_context(&mut ctx)
+                            (func)(&mut ctx)
                         }
                         Some(target) => {
                             let mut ctx = FunctionContext::new(
@@ -554,7 +554,7 @@ impl Value {
                                 ctx,
                                 args.clone(),
                             );
-                            func.call_with_context(&mut ctx)
+                            (func)(&mut ctx)
                         }
                     }
                 } else {

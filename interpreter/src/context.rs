@@ -1,4 +1,4 @@
-use crate::magic::{Function, FunctionRegistry, Handler};
+use crate::magic::{Function, FunctionRegistry, IntoFunction};
 use crate::objects::{TryIntoValue, Value};
 use crate::{functions, ExecutionError};
 use cel_parser::Expression;
@@ -105,7 +105,7 @@ impl Context<'_> {
         }
     }
 
-    pub(crate) fn get_function<S>(&self, name: S) -> Option<Box<dyn Function>>
+    pub(crate) fn get_function<S>(&self, name: S) -> Option<&Function>
     where
         S: Into<String>,
     {
@@ -118,7 +118,7 @@ impl Context<'_> {
 
     pub fn add_function<T: 'static, F>(&mut self, name: &str, value: F)
     where
-        F: Handler<T> + 'static + Send + Sync,
+        F: IntoFunction<T> + 'static + Send + Sync,
     {
         if let Context::Root { functions, .. } = self {
             functions.add(name, value);

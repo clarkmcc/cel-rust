@@ -63,31 +63,35 @@ macro_rules! impl_conversions {
 macro_rules! impl_handler {
     ($($t:ty),*) => {
         paste::paste! {
-            impl<F, $($t,)* R> Handler<($($t,)*)> for F
+            impl<F, $($t,)* R> IntoFunction<($($t,)*)> for F
             where
-                F: Fn($($t,)*) -> R + Clone,
+                F: Fn($($t,)*) -> R + Send + Sync + 'static,
                 $($t: for<'a, 'context> $crate::FromContext<'a, 'context>,)*
                 R: IntoResolveResult,
             {
-                fn call(self, _ftx: &mut FunctionContext) -> ResolveResult {
-                    $(
-                        let [<arg_ $t:lower>] = $t::from_context(_ftx)?;
-                    )*
-                    self($([<arg_ $t:lower>],)*).into_resolve_result()
+                fn into_function(self) -> Function {
+                    Box::new(move |_ftx| {
+                        $(
+                            let [<arg_ $t:lower>] = $t::from_context(_ftx)?;
+                        )*
+                        self($([<arg_ $t:lower>],)*).into_resolve_result()
+                    })
                 }
             }
 
-            impl<F, $($t,)* R> Handler<(WithFunctionContext, $($t,)*)> for F
+            impl<F, $($t,)* R> IntoFunction<(WithFunctionContext, $($t,)*)> for F
             where
-                F: Fn(&FunctionContext, $($t,)*) -> R + Clone,
+                F: Fn(&FunctionContext, $($t,)*) -> R + Send + Sync + 'static,
                 $($t: for<'a, 'context> $crate::FromContext<'a, 'context>,)*
                 R: IntoResolveResult,
             {
-                fn call(self, _ftx: &mut FunctionContext) -> ResolveResult {
-                    $(
-                        let [<arg_ $t:lower>] = $t::from_context(_ftx)?;
-                    )*
-                    self(_ftx, $([<arg_ $t:lower>],)*).into_resolve_result()
+                fn into_function(self) -> Function {
+                    Box::new(move |_ftx| {
+                        $(
+                            let [<arg_ $t:lower>] = $t::from_context(_ftx)?;
+                        )*
+                        self(_ftx, $([<arg_ $t:lower>],)*).into_resolve_result()
+                    })
                 }
             }
         }
