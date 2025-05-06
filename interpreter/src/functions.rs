@@ -1,14 +1,69 @@
 use crate::context::Context;
 use crate::magic::{Arguments, Identifier, This};
-use crate::objects::{Value, ValueType};
+use crate::objects::{CelType, ValueType};
 use crate::resolvers::{Argument, Resolver};
-use crate::ExecutionError;
+use crate::{ExecutionError, Value};
 use cel_parser::Expression;
 use std::cmp::Ordering;
 use std::convert::TryInto;
+use std::result::Result as StdResult;
 use std::sync::Arc;
 
-type Result<T> = std::result::Result<T, ExecutionError>;
+type Result<T> = StdResult<T, ExecutionError>;
+
+/// Returns the CEL type of the argument as a first-class value.
+///
+/// This function implements the standard CEL `type()` function, which returns
+/// the type of its argument in accordance with the CEL specification:
+///
+/// - When called on a type itself (like `type(int)` or `type(string)`), this returns the
+//    "type" type.
+/// - For other values, returns the type name as a string (e.g., `type(1)` returns "int")
+///
+/// This implementation also handles special cases for proper evaluation of expressions
+/// like `type(type(1)) == type(string)`.
+pub fn type_fn(_ftx: &FunctionContext, This(this): This<Value>) -> Result<Value> {
+    // For the value itself, we have two distinct cases:
+    // 1. If the value is a Type, we return the type of a type (which is "type" as a Type value)
+    // 2. If the value is a string, we need to check if it represents a type name (e.g., `type(string)`)
+    // 3. For all other values, we return their type name as a String value
+    match this {
+        // When type() is called on a type (like type(int)), it should return "type" as a Type value
+        Value::Type(_) => Ok(Value::Type(CelType::Type)),
+        // For strings, we need to check if they represent a type name
+        Value::String(s) => {
+            // If the string value is a type name (like "string", "int", etc.),
+            // we should return the Type type for consistency with type(string), type(int), etc.
+            if CelType::try_from_string(s.as_str()).is_some() {
+                Ok(Value::Type(CelType::Type))
+            } else {
+                Ok(Value::String("string".to_string().into()))
+            }
+        }
+        Value::Null => Ok(Value::String("null".to_string().into())),
+        Value::Bool(_) => Ok(Value::String("bool".to_string().into())),
+        Value::Int(_) => Ok(Value::String("int".to_string().into())),
+        Value::UInt(_) => Ok(Value::String("uint".to_string().into())),
+        Value::Float(_) => Ok(Value::String("float".to_string().into())),
+        Value::Bytes(_) => Ok(Value::String("bytes".to_string().into())),
+        Value::List(_) => Ok(Value::String("list".to_string().into())),
+        Value::Map(_) => Ok(Value::String("map".to_string().into())),
+        #[cfg(feature = "chrono")]
+        Value::Timestamp(_) => Ok(Value::String("timestamp".to_string().into())),
+        #[cfg(feature = "chrono")]
+        Value::Duration(_) => Ok(Value::String("duration".to_string().into())),
+        Value::Function(name, _) => {
+            // Special case for type identifiers in expressions like type(string)
+            if CelType::try_from_string(name.as_str()).is_some() {
+                // When the argument is a type identifier, return "type" as a Type value
+                // This matches the behavior in cel-go for type(string)
+                Ok(Value::Type(CelType::Type))
+            } else {
+                Ok(Value::String("function".to_string().into()))
+            }
+        }
+    }
+}
 
 /// `FunctionContext` is a context object passed to functions when they are called.
 ///
@@ -708,6 +763,144 @@ mod tests {
             ctx.add_variable_from_value("foo", std::collections::HashMap::from([("bar", 1)]));
             assert_eq!(test_script(script, Some(ctx)), Ok(true.into()), "{}", name);
         }
+    }
+
+    #[test]
+    fn test_type_property_access() {
+        // Test accessing a property named "type" from a context object
+        // This verifies that accessing a field named "type" works correctly
+        let mut ctx = Context::default();
+        ctx.add_variable_from_value(
+            "account",
+            std::collections::HashMap::from([("type", "savings")]),
+        );
+
+        // Test accessing the "type" property directly
+        assert_eq!(
+            test_script("account.type == 'savings'", Some(ctx)),
+            Ok(true.into()),
+            "access type property"
+        );
+
+        // Create a new context for the second test
+        let mut ctx2 = Context::default();
+        ctx2.add_variable_from_value(
+            "account",
+            std::collections::HashMap::from([("type", "savings")]),
+        );
+
+        // Test the type of the "type" property
+        assert_eq!(
+            test_script("type(account.type) == 'string'", Some(ctx2)),
+            Ok(true.into()),
+            "type of type property"
+        );
+    }
+
+    #[test]
+    fn test_type() {
+        [
+            ("type of int", "type(1) == type(2)"),
+            ("type of uint", "type(1u) == type(2u)"),
+            ("type of float", "type(1.0) == type(2.0)"),
+            ("type of string", "type('foo') == type('bar')"),
+            ("type of bytes", "type(b'foo') == type(b'bar')"),
+            ("type of bool", "type(true) == type(false)"),
+            ("type of list", "type([1, 2]) == type([3, 4])"),
+            ("type of map", "type({'a': 1}) == type({'b': 2})"),
+            ("type of null", "type(null) == type(null)"),
+            ("type equality", "type(1) == type(1)"),
+            ("type inequality", "type(1) != type('foo')"),
+            ("type function with variable", "type(foo) == type(1)"),
+            // LITERAL VALUES
+            ("type of int literal", "type(1) == 'int'"),
+            ("type of uint literal", "type(1u) == 'uint'"),
+            ("type of float literal", "type(1.0) == 'float'"),
+            ("type of string literal", "type('foo') == 'string'"),
+            ("type of bytes literal", "type(b'foo') == 'bytes'"),
+            ("type of bool literal", "type(true) == 'bool'"),
+            ("type of list literal", "type([1, 2]) == 'list'"),
+            ("type of map literal", "type({'a': 1}) == 'map'"),
+            ("type of null literal", "type(null) == 'null'"),
+            // TYPE OF TYPE
+            (
+                "string type equals type of type of int literal",
+                "type(string) == type(type(1))",
+            ),
+            (
+                "string type equals type of type of string literal",
+                "type(string) == type(type('foobar'))",
+            ),
+            (
+                "int type equals type of type of int literal",
+                "type(int) == type(type(3))",
+            ),
+            (
+                "string type equals type of type of int literal",
+                "type(type(1)) == type(string)",
+            ),
+            (
+                "bool type equals type of type of bool literal",
+                "type(bool) == type(type(true))",
+            ),
+            (
+                "type equality with string",
+                "type(type(1)) == type(type('foo'))",
+            ),
+            (
+                "type(type(true)) equals type(type('foo'))",
+                "type(type(true)) == type(type('foo'))",
+            ),
+            (
+                "type(type(3.3)) equals type(type(true))",
+                "type(type(3.3)) == type(type(true))",
+            ),
+            (
+                "type(type(1)) equals type(type(2))",
+                "type(type(1)) == type(type(2))",
+            ),
+            (
+                "type(type(1)) equals type(type('a'))",
+                "type(type(1)) == type(type('a'))",
+            ),
+            // NOT EQUALS
+            (
+                "type(type(1)) not equals type('a')",
+                "type(type(1)) != type('a')",
+            ),
+            ("type(1) not equal to type('a')", "type(1) != type('a')"),
+            ("type(1) not equal to type(3.2)", "type(1) != type(3.2)"),
+            ("type(1) not equal to type(true)", "type(1) != type(true)"),
+            ("type(1) not equal to type(null)", "type(1) != type(null)"),
+            (
+                "type(string) not equal to type('foobar')",
+                "type(string) != type('foobar')",
+            ),
+            // RAW
+            ("type(1) equals 'int'", "type(1) == 'int'"),
+            ("type('a') equals 'string'", "type('a') == 'string'"),
+            ("type(true) equals 'bool'", "type(true) == 'bool'"),
+            ("type(null) equals 'null'", "type(null) == 'null'"),
+            ("type(1.0) equals 'float'", "type(1.0) == 'float'"),
+            ("type([1, 2, 3]) equals 'list'", "type([1, 2, 3]) == 'list'"),
+            (
+                "type({'a': 1, 'b': 2}) equals 'map'",
+                "type({'a': 1, 'b': 2}) == 'map'",
+            ),
+            ("type(b'foo') equals 'bytes'", "type(b'foo') == 'bytes'"),
+            ("type(1u) equals 'uint'", "type(1u) == 'uint'"),
+        ]
+        .iter()
+        .for_each(|test| {
+            let mut ctx = Context::default();
+            ctx.add_variable_from_value("foo", 42);
+            assert_eq!(
+                test_script(test.1, Some(ctx)),
+                Ok(true.into()),
+                "{}",
+                test.0
+            );
+        });
     }
 
     #[test]

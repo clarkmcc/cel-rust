@@ -153,8 +153,88 @@ impl TryIntoValue for Value {
     }
 }
 
+/// Represents a CEL type as a first-class value
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CelType {
+    String,
+    Int,
+    UInt,
+    Bool,
+    Bytes,
+    List,
+    Map,
+    Null,
+    Type,
+    Float,
+    Timestamp,
+    Duration,
+    Function,
+}
+
+impl CelType {
+    /// Returns the string representation of the type
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            CelType::String => "string",
+            CelType::Int => "int",
+            CelType::UInt => "uint",
+            CelType::Bool => "bool",
+            CelType::Bytes => "bytes",
+            CelType::List => "list",
+            CelType::Map => "map",
+            CelType::Null => "null",
+            CelType::Type => "type",
+            CelType::Float => "float",
+            CelType::Timestamp => "timestamp",
+            CelType::Duration => "duration",
+            CelType::Function => "function",
+        }
+    }
+
+    /// Internal helper to map a string to a CelType
+    fn string_to_celtype(s: &str) -> Option<Self> {
+        match s {
+            "string" => Some(CelType::String),
+            "int" => Some(CelType::Int),
+            "uint" => Some(CelType::UInt),
+            "bool" => Some(CelType::Bool),
+            "bytes" => Some(CelType::Bytes),
+            "list" => Some(CelType::List),
+            "map" => Some(CelType::Map),
+            "null" => Some(CelType::Null),
+            "type" => Some(CelType::Type),
+            "float" => Some(CelType::Float),
+            "timestamp" => Some(CelType::Timestamp),
+            "duration" => Some(CelType::Duration),
+            "function" => Some(CelType::Function),
+            _ => None,
+        }
+    }
+
+    /// Tries to parse a string into a CelType
+    /// This avoids ambiguity with the FromStr trait implementation
+    pub fn try_from_string(s: &str) -> Option<Self> {
+        Self::string_to_celtype(s)
+    }
+}
+
+impl std::str::FromStr for CelType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        CelType::string_to_celtype(s).ok_or_else(|| format!("Unknown CEL type: {}", s))
+    }
+}
+
+impl Display for CelType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Value {
+    Type(CelType),
     List(Arc<Vec<Value>>),
     Map(Map),
 
@@ -212,6 +292,7 @@ impl Display for ValueType {
 impl Value {
     pub fn type_of(&self) -> ValueType {
         match self {
+            Value::Type(_) => ValueType::String, // Type values are represented as strings in CEL
             Value::List(_) => ValueType::List,
             Value::Map(_) => ValueType::Map,
             Value::Function(_, _) => ValueType::Function,
@@ -246,6 +327,8 @@ impl From<&Value> for Value {
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
+            (Value::Type(a), Value::Type(b)) => a == b,
+            // Existing matches below...
             (Value::Map(a), Value::Map(b)) => a == b,
             (Value::List(a), Value::List(b)) => a == b,
             (Value::Function(a1, a2), Value::Function(b1, b2)) => a1 == b1 && a2 == b2,
@@ -535,7 +618,23 @@ impl Value {
                     map: Arc::from(map),
                 }))
             }
-            Expression::Ident(name) => ctx.get_variable(&***name),
+            Expression::Ident(name) => {
+                // Check if it's a type identifier
+                if let Some(cel_type) = CelType::try_from_string(name.as_str()) {
+                    // Check if a variable with the same name exists
+                    let var_result = ctx.get_variable(&***name);
+                    if var_result.is_ok() {
+                        // If it's also a variable, return an error
+                        Err(ExecutionError::OverlappingIdentifier(name.to_string()))
+                    } else {
+                        // Return the type identifier as a Type value
+                        Ok(Value::Type(cel_type))
+                    }
+                } else {
+                    // Just a regular variable
+                    ctx.get_variable(&***name)
+                }
+            }
             Expression::FunctionCall(name, target, args) => {
                 if let Expression::Ident(name) = &**name {
                     let func = ctx
@@ -579,11 +678,17 @@ impl Value {
             Member::Index(idx) => {
                 let idx = Value::resolve(idx, ctx)?;
                 match (self, idx) {
-                    (Value::List(items), Value::Int(idx)) => items
-                        .get(idx as usize)
-                        .cloned()
-                        .unwrap_or(Value::Null)
-                        .into(),
+                    (Value::List(items), Value::Int(idx)) => {
+                        if idx < 0 || idx as usize >= items.len() {
+                            Err(ExecutionError::IndexOutOfBounds(idx, items.len()))
+                        } else {
+                            items
+                                .get(idx as usize)
+                                .cloned()
+                                .unwrap_or(Value::Null)
+                                .into()
+                        }
+                    }
                     (Value::String(str), Value::Int(idx)) => {
                         match str.get(idx as usize..(idx + 1) as usize) {
                             None => Ok(Value::Null),
@@ -611,7 +716,6 @@ impl Value {
                         .unwrap_or(Value::Null)
                         .into(),
                     (Value::Map(_), index) => Err(ExecutionError::UnsupportedMapIndex(index)),
-                    (Value::List(_), index) => Err(ExecutionError::UnsupportedListIndex(index)),
                     (value, index) => Err(ExecutionError::UnsupportedIndex(value, index)),
                 }
             }
@@ -641,6 +745,7 @@ impl Value {
     #[inline(always)]
     fn to_bool(&self) -> bool {
         match self {
+            Value::Type(_) => true, // Types are always truthy
             Value::List(v) => !v.is_empty(),
             Value::Map(v) => !v.map.is_empty(),
             Value::Int(v) => *v != 0,
@@ -952,14 +1057,45 @@ mod tests {
     }
 
     #[test]
-    fn out_of_bound_list_access() {
-        let program = Program::compile("list[10]").unwrap();
+    fn test_out_of_bound_list_access() {
+        let program = Program::compile("arr[10]").unwrap();
+        let mut context = Context::default();
+        context
+            .add_variable("arr", Value::List(Arc::new(vec![])))
+            .unwrap();
+
+        let result = program.execute(&context);
+        assert!(result.is_err(), "out of bound list access should fail");
+    }
+
+    #[test]
+    fn test_overlapping_identifier() {
+        let program = Program::compile("list").unwrap();
         let mut context = Context::default();
         context
             .add_variable("list", Value::List(Arc::new(vec![])))
             .unwrap();
+
         let result = program.execute(&context);
-        assert_eq!(result.unwrap(), Value::Null);
+        assert!(result.is_err(), "overlapping identifier should fail");
+    }
+
+    #[test]
+    fn test_overlapping_identifier_as_nested_variable() {
+        let program = Program::compile("true").unwrap();
+        let mut context = Context::default();
+        context
+            .add_variable(
+                "person",
+                Value::Map(crate::objects::Map {
+                    map: Arc::new(HashMap::from([(Key::from("age"), Value::Int(1))])),
+                }),
+            )
+            .unwrap();
+
+        let result = program.execute(&context);
+        // The result should succeed.
+        assert!(result.is_ok());
     }
 
     #[test]
