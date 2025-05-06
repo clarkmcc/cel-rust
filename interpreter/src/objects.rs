@@ -1051,26 +1051,27 @@ mod tests {
     }
 
     #[test]
-    fn out_of_bound_list_access() {
-        let program = Program::compile("list[10]").unwrap();
-        println!("\nCompiled program: {:?}", program);
+    fn test_out_of_bound_list_access() {
+        let program = Program::compile("arr[10]").unwrap();
+        let mut context = Context::default();
+        context
+            .add_variable("arr", Value::List(Arc::new(vec![])))
+            .unwrap();
+
+        let result = program.execute(&context);
+        assert!(result.is_err(), "out of bound list access should fail");
+    }
+
+    #[test]
+    fn test_overlapping_identifer() {
+        let program = Program::compile("list").unwrap();
         let mut context = Context::default();
         context
             .add_variable("list", Value::List(Arc::new(vec![])))
             .unwrap();
 
-        // Debug context
-        println!(
-            "\nContext has list variable: {:?}",
-            context.get_variable("list")
-        );
-
-        // Execute program
         let result = program.execute(&context);
-        println!("\nExecution result: {:?}", result);
-
-        // Assert the result
-        assert_eq!(result.unwrap(), Value::Null);
+        assert!(result.is_err(), "overlapping identifier should fail");
     }
 
     #[test]
