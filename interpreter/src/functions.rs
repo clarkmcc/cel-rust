@@ -812,6 +812,16 @@ mod tests {
             ("type equality", "type(1) == type(1)"),
             ("type inequality", "type(1) != type('foo')"),
             ("type function with variable", "type(foo) == type(1)"),
+            // LITERAL VALUES
+            ("type of int literal", "type(1) == 'int'"),
+            ("type of uint literal", "type(1u) == 'uint'"),
+            ("type of float literal", "type(1.0) == 'float'"),
+            ("type of string literal", "type('foo') == 'string'"),
+            ("type of bytes literal", "type(b'foo') == 'bytes'"),
+            ("type of bool literal", "type(true) == 'bool'"),
+            ("type of list literal", "type([1, 2]) == 'list'"),
+            ("type of map literal", "type({'a': 1}) == 'map'"),
+            ("type of null literal", "type(null) == 'null'"),
             // TYPE OF TYPE
             (
                 "string type equals type of type of int literal",
