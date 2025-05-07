@@ -1,7 +1,9 @@
 extern crate core;
 
 use cel_parser::{parse, ExpressionReferences, Member};
+use cel_parser::{Expression, Spanned};
 use std::convert::TryFrom;
+use std::ops::Range;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -9,7 +11,6 @@ mod macros;
 
 pub mod context;
 pub use cel_parser::error::ParseError;
-pub use cel_parser::Expression;
 pub use context::Context;
 pub use functions::FunctionContext;
 pub use objects::{ResolveResult, Value};
@@ -55,11 +56,11 @@ pub enum ExecutionError {
     /// Indicates that the script attempted to reference a key on a type that
     /// was missing the requested key.
     #[error("No such key: {0}")]
-    NoSuchKey(Arc<String>),
+    NoSuchKey(Arc<Spanned<String>>),
     /// Indicates that the script attempted to reference an undeclared variable
     /// method, or function.
     #[error("Undeclared reference to '{0}'")]
-    UndeclaredReference(Arc<String>),
+    UndeclaredReference(Arc<Spanned<String>>),
     /// Indicates that a function expected to be called as a method, or to be
     /// called with at least one parameter.
     #[error("Missing argument or target")]
@@ -86,7 +87,7 @@ pub enum ExecutionError {
     /// Indicates that a function call occurred without an [`Expression::Ident`]
     /// as the function identifier.
     #[error("Unsupported function call identifier type: {0:?}")]
-    UnsupportedFunctionCallIdentifierType(Expression),
+    UnsupportedFunctionCallIdentifierType(Spanned<Expression>),
     /// Indicates that a [`Member::Fields`] construction was attempted
     /// which is not yet supported.
     #[error("Unsupported fields construction: {0:?}")]
@@ -97,12 +98,12 @@ pub enum ExecutionError {
 }
 
 impl ExecutionError {
-    pub fn no_such_key(name: &str) -> Self {
-        ExecutionError::NoSuchKey(Arc::new(name.to_string()))
+    pub fn no_such_key(name: &str, span: Option<Range<usize>>) -> Self {
+        ExecutionError::NoSuchKey(Arc::new(Spanned::new(name.to_string(), span)))
     }
 
-    pub fn undeclared_reference(name: &str) -> Self {
-        ExecutionError::UndeclaredReference(Arc::new(name.to_string()))
+    pub fn undeclared_reference(name: &str, span: Option<Range<usize>>) -> Self {
+        ExecutionError::UndeclaredReference(Arc::new(Spanned::new(name.to_string(), span)))
     }
 
     pub fn invalid_argument_count(expected: usize, actual: usize) -> Self {
@@ -138,7 +139,7 @@ impl ExecutionError {
 
 #[derive(Debug)]
 pub struct Program {
-    expression: Expression,
+    expression: Spanned<Expression>,
 }
 
 impl Program {
@@ -147,7 +148,7 @@ impl Program {
     }
 
     pub fn execute(&self, context: &Context) -> ResolveResult {
-        Value::resolve(&self.expression, context)
+        Value::resolve(&self.expression.inner, context)
     }
 
     /// Returns the variables and functions referenced by the CEL program
@@ -235,22 +236,22 @@ mod tests {
             (
                 "no such key",
                 "foo.baz.bar == 1",
-                ExecutionError::no_such_key("baz"),
+                ExecutionError::no_such_key("baz", Some(4..7)),
             ),
             (
                 "undeclared reference",
                 "missing == 1",
-                ExecutionError::undeclared_reference("missing"),
+                ExecutionError::undeclared_reference("missing", Some(0..7)),
             ),
             (
                 "undeclared method",
                 "1.missing()",
-                ExecutionError::undeclared_reference("missing"),
+                ExecutionError::undeclared_reference("missing", Some(2..9)),
             ),
             (
                 "undeclared function",
                 "missing(1)",
-                ExecutionError::undeclared_reference("missing"),
+                ExecutionError::undeclared_reference("missing", Some(0..7)),
             ),
             (
                 "unsupported key type",

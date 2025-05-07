@@ -1,4 +1,6 @@
 use std::collections::HashSet;
+use std::fmt::Display;
+use std::ops::{Deref, DerefMut, Range};
 use std::sync::Arc;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -29,31 +31,117 @@ pub enum UnaryOp {
     DoubleMinus,
 }
 
+#[derive(Debug, Clone)]
+pub struct Spanned<T> {
+    pub inner: T,
+    #[cfg(feature = "preserve_spans")]
+    pub span: Option<Range<usize>>,
+}
+
+impl<T> Spanned<T> {
+    pub fn new(inner: T, span: Option<Range<usize>>) -> Self {
+        Self { inner, span }
+    }
+}
+
+impl<T: PartialEq> PartialEq for Spanned<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner == other.inner
+    }
+}
+
+impl<T> Deref for Spanned<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<T> DerefMut for Spanned<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl<T: Display> Display for Spanned<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.inner.fmt(f)
+    }
+}
+
+pub trait SpanExtension: Sized {
+    /// Create a new [Spanned<T>] without any span information
+    /// e.g. for synthetic variables that do not originate from
+    /// actual source code.
+    fn unspanned(self) -> Spanned<Self> {
+        Spanned {
+            inner: self,
+            #[cfg(feature = "preserve_spans")]
+            span: None,
+        }
+    }
+
+    #[allow(unused)]
+    /// Create a new [Spanned<T>] with a given span. If the
+    /// `preserve_spans` feature is turned off, the span is
+    ///  just dropped
+    fn spanned(self, span: Range<usize>) -> Spanned<Self> {
+        Spanned {
+            inner: self,
+            #[cfg(feature = "preserve_spans")]
+            span: Some(span),
+        }
+    }
+}
+
+impl SpanExtension for Expression {}
+impl SpanExtension for ArithmeticOp {}
+impl SpanExtension for UnaryOp {}
+impl SpanExtension for RelationOp {}
+impl SpanExtension for String {}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum Expression {
-    Arithmetic(Box<Expression>, ArithmeticOp, Box<Expression>),
-    Relation(Box<Expression>, RelationOp, Box<Expression>),
+    Arithmetic(
+        Box<Spanned<Expression>>,
+        Spanned<ArithmeticOp>,
+        Box<Spanned<Expression>>,
+    ),
+    Relation(
+        Box<Spanned<Expression>>,
+        Spanned<RelationOp>,
+        Box<Spanned<Expression>>,
+    ),
 
-    Ternary(Box<Expression>, Box<Expression>, Box<Expression>),
-    Or(Box<Expression>, Box<Expression>),
-    And(Box<Expression>, Box<Expression>),
-    Unary(UnaryOp, Box<Expression>),
+    Ternary(
+        Box<Spanned<Expression>>,
+        Box<Spanned<Expression>>,
+        Box<Spanned<Expression>>,
+    ),
+    Or(Box<Spanned<Expression>>, Box<Spanned<Expression>>),
+    And(Box<Spanned<Expression>>, Box<Spanned<Expression>>),
+    Unary(Spanned<UnaryOp>, Box<Spanned<Expression>>),
 
-    Member(Box<Expression>, Box<Member>),
-    FunctionCall(Box<Expression>, Option<Box<Expression>>, Vec<Expression>),
+    Member(Box<Spanned<Expression>>, Box<Member>),
+    FunctionCall(
+        Box<Spanned<Expression>>,
+        Option<Box<Spanned<Expression>>>,
+        Vec<Spanned<Expression>>,
+    ),
 
-    List(Vec<Expression>),
-    Map(Vec<(Expression, Expression)>),
+    List(Vec<Spanned<Expression>>),
+    Map(Vec<(Spanned<Expression>, Spanned<Expression>)>),
 
     Atom(Atom),
-    Ident(Arc<String>),
+    Ident(Arc<Spanned<String>>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Member {
-    Attribute(Arc<String>),
-    Index(Box<Expression>),
-    Fields(Vec<(Arc<String>, Expression)>),
+    Attribute(Arc<Spanned<String>>),
+    Index(Box<Spanned<Expression>>),
+    Fields(Vec<(Arc<Spanned<String>>, Spanned<Expression>)>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -127,7 +215,7 @@ impl ExpressionReferences<'_> {
     }
 }
 
-impl Expression {
+impl Spanned<Expression> {
     /// Returns a set of all variables referenced in the expression. Variable identifiers
     /// are represented internally as [`Arc<String>`] and this function simply clones those
     /// references into a [`HashSet`].
@@ -157,7 +245,7 @@ impl Expression {
         variables: &mut HashSet<&'expr str>,
         functions: &mut HashSet<&'expr str>,
     ) {
-        match self {
+        match &self.inner {
             Expression::Arithmetic(e1, _, e2)
             | Expression::Relation(e1, _, e2)
             | Expression::Ternary(e1, _, e2)
@@ -173,7 +261,7 @@ impl Expression {
                 e._references(variables, functions);
             }
             Expression::FunctionCall(name, target, args) => {
-                if let Expression::Ident(v) = &**name {
+                if let Expression::Ident(v) = &name.inner {
                     functions.insert(v.as_str());
                 }
                 if let Some(target) = target {

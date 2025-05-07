@@ -1,5 +1,5 @@
 use crate::{ExecutionError, FunctionContext, ResolveResult, Value};
-use cel_parser::Expression;
+use cel_parser::{Expression, Spanned};
 
 /// Resolver knows how to resolve a [`Value`] from a [`FunctionContext`].
 /// At their core, resolvers are responsible for taking Expressions and
@@ -16,9 +16,9 @@ pub trait Resolver {
     fn resolve(&self, ctx: &FunctionContext) -> ResolveResult;
 }
 
-impl Resolver for Expression {
+impl Resolver for Spanned<Expression> {
     fn resolve(&self, ctx: &FunctionContext) -> ResolveResult {
-        Value::resolve(self, ctx.ptx)
+        Value::resolve(&self.inner, ctx.ptx)
     }
 }
 
@@ -40,7 +40,7 @@ impl Resolver for Argument {
                 index + 1,
                 ctx.args.len(),
             ))?;
-        Value::resolve(arg, ctx.ptx)
+        Value::resolve(&arg.inner, ctx.ptx)
     }
 }
 
@@ -57,7 +57,7 @@ impl Resolver for AllArguments {
     fn resolve(&self, ctx: &FunctionContext) -> ResolveResult {
         let mut args = Vec::with_capacity(ctx.args.len());
         for arg in ctx.args.iter() {
-            args.push(Value::resolve(arg, ctx.ptx)?);
+            args.push(Value::resolve(&arg.inner, ctx.ptx)?);
         }
         Ok(Value::List(args.into()))
     }

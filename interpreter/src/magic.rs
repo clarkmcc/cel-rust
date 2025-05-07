@@ -1,7 +1,7 @@
 use crate::macros::{impl_conversions, impl_handler};
 use crate::resolvers::{AllArguments, Argument};
 use crate::{ExecutionError, FunctionContext, ResolveResult, Value};
-use cel_parser::Expression;
+use cel_parser::{Expression, Spanned};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -174,7 +174,7 @@ where
 /// ) -> Result<Value>;
 /// ```
 #[derive(Clone)]
-pub struct Identifier(pub Arc<String>);
+pub struct Identifier(pub Arc<Spanned<String>>);
 
 impl<'a, 'context> FromContext<'a, 'context> for Identifier {
     fn from_context(ctx: &'a mut FunctionContext<'context>) -> Result<Self, ExecutionError>
@@ -199,7 +199,7 @@ impl From<&Identifier> for String {
 
 impl From<Identifier> for String {
     fn from(value: Identifier) -> Self {
-        value.0.as_ref().clone()
+        value.0.as_ref().inner.clone()
     }
 }
 
@@ -269,7 +269,7 @@ impl<'a, 'context> FromContext<'a, 'context> for Expression {
 fn arg_expr_from_context(ctx: &mut FunctionContext) -> Expression {
     let idx = ctx.arg_idx;
     ctx.arg_idx += 1;
-    ctx.args[idx].clone()
+    ctx.args[idx].clone().inner
 }
 
 /// Returns the next argument specified by the context's `arg_idx` field as after resolving

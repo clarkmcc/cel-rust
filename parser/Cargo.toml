@@ -8,6 +8,10 @@ edition = "2021"
 license = "MIT"
 categories = ["parsing"]
 
+[features]
+default = ["preserve_spans"]
+preserve_spans = []
+
 [dependencies]
 lalrpop-util = { version = "0.22.0", features = ["lexer"] }
 regex = "1.4.2"

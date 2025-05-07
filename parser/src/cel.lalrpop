@@ -1,4 +1,4 @@
-use crate::{RelationOp, ArithmeticOp, Expression, UnaryOp, Member, Atom, parse_bytes, parse_string};
+use crate::{RelationOp, ArithmeticOp, Expression, Spanned, SpanExtension, UnaryOp, Member, Atom, parse_bytes, parse_string};
 use std::sync::Arc;
 
 grammar;
@@ -11,72 +11,76 @@ match {
    _
 }
 
-pub Expression: Expression = {
+pub SpannedExpression: Spanned<Expression> = {
+    Expression
+};
+
+pub Expression: Spanned<Expression> = {
     Conditional
 };
 
-pub Conditional: Expression = {
-    <condition:LogicalOr> "?" <if_true:LogicalOr> ":" <if_false:Conditional> => Expression::Ternary(condition.into(), if_true.into(), if_false.into()),
+pub Conditional: Spanned<Expression> = {
+    <start: @L> <condition:LogicalOr> "?" <if_true:LogicalOr> ":" <if_false:Conditional> <end: @R> => Expression::Ternary(condition.into(), if_true.into(), if_false.into()).spanned(start..end),
     LogicalOr
 };
 
-pub LogicalOr: Expression = {
-    <left:LogicalOr> "||" <right:LogicalAnd> => Expression::Or(left.into(), right.into()),
+pub LogicalOr: Spanned<Expression> = {
+    <start: @L> <left:LogicalOr> "||" <right:LogicalAnd> <end: @R> => Expression::Or(left.into(), right.into()).spanned(start..end),
     LogicalAnd
 };
 
-pub LogicalAnd: Expression = {
-    <left:LogicalAnd> "&&" <right:Relations> => Expression::And(left.into(), right.into()),
+pub LogicalAnd: Spanned<Expression> = {
+    <start: @L> <left:LogicalAnd> "&&" <right:Relations> <end: @R> => Expression::And(left.into(), right.into()).spanned(start..end),
     Relations
 };
 
-pub Relations: Expression = {
-    <left:ArithmeticAddSub> <op:RelationOp> <right:ArithmeticAddSub> => Expression::Relation(left.into(), op, right.into()),
+pub Relations: Spanned<Expression> = {
+    <start: @L> <left:ArithmeticAddSub> <op:SpannedRelationOp> <right:ArithmeticAddSub> <end: @R> => Expression::Relation(left.into(), op, right.into()).spanned(start..end),
     ArithmeticAddSub
 };
 
-pub ArithmeticAddSub: Expression = {
-    <left:ArithmeticAddSub> <op:ArithmeticOpAddSub> <right:ArithmeticMulDivMod> => Expression::Arithmetic(left.into(), op, right.into()),
+pub ArithmeticAddSub: Spanned<Expression> = {
+    <start: @L> <left:ArithmeticAddSub> <op:SpannedArithmeticOpAddSub> <right:ArithmeticMulDivMod> <end: @R> => Expression::Arithmetic(left.into(), op, right.into()).spanned(start..end),
     ArithmeticMulDivMod
 };
 
-pub ArithmeticMulDivMod: Expression = {
-    <left:ArithmeticMulDivMod> <op:ArithmeticOpMulDivMod> <right:Unary> => Expression::Arithmetic(left.into(), op, right.into()),
+pub ArithmeticMulDivMod: Spanned<Expression> = {
+    <start: @L> <left:ArithmeticMulDivMod> <op:SpannedArithmeticOpMulDivMod> <right:Unary> <end: @R> => Expression::Arithmetic(left.into(), op, right.into()).spanned(start..end),
     Unary
 };
 
-pub Unary: Expression = {
-    <op:UnaryOp> <right:Member> => Expression::Unary(op, right.into()),
+pub Unary: Spanned<Expression> = {
+    <start: @L> <op:SpannedUnaryOp> <right:Member> <end: @R> => Expression::Unary(op, right.into()).spanned(start..end),
     Member
 };
 
-pub Member: Expression = {
-    <left:Member> "." <identifier:Ident> => Expression::Member(left.into(), Member::Attribute(identifier.into()).into()).into(),
-    <left:Member> "." <identifier:Ident> "(" <arguments:CommaSeparated<Expression>> ")" => {
-           Expression::FunctionCall(Expression::Ident(identifier).into(), Some(left.into()), arguments).into()
+pub Member: Spanned<Expression> = {
+    <start: @L> <left:Member> "." <identifier:Ident> <end: @R> => Expression::Member(left.into(), Member::Attribute(identifier.into()).into()).spanned(start..end),
+    <start: @L> <left:Member> "." <identifier:ExprIdent> "(" <arguments:CommaSeparated<SpannedExpression>> ")" <end: @R> => {
+           Expression::FunctionCall(identifier.into(), Some(left.into()), arguments).spanned(start..end)
    },
-    <left:Member> "[" <expression:Expression> "]" => Expression::Member(left.into(), Member::Index(expression.into()).into()).into(),
-    <left:Member> "{" <fields:CommaSeparated<FieldInits>> "}" => Expression::Member(left.into(), Member::Fields(fields.into()).into()).into(),
+    <start: @L> <left:Member> "[" <expression:SpannedExpression> "]" <end: @R> => Expression::Member(left.into(), Member::Index(expression.into()).into()).spanned(start..end),
+    <start: @L> <left:Member> "{" <fields:CommaSeparated<FieldInits>> "}" <end: @R> => Expression::Member(left.into(), Member::Fields(fields.into()).into()).spanned(start..end),
     Primary,
 }
 
-pub Primary: Expression = {
-    "."? <Ident> => Expression::Ident(<>.into()).into(),
-    "."? <identifier:Ident> "(" <arguments:CommaSeparated<Expression>> ")" => {
-           Expression::FunctionCall(Expression::Ident(identifier).into(), None, arguments).into()
+pub Primary: Spanned<Expression> = {
+    <start: @L> "."? <id: Ident> <end: @R> => Expression::Ident(id.into()).spanned(start..end),
+    <start: @L> "."? <identifier:ExprIdent> "(" <arguments:CommaSeparated<SpannedExpression>> ")" <end: @R> => {
+           Expression::FunctionCall(identifier.into(), None, arguments).spanned(start..end)
     },
-    Atom => Expression::Atom(<>).into(),
-    "[" <members:CommaSeparated<Expression>> "]" => Expression::List(<>).into(),
-    "{" <fields:CommaSeparated<MapInits>> "}" => Expression::Map(<>).into(),
+    <start: @L> <a: Atom> <end: @R> => Expression::Atom(a).spanned(start..end),
+    <start: @L> "[" <members:CommaSeparated<SpannedExpression>> "]" <end: @R> => Expression::List(members).spanned(start..end),
+    <start: @L> "{" <fields:CommaSeparated<MapInits>> "}" <end: @R> => Expression::Map(fields).spanned(start..end),
     "(" <Expression> ")"
 }
 
-pub FieldInits: (Arc<String>, Expression) = {
-    <Ident> ":" <Expression>
+pub FieldInits: (Arc<Spanned<String>>, Spanned<Expression>) = {
+    <Ident> ":" <SpannedExpression>
 }
 
-pub MapInits: (Expression, Expression) = {
-    <Expression> ":" <Expression>
+pub MapInits: (Spanned<Expression>, Spanned<Expression>) = {
+    <SpannedExpression> ":" <SpannedExpression>
 }
 
 CommaSeparated<T>: Vec<T> = {
@@ -90,9 +94,17 @@ CommaSeparated<T>: Vec<T> = {
     }
 };
 
+SpannedArithmeticOpAddSub: Spanned<ArithmeticOp> = {
+    <start: @L> <op: ArithmeticOpAddSub> <end: @R> => op.spanned(start..end)
+};
+
 ArithmeticOpAddSub: ArithmeticOp = {
     "+" => ArithmeticOp::Add,
     "-" => ArithmeticOp::Subtract
+};
+
+SpannedArithmeticOpMulDivMod: Spanned<ArithmeticOp> = {
+    <start: @L> <op: ArithmeticOpMulDivMod> <end: @R> => op.spanned(start..end)
 };
 
 ArithmeticOpMulDivMod: ArithmeticOp = {
@@ -102,12 +114,20 @@ ArithmeticOpMulDivMod: ArithmeticOp = {
 };
 
 
+SpannedUnaryOp: Spanned<UnaryOp> = {
+    <start: @L> <op: UnaryOp> <end: @R> => op.spanned(start..end)
+};
+
 UnaryOp: UnaryOp = {
     "!" => UnaryOp::Not,
     "!!" => UnaryOp::DoubleNot,
     "-" => UnaryOp::Minus,
     "--" => UnaryOp::DoubleMinus,
-}
+};
+
+SpannedRelationOp: Spanned<RelationOp> = {
+    <start: @L> <op: RelationOp> <end: @R> => op.spanned(start..end)
+};
 
 RelationOp: RelationOp = {
     "<" => RelationOp::LessThan,
@@ -117,7 +137,7 @@ RelationOp: RelationOp = {
     "==" => RelationOp::Equals,
     "!=" => RelationOp::NotEquals,
     "in" => RelationOp::In
-}
+};
 
 Atom: Atom = {
     // Integer literals. Annoying to parse :/
@@ -167,6 +187,10 @@ Atom: Atom = {
     "null" => Atom::Null,
 };
 
-Ident: Arc<String> = {
-    r"[_a-zA-Z][_a-zA-Z0-9]*" => Arc::from(<>.to_string())
+ExprIdent: Spanned<Expression> = {
+    <start: @L> <id: Ident> <end: @R> => Expression::Ident(id).spanned(start..end)
+}
+
+Ident: Arc<Spanned<String>> = {
+    <start: @L> <s: r"[_a-zA-Z][_a-zA-Z0-9]*"> <end: @R> => Arc::from(s.to_string().spanned(start..end))
 }
