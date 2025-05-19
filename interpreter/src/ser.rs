@@ -48,7 +48,7 @@ pub struct KeySerializer;
 /// assert_eq!(value, true.into());
 /// ```
 #[cfg(feature = "chrono")]
-#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct Duration(pub chrono::Duration);
 
 #[cfg(feature = "chrono")]
@@ -93,7 +93,7 @@ impl ser::Serialize for Duration {
             ) -> std::result::Result<S::Ok, S::Error> {
                 let mut s = serializer.serialize_struct(Duration::STRUCT_NAME, 2)?;
                 s.serialize_field(Duration::SECS_FIELD, &self.0.num_seconds())?;
-                s.serialize_field(Duration::NANOS_FIELD, &self.0.subsec_nanos())?;
+                s.serialize_field(Duration::NANOS_FIELD, &(self.0.num_nanoseconds().unwrap_or(0) % 1_000_000_000))?;
                 s.end()
             }
         }
