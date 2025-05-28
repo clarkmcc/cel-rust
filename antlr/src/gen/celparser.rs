@@ -93,7 +93,7 @@ pub const RULE_mapInitializerList: usize = 13;
 pub const RULE_escapeIdent: usize = 14;
 pub const RULE_optExpr: usize = 15;
 pub const RULE_literal: usize = 16;
-pub const ruleNames: [&'static str; 17] = [
+pub const ruleNames: [&str; 17] = [
     "start",
     "expr",
     "conditionalOr",
@@ -1268,18 +1268,16 @@ where
                                     recog.base.input.lt(1).cloned();
 
                                 _la = recog.base.input.la(1);
-                                if {
-                                    !(((_la) & !0x3f) == 0
-                                        && ((1usize << _la)
-                                            & ((1usize << EQUALS)
-                                                | (1usize << NOT_EQUALS)
-                                                | (1usize << IN)
-                                                | (1usize << LESS)
-                                                | (1usize << LESS_EQUALS)
-                                                | (1usize << GREATER_EQUALS)
-                                                | (1usize << GREATER)))
-                                            != 0)
-                                } {
+                                if !(((_la) & !0x3f) == 0
+                                && ((1usize << _la)
+                                    & ((1usize << EQUALS)
+                                        | (1usize << NOT_EQUALS)
+                                        | (1usize << IN)
+                                        | (1usize << LESS)
+                                        | (1usize << LESS_EQUALS)
+                                        | (1usize << GREATER_EQUALS)
+                                        | (1usize << GREATER)))
+                                    != 0) {
                                     let tmp = recog.err_handler.recover_inline(&mut recog.base)?;
                                     cast_mut::<_, RelationContext>(&mut _localctx).op =
                                         Some(tmp.clone());
@@ -1507,14 +1505,12 @@ where
                                             recog.base.input.lt(1).cloned();
 
                                         _la = recog.base.input.la(1);
-                                        if {
-                                            !(((_la) & !0x3f) == 0
-                                                && ((1usize << _la)
-                                                    & ((1usize << STAR)
-                                                        | (1usize << SLASH)
-                                                        | (1usize << PERCENT)))
-                                                    != 0)
-                                        } {
+                                        if !(((_la) & !0x3f) == 0
+                                        && ((1usize << _la)
+                                            & ((1usize << STAR)
+                                                | (1usize << SLASH)
+                                                | (1usize << PERCENT)))
+                                            != 0) {
                                             let tmp = recog
                                                 .err_handler
                                                 .recover_inline(&mut recog.base)?;
@@ -1556,7 +1552,7 @@ where
                                             recog.base.input.lt(1).cloned();
 
                                         _la = recog.base.input.la(1);
-                                        if { !(_la == MINUS || _la == PLUS) } {
+                                        if !(_la == MINUS || _la == PLUS) {
                                             let tmp = recog
                                                 .err_handler
                                                 .recover_inline(&mut recog.base)?;
@@ -2016,7 +2012,7 @@ where
                             recog.base.set_state(90);
                             recog.err_handler.sync(&mut recog.base)?;
                             _la = recog.base.input.la(1);
-                            if !(_la == EXCLAM) {
+                            if _la != EXCLAM {
                                 break;
                             }
                         }
@@ -2770,7 +2766,7 @@ where
                                         recog.base.set_state(115);
                                         recog.err_handler.sync(&mut recog.base)?;
                                         _la = recog.base.input.la(1);
-                                        if (((_la - 10) & !0x3f) == 0
+                                        if ((_la - 10) & !0x3f) == 0
                                             && ((1usize << (_la - 10))
                                                 & ((1usize << (LBRACKET - 10))
                                                     | (1usize << (LBRACE - 10))
@@ -2787,7 +2783,7 @@ where
                                                     | (1usize << (STRING - 10))
                                                     | (1usize << (BYTES - 10))
                                                     | (1usize << (IDENTIFIER - 10))))
-                                                != 0)
+                                                != 0
                                         {
                                             {
                                                 /*InvokeRule exprList*/
@@ -3814,7 +3810,7 @@ where
                             recog.base.set_state(141);
                             recog.err_handler.sync(&mut recog.base)?;
                             _la = recog.base.input.la(1);
-                            if (((_la - 10) & !0x3f) == 0
+                            if ((_la - 10) & !0x3f) == 0
                                 && ((1usize << (_la - 10))
                                     & ((1usize << (LBRACKET - 10))
                                         | (1usize << (LBRACE - 10))
@@ -3831,7 +3827,7 @@ where
                                         | (1usize << (STRING - 10))
                                         | (1usize << (BYTES - 10))
                                         | (1usize << (IDENTIFIER - 10))))
-                                    != 0)
+                                    != 0
                             {
                                 {
                                     /*InvokeRule exprList*/
@@ -3893,7 +3889,7 @@ where
                         recog.base.set_state(150);
                         recog.err_handler.sync(&mut recog.base)?;
                         _la = recog.base.input.la(1);
-                        if (((_la - 10) & !0x3f) == 0
+                        if ((_la - 10) & !0x3f) == 0
                             && ((1usize << (_la - 10))
                                 & ((1usize << (LBRACKET - 10))
                                     | (1usize << (LBRACE - 10))
@@ -3911,7 +3907,7 @@ where
                                     | (1usize << (STRING - 10))
                                     | (1usize << (BYTES - 10))
                                     | (1usize << (IDENTIFIER - 10))))
-                                != 0)
+                                != 0
                         {
                             {
                                 /*InvokeRule listInit*/
@@ -3959,7 +3955,7 @@ where
                         recog.base.set_state(158);
                         recog.err_handler.sync(&mut recog.base)?;
                         _la = recog.base.input.la(1);
-                        if (((_la - 10) & !0x3f) == 0
+                        if ((_la - 10) & !0x3f) == 0
                             && ((1usize << (_la - 10))
                                 & ((1usize << (LBRACKET - 10))
                                     | (1usize << (LBRACE - 10))
@@ -3977,7 +3973,7 @@ where
                                     | (1usize << (STRING - 10))
                                     | (1usize << (BYTES - 10))
                                     | (1usize << (IDENTIFIER - 10))))
-                                != 0)
+                                != 0
                         {
                             {
                                 /*InvokeRule mapInitializerList*/
@@ -4129,12 +4125,12 @@ where
                         recog.base.set_state(177);
                         recog.err_handler.sync(&mut recog.base)?;
                         _la = recog.base.input.la(1);
-                        if (((_la - 20) & !0x3f) == 0
+                        if ((_la - 20) & !0x3f) == 0
                             && ((1usize << (_la - 20))
                                 & ((1usize << (QUESTIONMARK - 20))
                                     | (1usize << (IDENTIFIER - 20))
                                     | (1usize << (ESC_IDENTIFIER - 20))))
-                                != 0)
+                                != 0
                         {
                             {
                                 /*InvokeRule fieldInitializerList*/
@@ -6578,7 +6574,7 @@ lazy_static! {
     };
 }
 
-const _serializedATN: &'static str =
+const _serializedATN: &str =
     "\x03\u{608b}\u{a72a}\u{8133}\u{b9ed}\u{417c}\u{3be7}\u{7786}\u{5964}\x03\
 	\x27\u{105}\x04\x02\x09\x02\x04\x03\x09\x03\x04\x04\x09\x04\x04\x05\x09\
 	\x05\x04\x06\x09\x06\x04\x07\x09\x07\x04\x08\x09\x08\x04\x09\x09\x09\x04\
