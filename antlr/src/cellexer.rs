@@ -1,4 +1,4 @@
-// Generated from CEL.g4 by ANTLR 4.8
+// Generated from /Users/asnaps/src/github.com/clarkmcc/cel-rust/antlr/src/CEL.g4 by ANTLR 4.8
 #![allow(dead_code)]
 #![allow(nonstandard_style)]
 #![allow(unused_imports)]
@@ -114,10 +114,11 @@ pub type LocalTokenFactory<'input> = CommonTokenFactory;
 
 type From<'a> = <LocalTokenFactory<'a> as TokenFactory<'a> >::From;
 
-#[derive(Tid)]
 pub struct CELLexer<'input, Input:CharStream<From<'input> >> {
 	base: BaseLexer<'input,CELLexerActions,Input,LocalTokenFactory<'input>>,
 }
+
+antlr_rust::tid! { impl<'input,Input> TidAble<'input> for CELLexer<'input,Input> where Input:CharStream<From<'input> > }
 
 impl<'input, Input:CharStream<From<'input> >> Deref for CELLexer<'input,Input>{
 	type Target = BaseLexer<'input,CELLexerActions,Input,LocalTokenFactory<'input>>;
@@ -151,7 +152,7 @@ impl<'input, Input:CharStream<From<'input> >> CELLexer<'input,Input>{
     }
 
 	pub fn new_with_token_factory(input: Input, tf: &'input LocalTokenFactory<'input>) -> Self {
-		antlr_rust::recognizer::check_version("0","2");
+		antlr_rust::recognizer::check_version("0","3");
     	Self {
 			base: BaseLexer::new_base_lexer(
 				input,

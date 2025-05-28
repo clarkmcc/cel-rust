@@ -1,10 +1,11 @@
-// Generated from CEL.g4 by ANTLR 4.8
+// Generated from /Users/asnaps/src/github.com/clarkmcc/cel-rust/antlr/src/CEL.g4 by ANTLR 4.8
 #![allow(dead_code)]
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 #![allow(nonstandard_style)]
 #![allow(unused_imports)]
 #![allow(unused_mut)]
+#![allow(unused_braces)]
 use antlr_rust::PredictionContextCache;
 use antlr_rust::parser::{Parser, BaseParser, ParserRecog, ParserNodeType};
 use antlr_rust::token_stream::TokenStream;
@@ -123,7 +124,7 @@ use std::any::{Any,TypeId};
 
 
 type BaseParserType<'input, I> =
-	BaseParser<'input,CELParserExt, I, CELParserContextType , dyn CELListener<'input> + 'input >;
+	BaseParser<'input,CELParserExt<'input>, I, CELParserContextType , dyn CELListener<'input> + 'input >;
 
 type TokenType<'input> = <LocalTokenFactory<'input> as TokenFactory<'input>>::Tok;
 pub type LocalTokenFactory<'input> = CommonTokenFactory;
@@ -155,7 +156,7 @@ where
     }
 
     pub fn with_strategy(input: I, strategy: H) -> Self {
-		antlr_rust::recognizer::check_version("0","2");
+		antlr_rust::recognizer::check_version("0","3");
 		let interpreter = Arc::new(ParserATNSimulator::new(
 			_ATN.clone(),
 			_decision_to_DFA.clone(),
@@ -166,6 +167,7 @@ where
 				input,
 				Arc::clone(&interpreter),
 				CELParserExt{
+					_pd: Default::default(),
 				}
 			),
 			interpreter,
@@ -203,6 +205,8 @@ pub trait CELParserContext<'input>:
 	ParserRuleContext<'input, TF=LocalTokenFactory<'input>, Ctx=CELParserContextType>
 {}
 
+antlr_rust::coerce_from!{ 'input : CELParserContext<'input> }
+
 impl<'input, 'x, T> VisitableDyn<T> for dyn CELParserContext<'input> + 'input
 where
     T: CELVisitor<'input> + 'x,
@@ -215,14 +219,12 @@ where
 impl<'input> CELParserContext<'input> for TerminalNode<'input,CELParserContextType> {}
 impl<'input> CELParserContext<'input> for ErrorNode<'input,CELParserContextType> {}
 
-#[antlr_rust::impl_tid]
-impl<'input> antlr_rust::TidAble<'input> for dyn CELParserContext<'input> + 'input{}
+antlr_rust::tid! { impl<'input> TidAble<'input> for dyn CELParserContext<'input> + 'input }
 
-#[antlr_rust::impl_tid]
-impl<'input> antlr_rust::TidAble<'input> for dyn CELListener<'input> + 'input{}
+antlr_rust::tid! { impl<'input> TidAble<'input> for dyn CELListener<'input> + 'input }
 
 pub struct CELParserContextType;
-antlr_rust::type_id!{CELParserContextType}
+antlr_rust::tid!{CELParserContextType}
 
 impl<'input> ParserNodeType<'input> for CELParserContextType{
 	type TF = LocalTokenFactory<'input>;
@@ -251,20 +253,21 @@ where
     }
 }
 
-pub struct CELParserExt{
+pub struct CELParserExt<'input>{
+	_pd: PhantomData<&'input str>,
 }
 
-impl CELParserExt{
+impl<'input> CELParserExt<'input>{
 }
+antlr_rust::tid! { CELParserExt<'a> }
 
-
-impl<'input> TokenAware<'input> for CELParserExt{
+impl<'input> TokenAware<'input> for CELParserExt<'input>{
 	type TF = LocalTokenFactory<'input>;
 }
 
-impl<'input,I: TokenStream<'input, TF = LocalTokenFactory<'input> > + TidAble<'input>> ParserRecog<'input, BaseParserType<'input,I>> for CELParserExt{}
+impl<'input,I: TokenStream<'input, TF = LocalTokenFactory<'input> > + TidAble<'input>> ParserRecog<'input, BaseParserType<'input,I>> for CELParserExt<'input>{}
 
-impl<'input,I: TokenStream<'input, TF = LocalTokenFactory<'input> > + TidAble<'input>> Actions<'input, BaseParserType<'input,I>> for CELParserExt{
+impl<'input,I: TokenStream<'input, TF = LocalTokenFactory<'input> > + TidAble<'input>> Actions<'input, BaseParserType<'input,I>> for CELParserExt<'input>{
 	fn get_grammar_file_name(&self) -> & str{ "CEL.g4"}
 
    	fn get_rule_names(&self) -> &[& str] {&ruleNames}
@@ -341,14 +344,14 @@ ph:PhantomData<&'input str>
 impl<'input> CELParserContext<'input> for StartContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CELListener<'input> + 'a> for StartContext<'input>{
-	fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_start(self);
-	}
-	fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.exit_start(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_start(self);
+		}
+		fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.exit_start(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CELVisitor<'input> + 'a> for StartContext<'input>{
@@ -363,7 +366,7 @@ impl<'input> CustomRuleContext<'input> for StartContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_start }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_start }
 }
-antlr_rust::type_id!{StartContextExt<'a>}
+antlr_rust::tid!{StartContextExt<'a>}
 
 impl<'input> StartContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CELParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StartContextAll<'input>> {
@@ -403,7 +406,7 @@ where
 		let mut _localctx = StartContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 0, RULE_start);
         let mut _localctx: Rc<StartContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -418,7 +421,8 @@ where
 			recog.base.match_token(EOF,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -451,14 +455,14 @@ ph:PhantomData<&'input str>
 impl<'input> CELParserContext<'input> for ExprContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CELListener<'input> + 'a> for ExprContext<'input>{
-	fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_expr(self);
-	}
-	fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.exit_expr(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_expr(self);
+		}
+		fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.exit_expr(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CELVisitor<'input> + 'a> for ExprContext<'input>{
@@ -473,7 +477,7 @@ impl<'input> CustomRuleContext<'input> for ExprContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_expr }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_expr }
 }
-antlr_rust::type_id!{ExprContextExt<'a>}
+antlr_rust::tid!{ExprContextExt<'a>}
 
 impl<'input> ExprContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CELParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ExprContextAll<'input>> {
@@ -525,8 +529,8 @@ where
 		let mut _localctx = ExprContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 2, RULE_expr);
         let mut _localctx: Rc<ExprContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -566,7 +570,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -600,14 +605,14 @@ ph:PhantomData<&'input str>
 impl<'input> CELParserContext<'input> for ConditionalOrContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CELListener<'input> + 'a> for ConditionalOrContext<'input>{
-	fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_conditionalOr(self);
-	}
-	fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.exit_conditionalOr(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_conditionalOr(self);
+		}
+		fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.exit_conditionalOr(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CELVisitor<'input> + 'a> for ConditionalOrContext<'input>{
@@ -622,7 +627,7 @@ impl<'input> CustomRuleContext<'input> for ConditionalOrContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_conditionalOr }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_conditionalOr }
 }
-antlr_rust::type_id!{ConditionalOrContextExt<'a>}
+antlr_rust::tid!{ConditionalOrContextExt<'a>}
 
 impl<'input> ConditionalOrContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CELParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ConditionalOrContextAll<'input>> {
@@ -672,8 +677,8 @@ where
 		let mut _localctx = ConditionalOrContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 4, RULE_conditionalOr);
         let mut _localctx: Rc<ConditionalOrContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -716,7 +721,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -750,14 +756,14 @@ ph:PhantomData<&'input str>
 impl<'input> CELParserContext<'input> for ConditionalAndContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CELListener<'input> + 'a> for ConditionalAndContext<'input>{
-	fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_conditionalAnd(self);
-	}
-	fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.exit_conditionalAnd(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_conditionalAnd(self);
+		}
+		fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.exit_conditionalAnd(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CELVisitor<'input> + 'a> for ConditionalAndContext<'input>{
@@ -772,7 +778,7 @@ impl<'input> CustomRuleContext<'input> for ConditionalAndContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_conditionalAnd }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_conditionalAnd }
 }
-antlr_rust::type_id!{ConditionalAndContextExt<'a>}
+antlr_rust::tid!{ConditionalAndContextExt<'a>}
 
 impl<'input> ConditionalAndContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CELParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ConditionalAndContextAll<'input>> {
@@ -822,8 +828,8 @@ where
 		let mut _localctx = ConditionalAndContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 6, RULE_conditionalAnd);
         let mut _localctx: Rc<ConditionalAndContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -866,7 +872,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -896,14 +903,14 @@ ph:PhantomData<&'input str>
 impl<'input> CELParserContext<'input> for RelationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CELListener<'input> + 'a> for RelationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_relation(self);
-	}
-	fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.exit_relation(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_relation(self);
+		}
+		fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.exit_relation(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CELVisitor<'input> + 'a> for RelationContext<'input>{
@@ -918,7 +925,7 @@ impl<'input> CustomRuleContext<'input> for RelationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_relation }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_relation }
 }
-antlr_rust::type_id!{RelationContextExt<'a>}
+antlr_rust::tid!{RelationContextExt<'a>}
 
 impl<'input> RelationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CELParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<RelationContextAll<'input>> {
@@ -1002,8 +1009,8 @@ where
 	    let mut _localctx: Rc<RelationContextAll> = _localctx;
         let mut _prevctx = _localctx.clone();
 		let _startState = 8;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -1061,7 +1068,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(3,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_) => {},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1090,14 +1098,14 @@ ph:PhantomData<&'input str>
 impl<'input> CELParserContext<'input> for CalcContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CELListener<'input> + 'a> for CalcContext<'input>{
-	fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_calc(self);
-	}
-	fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.exit_calc(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_calc(self);
+		}
+		fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.exit_calc(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CELVisitor<'input> + 'a> for CalcContext<'input>{
@@ -1112,7 +1120,7 @@ impl<'input> CustomRuleContext<'input> for CalcContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_calc }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_calc }
 }
-antlr_rust::type_id!{CalcContextExt<'a>}
+antlr_rust::tid!{CalcContextExt<'a>}
 
 impl<'input> CalcContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CELParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<CalcContextAll<'input>> {
@@ -1186,8 +1194,8 @@ where
 	    let mut _localctx: Rc<CalcContextAll> = _localctx;
         let mut _prevctx = _localctx.clone();
 		let _startState = 10;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -1285,7 +1293,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(5,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_) => {},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1307,7 +1316,7 @@ pub enum UnaryContextAll<'input>{
 	NegateContext(NegateContext<'input>),
 Error(UnaryContext<'input>)
 }
-antlr_rust::type_id!{UnaryContextAll<'a>}
+antlr_rust::tid!{UnaryContextAll<'a>}
 
 impl<'input> antlr_rust::parser_rule_context::DerefSeal for UnaryContextAll<'input>{}
 
@@ -1356,7 +1365,7 @@ impl<'input> CustomRuleContext<'input> for UnaryContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_unary }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_unary }
 }
-antlr_rust::type_id!{UnaryContextExt<'a>}
+antlr_rust::tid!{UnaryContextExt<'a>}
 
 impl<'input> UnaryContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CELParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<UnaryContextAll<'input>> {
@@ -1403,7 +1412,7 @@ pub struct LogicalNotContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{LogicalNotContextExt<'a>}
+antlr_rust::tid!{LogicalNotContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for LogicalNotContext<'input>{}
 
@@ -1470,7 +1479,7 @@ pub struct MemberExprContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{MemberExprContextExt<'a>}
+antlr_rust::tid!{MemberExprContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for MemberExprContext<'input>{}
 
@@ -1546,7 +1555,7 @@ pub struct NegateContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{NegateContextExt<'a>}
+antlr_rust::tid!{NegateContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for NegateContext<'input>{}
 
@@ -1610,8 +1619,8 @@ where
 		let mut _localctx = UnaryContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 12, RULE_unary);
         let mut _localctx: Rc<UnaryContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			recog.base.set_state(99);
@@ -1704,7 +1713,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1728,7 +1738,7 @@ pub enum MemberContextAll<'input>{
 	IndexContext(IndexContext<'input>),
 Error(MemberContext<'input>)
 }
-antlr_rust::type_id!{MemberContextAll<'a>}
+antlr_rust::tid!{MemberContextAll<'a>}
 
 impl<'input> antlr_rust::parser_rule_context::DerefSeal for MemberContextAll<'input>{}
 
@@ -1778,7 +1788,7 @@ impl<'input> CustomRuleContext<'input> for MemberContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_member }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_member }
 }
-antlr_rust::type_id!{MemberContextExt<'a>}
+antlr_rust::tid!{MemberContextExt<'a>}
 
 impl<'input> MemberContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CELParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<MemberContextAll<'input>> {
@@ -1841,7 +1851,7 @@ pub struct MemberCallContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{MemberCallContextExt<'a>}
+antlr_rust::tid!{MemberCallContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for MemberCallContext<'input>{}
 
@@ -1924,7 +1934,7 @@ pub struct SelectContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{SelectContextExt<'a>}
+antlr_rust::tid!{SelectContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for SelectContext<'input>{}
 
@@ -1991,7 +2001,7 @@ pub struct PrimaryExprContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{PrimaryExprContextExt<'a>}
+antlr_rust::tid!{PrimaryExprContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for PrimaryExprContext<'input>{}
 
@@ -2077,7 +2087,7 @@ pub struct IndexContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{IndexContextExt<'a>}
+antlr_rust::tid!{IndexContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for IndexContext<'input>{}
 
@@ -2149,8 +2159,8 @@ where
 	    let mut _localctx: Rc<MemberContextAll> = _localctx;
         let mut _prevctx = _localctx.clone();
 		let _startState = 14;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -2246,7 +2256,7 @@ where
 							recog.base.set_state(115);
 							recog.err_handler.sync(&mut recog.base)?;
 							_la = recog.base.input.la(1);
-							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << LBRACKET) | (1usize << LBRACE) | (1usize << LPAREN) | (1usize << DOT) | (1usize << MINUS) | (1usize << EXCLAM) | (1usize << CEL_TRUE) | (1usize << CEL_FALSE) | (1usize << NUL) | (1usize << NUM_FLOAT) | (1usize << NUM_INT) | (1usize << NUM_UINT) | (1usize << STRING) | (1usize << BYTES) | (1usize << IDENTIFIER))) != 0) {
+							if ((((_la - 10)) & !0x3f) == 0 && ((1usize << (_la - 10)) & ((1usize << (LBRACKET - 10)) | (1usize << (LBRACE - 10)) | (1usize << (LPAREN - 10)) | (1usize << (DOT - 10)) | (1usize << (MINUS - 10)) | (1usize << (EXCLAM - 10)) | (1usize << (CEL_TRUE - 10)) | (1usize << (CEL_FALSE - 10)) | (1usize << (NUL - 10)) | (1usize << (NUM_FLOAT - 10)) | (1usize << (NUM_INT - 10)) | (1usize << (NUM_UINT - 10)) | (1usize << (STRING - 10)) | (1usize << (BYTES - 10)) | (1usize << (IDENTIFIER - 10)))) != 0) {
 								{
 								/*InvokeRule exprList*/
 								recog.base.set_state(114);
@@ -2312,7 +2322,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(13,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_) => {},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2338,7 +2349,7 @@ pub enum PrimaryContextAll<'input>{
 	GlobalCallContext(GlobalCallContext<'input>),
 Error(PrimaryContext<'input>)
 }
-antlr_rust::type_id!{PrimaryContextAll<'a>}
+antlr_rust::tid!{PrimaryContextAll<'a>}
 
 impl<'input> antlr_rust::parser_rule_context::DerefSeal for PrimaryContextAll<'input>{}
 
@@ -2391,7 +2402,7 @@ impl<'input> CustomRuleContext<'input> for PrimaryContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_primary }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_primary }
 }
-antlr_rust::type_id!{PrimaryContextExt<'a>}
+antlr_rust::tid!{PrimaryContextExt<'a>}
 
 impl<'input> PrimaryContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CELParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PrimaryContextAll<'input>> {
@@ -2444,7 +2455,7 @@ pub struct CreateListContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{CreateListContextExt<'a>}
+antlr_rust::tid!{CreateListContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for CreateListContext<'input>{}
 
@@ -2520,7 +2531,7 @@ pub struct IdentContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{IdentContextExt<'a>}
+antlr_rust::tid!{IdentContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for IdentContext<'input>{}
 
@@ -2603,7 +2614,7 @@ pub struct CreateStructContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{CreateStructContextExt<'a>}
+antlr_rust::tid!{CreateStructContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for CreateStructContext<'input>{}
 
@@ -2670,7 +2681,7 @@ pub struct ConstantLiteralContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{ConstantLiteralContextExt<'a>}
+antlr_rust::tid!{ConstantLiteralContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for ConstantLiteralContext<'input>{}
 
@@ -2746,7 +2757,7 @@ pub struct NestedContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{NestedContextExt<'a>}
+antlr_rust::tid!{NestedContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for NestedContext<'input>{}
 
@@ -2852,7 +2863,7 @@ pub struct CreateMessageContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{CreateMessageContextExt<'a>}
+antlr_rust::tid!{CreateMessageContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for CreateMessageContext<'input>{}
 
@@ -2944,7 +2955,7 @@ pub struct GlobalCallContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{GlobalCallContextExt<'a>}
+antlr_rust::tid!{GlobalCallContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for GlobalCallContext<'input>{}
 
@@ -3008,8 +3019,8 @@ where
 		let mut _localctx = PrimaryContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 16, RULE_primary);
         let mut _localctx: Rc<PrimaryContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(184);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -3072,7 +3083,7 @@ where
 					recog.base.set_state(141);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << LBRACKET) | (1usize << LBRACE) | (1usize << LPAREN) | (1usize << DOT) | (1usize << MINUS) | (1usize << EXCLAM) | (1usize << CEL_TRUE) | (1usize << CEL_FALSE) | (1usize << NUL) | (1usize << NUM_FLOAT) | (1usize << NUM_INT) | (1usize << NUM_UINT) | (1usize << STRING) | (1usize << BYTES) | (1usize << IDENTIFIER))) != 0) {
+					if ((((_la - 10)) & !0x3f) == 0 && ((1usize << (_la - 10)) & ((1usize << (LBRACKET - 10)) | (1usize << (LBRACE - 10)) | (1usize << (LPAREN - 10)) | (1usize << (DOT - 10)) | (1usize << (MINUS - 10)) | (1usize << (EXCLAM - 10)) | (1usize << (CEL_TRUE - 10)) | (1usize << (CEL_FALSE - 10)) | (1usize << (NUL - 10)) | (1usize << (NUM_FLOAT - 10)) | (1usize << (NUM_INT - 10)) | (1usize << (NUM_UINT - 10)) | (1usize << (STRING - 10)) | (1usize << (BYTES - 10)) | (1usize << (IDENTIFIER - 10)))) != 0) {
 						{
 						/*InvokeRule exprList*/
 						recog.base.set_state(140);
@@ -3123,7 +3134,7 @@ where
 					recog.base.set_state(150);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << LBRACKET) | (1usize << LBRACE) | (1usize << LPAREN) | (1usize << DOT) | (1usize << MINUS) | (1usize << EXCLAM) | (1usize << QUESTIONMARK) | (1usize << CEL_TRUE) | (1usize << CEL_FALSE) | (1usize << NUL) | (1usize << NUM_FLOAT) | (1usize << NUM_INT) | (1usize << NUM_UINT) | (1usize << STRING) | (1usize << BYTES) | (1usize << IDENTIFIER))) != 0) {
+					if ((((_la - 10)) & !0x3f) == 0 && ((1usize << (_la - 10)) & ((1usize << (LBRACKET - 10)) | (1usize << (LBRACE - 10)) | (1usize << (LPAREN - 10)) | (1usize << (DOT - 10)) | (1usize << (MINUS - 10)) | (1usize << (EXCLAM - 10)) | (1usize << (QUESTIONMARK - 10)) | (1usize << (CEL_TRUE - 10)) | (1usize << (CEL_FALSE - 10)) | (1usize << (NUL - 10)) | (1usize << (NUM_FLOAT - 10)) | (1usize << (NUM_INT - 10)) | (1usize << (NUM_UINT - 10)) | (1usize << (STRING - 10)) | (1usize << (BYTES - 10)) | (1usize << (IDENTIFIER - 10)))) != 0) {
 						{
 						/*InvokeRule listInit*/
 						recog.base.set_state(149);
@@ -3164,7 +3175,7 @@ where
 					recog.base.set_state(158);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << LBRACKET) | (1usize << LBRACE) | (1usize << LPAREN) | (1usize << DOT) | (1usize << MINUS) | (1usize << EXCLAM) | (1usize << QUESTIONMARK) | (1usize << CEL_TRUE) | (1usize << CEL_FALSE) | (1usize << NUL) | (1usize << NUM_FLOAT) | (1usize << NUM_INT) | (1usize << NUM_UINT) | (1usize << STRING) | (1usize << BYTES) | (1usize << IDENTIFIER))) != 0) {
+					if ((((_la - 10)) & !0x3f) == 0 && ((1usize << (_la - 10)) & ((1usize << (LBRACKET - 10)) | (1usize << (LBRACE - 10)) | (1usize << (LPAREN - 10)) | (1usize << (DOT - 10)) | (1usize << (MINUS - 10)) | (1usize << (EXCLAM - 10)) | (1usize << (QUESTIONMARK - 10)) | (1usize << (CEL_TRUE - 10)) | (1usize << (CEL_FALSE - 10)) | (1usize << (NUL - 10)) | (1usize << (NUM_FLOAT - 10)) | (1usize << (NUM_INT - 10)) | (1usize << (NUM_UINT - 10)) | (1usize << (STRING - 10)) | (1usize << (BYTES - 10)) | (1usize << (IDENTIFIER - 10)))) != 0) {
 						{
 						/*InvokeRule mapInitializerList*/
 						recog.base.set_state(157);
@@ -3257,7 +3268,7 @@ where
 					recog.base.set_state(177);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << QUESTIONMARK) | (1usize << IDENTIFIER) | (1usize << ESC_IDENTIFIER))) != 0) {
+					if ((((_la - 20)) & !0x3f) == 0 && ((1usize << (_la - 20)) & ((1usize << (QUESTIONMARK - 20)) | (1usize << (IDENTIFIER - 20)) | (1usize << (ESC_IDENTIFIER - 20)))) != 0) {
 						{
 						/*InvokeRule fieldInitializerList*/
 						recog.base.set_state(176);
@@ -3299,7 +3310,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3330,14 +3342,14 @@ ph:PhantomData<&'input str>
 impl<'input> CELParserContext<'input> for ExprListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CELListener<'input> + 'a> for ExprListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_exprList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.exit_exprList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_exprList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.exit_exprList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CELVisitor<'input> + 'a> for ExprListContext<'input>{
@@ -3352,7 +3364,7 @@ impl<'input> CustomRuleContext<'input> for ExprListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_exprList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_exprList }
 }
-antlr_rust::type_id!{ExprListContextExt<'a>}
+antlr_rust::tid!{ExprListContextExt<'a>}
 
 impl<'input> ExprListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CELParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ExprListContextAll<'input>> {
@@ -3400,8 +3412,8 @@ where
 		let mut _localctx = ExprListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 18, RULE_exprList);
         let mut _localctx: Rc<ExprListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -3442,7 +3454,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3473,14 +3486,14 @@ ph:PhantomData<&'input str>
 impl<'input> CELParserContext<'input> for ListInitContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CELListener<'input> + 'a> for ListInitContext<'input>{
-	fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_listInit(self);
-	}
-	fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.exit_listInit(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_listInit(self);
+		}
+		fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.exit_listInit(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CELVisitor<'input> + 'a> for ListInitContext<'input>{
@@ -3495,7 +3508,7 @@ impl<'input> CustomRuleContext<'input> for ListInitContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_listInit }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_listInit }
 }
-antlr_rust::type_id!{ListInitContextExt<'a>}
+antlr_rust::tid!{ListInitContextExt<'a>}
 
 impl<'input> ListInitContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CELParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ListInitContextAll<'input>> {
@@ -3543,7 +3556,7 @@ where
 		let mut _localctx = ListInitContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 20, RULE_listInit);
         let mut _localctx: Rc<ListInitContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -3587,7 +3600,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(27,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3622,14 +3636,14 @@ ph:PhantomData<&'input str>
 impl<'input> CELParserContext<'input> for FieldInitializerListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CELListener<'input> + 'a> for FieldInitializerListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_fieldInitializerList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.exit_fieldInitializerList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_fieldInitializerList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.exit_fieldInitializerList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CELVisitor<'input> + 'a> for FieldInitializerListContext<'input>{
@@ -3644,7 +3658,7 @@ impl<'input> CustomRuleContext<'input> for FieldInitializerListContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_fieldInitializerList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_fieldInitializerList }
 }
-antlr_rust::type_id!{FieldInitializerListContextExt<'a>}
+antlr_rust::tid!{FieldInitializerListContextExt<'a>}
 
 impl<'input> FieldInitializerListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CELParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<FieldInitializerListContextAll<'input>> {
@@ -3709,7 +3723,7 @@ where
 		let mut _localctx = FieldInitializerListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 22, RULE_fieldInitializerList);
         let mut _localctx: Rc<FieldInitializerListContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -3791,7 +3805,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(28,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3821,14 +3836,14 @@ ph:PhantomData<&'input str>
 impl<'input> CELParserContext<'input> for OptFieldContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CELListener<'input> + 'a> for OptFieldContext<'input>{
-	fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_optField(self);
-	}
-	fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.exit_optField(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_optField(self);
+		}
+		fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.exit_optField(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CELVisitor<'input> + 'a> for OptFieldContext<'input>{
@@ -3843,7 +3858,7 @@ impl<'input> CustomRuleContext<'input> for OptFieldContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_optField }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_optField }
 }
-antlr_rust::type_id!{OptFieldContextExt<'a>}
+antlr_rust::tid!{OptFieldContextExt<'a>}
 
 impl<'input> OptFieldContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CELParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<OptFieldContextAll<'input>> {
@@ -3883,8 +3898,8 @@ where
 		let mut _localctx = OptFieldContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 24, RULE_optField);
         let mut _localctx: Rc<OptFieldContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -3907,7 +3922,8 @@ where
 			recog.escapeIdent()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3942,14 +3958,14 @@ ph:PhantomData<&'input str>
 impl<'input> CELParserContext<'input> for MapInitializerListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CELListener<'input> + 'a> for MapInitializerListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_mapInitializerList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.exit_mapInitializerList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_mapInitializerList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.exit_mapInitializerList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CELVisitor<'input> + 'a> for MapInitializerListContext<'input>{
@@ -3964,7 +3980,7 @@ impl<'input> CustomRuleContext<'input> for MapInitializerListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_mapInitializerList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_mapInitializerList }
 }
-antlr_rust::type_id!{MapInitializerListContextExt<'a>}
+antlr_rust::tid!{MapInitializerListContextExt<'a>}
 
 impl<'input> MapInitializerListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CELParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<MapInitializerListContextAll<'input>> {
@@ -4029,7 +4045,7 @@ where
 		let mut _localctx = MapInitializerListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 26, RULE_mapInitializerList);
         let mut _localctx: Rc<MapInitializerListContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -4111,7 +4127,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(30,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4133,7 +4150,7 @@ pub enum EscapeIdentContextAll<'input>{
 	SimpleIdentifierContext(SimpleIdentifierContext<'input>),
 Error(EscapeIdentContext<'input>)
 }
-antlr_rust::type_id!{EscapeIdentContextAll<'a>}
+antlr_rust::tid!{EscapeIdentContextAll<'a>}
 
 impl<'input> antlr_rust::parser_rule_context::DerefSeal for EscapeIdentContextAll<'input>{}
 
@@ -4181,7 +4198,7 @@ impl<'input> CustomRuleContext<'input> for EscapeIdentContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_escapeIdent }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_escapeIdent }
 }
-antlr_rust::type_id!{EscapeIdentContextExt<'a>}
+antlr_rust::tid!{EscapeIdentContextExt<'a>}
 
 impl<'input> EscapeIdentContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CELParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EscapeIdentContextAll<'input>> {
@@ -4220,7 +4237,7 @@ pub struct EscapedIdentifierContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{EscapedIdentifierContextExt<'a>}
+antlr_rust::tid!{EscapedIdentifierContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for EscapedIdentifierContext<'input>{}
 
@@ -4289,7 +4306,7 @@ pub struct SimpleIdentifierContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{SimpleIdentifierContextExt<'a>}
+antlr_rust::tid!{SimpleIdentifierContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for SimpleIdentifierContext<'input>{}
 
@@ -4352,7 +4369,7 @@ where
 		let mut _localctx = EscapeIdentContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 28, RULE_escapeIdent);
         let mut _localctx: Rc<EscapeIdentContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(235);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -4387,7 +4404,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4418,14 +4436,14 @@ ph:PhantomData<&'input str>
 impl<'input> CELParserContext<'input> for OptExprContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CELListener<'input> + 'a> for OptExprContext<'input>{
-	fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_optExpr(self);
-	}
-	fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
-		listener.exit_optExpr(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_optExpr(self);
+		}
+		fn exit(&self,listener: &mut (dyn CELListener<'input> + 'a)) {
+			listener.exit_optExpr(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CELVisitor<'input> + 'a> for OptExprContext<'input>{
@@ -4440,7 +4458,7 @@ impl<'input> CustomRuleContext<'input> for OptExprContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_optExpr }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_optExpr }
 }
-antlr_rust::type_id!{OptExprContextExt<'a>}
+antlr_rust::tid!{OptExprContextExt<'a>}
 
 impl<'input> OptExprContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CELParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<OptExprContextAll<'input>> {
@@ -4481,8 +4499,8 @@ where
 		let mut _localctx = OptExprContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 30, RULE_optExpr);
         let mut _localctx: Rc<OptExprContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4507,7 +4525,8 @@ where
 			  
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4535,7 +4554,7 @@ pub enum LiteralContextAll<'input>{
 	IntContext(IntContext<'input>),
 Error(LiteralContext<'input>)
 }
-antlr_rust::type_id!{LiteralContextAll<'a>}
+antlr_rust::tid!{LiteralContextAll<'a>}
 
 impl<'input> antlr_rust::parser_rule_context::DerefSeal for LiteralContextAll<'input>{}
 
@@ -4589,7 +4608,7 @@ impl<'input> CustomRuleContext<'input> for LiteralContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_literal }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_literal }
 }
-antlr_rust::type_id!{LiteralContextExt<'a>}
+antlr_rust::tid!{LiteralContextExt<'a>}
 
 impl<'input> LiteralContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CELParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LiteralContextAll<'input>> {
@@ -4628,7 +4647,7 @@ pub struct BytesContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{BytesContextExt<'a>}
+antlr_rust::tid!{BytesContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for BytesContext<'input>{}
 
@@ -4697,7 +4716,7 @@ pub struct UintContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{UintContextExt<'a>}
+antlr_rust::tid!{UintContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for UintContext<'input>{}
 
@@ -4766,7 +4785,7 @@ pub struct NullContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{NullContextExt<'a>}
+antlr_rust::tid!{NullContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for NullContext<'input>{}
 
@@ -4835,7 +4854,7 @@ pub struct BoolFalseContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{BoolFalseContextExt<'a>}
+antlr_rust::tid!{BoolFalseContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for BoolFalseContext<'input>{}
 
@@ -4904,7 +4923,7 @@ pub struct StringContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{StringContextExt<'a>}
+antlr_rust::tid!{StringContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for StringContext<'input>{}
 
@@ -4979,7 +4998,7 @@ pub struct DoubleContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{DoubleContextExt<'a>}
+antlr_rust::tid!{DoubleContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for DoubleContext<'input>{}
 
@@ -5048,7 +5067,7 @@ pub struct BoolTrueContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{BoolTrueContextExt<'a>}
+antlr_rust::tid!{BoolTrueContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for BoolTrueContext<'input>{}
 
@@ -5123,7 +5142,7 @@ pub struct IntContextExt<'input>{
 	ph:PhantomData<&'input str>
 }
 
-antlr_rust::type_id!{IntContextExt<'a>}
+antlr_rust::tid!{IntContextExt<'a>}
 
 impl<'input> CELParserContext<'input> for IntContext<'input>{}
 
@@ -5186,8 +5205,8 @@ where
 		let mut _localctx = LiteralContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 32, RULE_literal);
         let mut _localctx: Rc<LiteralContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(256);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -5324,7 +5343,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
