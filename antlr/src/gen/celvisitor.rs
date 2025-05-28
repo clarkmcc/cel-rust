@@ -1,7 +1,7 @@
 #![allow(nonstandard_style)]
 // Generated from /Users/asnaps/src/github.com/clarkmcc/cel-rust/antlr/src/gen/CEL.g4 by ANTLR 4.8
 use super::celparser::*;
-use antlr_rust::tree::{ParseTreeVisitor, ParseTreeVisitorCompat};
+use antlr4rust::tree::{ParseTreeVisitor, ParseTreeVisitorCompat};
 
 /**
  * This interface defines a complete generic visitor for a parse tree produced

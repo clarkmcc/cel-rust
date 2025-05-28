@@ -1,7 +1,7 @@
 #![allow(nonstandard_style)]
 // Generated from /Users/asnaps/src/github.com/clarkmcc/cel-rust/antlr/src/gen/CEL.g4 by ANTLR 4.8
 use super::celparser::*;
-use antlr_rust::tree::ParseTreeListener;
+use antlr4rust::tree::ParseTreeListener;
 
 pub trait CELListener<'input>: ParseTreeListener<'input, CELParserContextType> {
     /**
@@ -414,4 +414,4 @@ pub trait CELListener<'input>: ParseTreeListener<'input, CELParserContextType> {
     fn exit_Null(&mut self, _ctx: &NullContext<'input>) {}
 }
 
-antlr_rust::coerce_from! { 'input : CELListener<'input> }
+antlr4rust::coerce_from! { 'input : CELListener<'input> }
