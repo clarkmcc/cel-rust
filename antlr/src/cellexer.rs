@@ -4,138 +4,230 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 use antlr_rust::atn::ATN;
+use antlr_rust::atn_deserializer::ATNDeserializer;
 use antlr_rust::char_stream::CharStream;
+use antlr_rust::dfa::DFA;
+use antlr_rust::error_listener::ErrorListener;
 use antlr_rust::int_stream::IntStream;
 use antlr_rust::lexer::{BaseLexer, Lexer, LexerRecog};
-use antlr_rust::atn_deserializer::ATNDeserializer;
-use antlr_rust::dfa::DFA;
-use antlr_rust::lexer_atn_simulator::{LexerATNSimulator, ILexerATNSimulator};
-use antlr_rust::PredictionContextCache;
-use antlr_rust::recognizer::{Recognizer,Actions};
-use antlr_rust::error_listener::ErrorListener;
-use antlr_rust::TokenSource;
-use antlr_rust::token_factory::{TokenFactory,CommonTokenFactory,TokenAware};
+use antlr_rust::lexer_atn_simulator::{ILexerATNSimulator, LexerATNSimulator};
+use antlr_rust::parser_rule_context::{cast, BaseParserRuleContext, ParserRuleContext};
+use antlr_rust::recognizer::{Actions, Recognizer};
+use antlr_rust::rule_context::{BaseRuleContext, EmptyContext, EmptyCustomRuleContext};
 use antlr_rust::token::*;
-use antlr_rust::rule_context::{BaseRuleContext,EmptyCustomRuleContext,EmptyContext};
-use antlr_rust::parser_rule_context::{ParserRuleContext,BaseParserRuleContext,cast};
-use antlr_rust::vocabulary::{Vocabulary,VocabularyImpl};
+use antlr_rust::token_factory::{CommonTokenFactory, TokenAware, TokenFactory};
+use antlr_rust::vocabulary::{Vocabulary, VocabularyImpl};
+use antlr_rust::PredictionContextCache;
+use antlr_rust::TokenSource;
 
-use antlr_rust::{lazy_static,Tid,TidAble,TidExt};
+use antlr_rust::{lazy_static, Tid, TidAble, TidExt};
 
-use std::sync::Arc;
 use std::cell::RefCell;
-use std::rc::Rc;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
+use std::sync::Arc;
 
+pub const EQUALS: isize = 1;
+pub const NOT_EQUALS: isize = 2;
+pub const IN: isize = 3;
+pub const LESS: isize = 4;
+pub const LESS_EQUALS: isize = 5;
+pub const GREATER_EQUALS: isize = 6;
+pub const GREATER: isize = 7;
+pub const LOGICAL_AND: isize = 8;
+pub const LOGICAL_OR: isize = 9;
+pub const LBRACKET: isize = 10;
+pub const RPRACKET: isize = 11;
+pub const LBRACE: isize = 12;
+pub const RBRACE: isize = 13;
+pub const LPAREN: isize = 14;
+pub const RPAREN: isize = 15;
+pub const DOT: isize = 16;
+pub const COMMA: isize = 17;
+pub const MINUS: isize = 18;
+pub const EXCLAM: isize = 19;
+pub const QUESTIONMARK: isize = 20;
+pub const COLON: isize = 21;
+pub const PLUS: isize = 22;
+pub const STAR: isize = 23;
+pub const SLASH: isize = 24;
+pub const PERCENT: isize = 25;
+pub const CEL_TRUE: isize = 26;
+pub const CEL_FALSE: isize = 27;
+pub const NUL: isize = 28;
+pub const WHITESPACE: isize = 29;
+pub const COMMENT: isize = 30;
+pub const NUM_FLOAT: isize = 31;
+pub const NUM_INT: isize = 32;
+pub const NUM_UINT: isize = 33;
+pub const STRING: isize = 34;
+pub const BYTES: isize = 35;
+pub const IDENTIFIER: isize = 36;
+pub const ESC_IDENTIFIER: isize = 37;
+pub const channelNames: [&'static str; 0 + 2] = ["DEFAULT_TOKEN_CHANNEL", "HIDDEN"];
 
-	pub const EQUALS:isize=1; 
-	pub const NOT_EQUALS:isize=2; 
-	pub const IN:isize=3; 
-	pub const LESS:isize=4; 
-	pub const LESS_EQUALS:isize=5; 
-	pub const GREATER_EQUALS:isize=6; 
-	pub const GREATER:isize=7; 
-	pub const LOGICAL_AND:isize=8; 
-	pub const LOGICAL_OR:isize=9; 
-	pub const LBRACKET:isize=10; 
-	pub const RPRACKET:isize=11; 
-	pub const LBRACE:isize=12; 
-	pub const RBRACE:isize=13; 
-	pub const LPAREN:isize=14; 
-	pub const RPAREN:isize=15; 
-	pub const DOT:isize=16; 
-	pub const COMMA:isize=17; 
-	pub const MINUS:isize=18; 
-	pub const EXCLAM:isize=19; 
-	pub const QUESTIONMARK:isize=20; 
-	pub const COLON:isize=21; 
-	pub const PLUS:isize=22; 
-	pub const STAR:isize=23; 
-	pub const SLASH:isize=24; 
-	pub const PERCENT:isize=25; 
-	pub const CEL_TRUE:isize=26; 
-	pub const CEL_FALSE:isize=27; 
-	pub const NUL:isize=28; 
-	pub const WHITESPACE:isize=29; 
-	pub const COMMENT:isize=30; 
-	pub const NUM_FLOAT:isize=31; 
-	pub const NUM_INT:isize=32; 
-	pub const NUM_UINT:isize=33; 
-	pub const STRING:isize=34; 
-	pub const BYTES:isize=35; 
-	pub const IDENTIFIER:isize=36; 
-	pub const ESC_IDENTIFIER:isize=37;
-	pub const channelNames: [&'static str;0+2] = [
-		"DEFAULT_TOKEN_CHANNEL", "HIDDEN"
-	];
+pub const modeNames: [&'static str; 1] = ["DEFAULT_MODE"];
 
-	pub const modeNames: [&'static str;1] = [
-		"DEFAULT_MODE"
-	];
+pub const ruleNames: [&'static str; 48] = [
+    "EQUALS",
+    "NOT_EQUALS",
+    "IN",
+    "LESS",
+    "LESS_EQUALS",
+    "GREATER_EQUALS",
+    "GREATER",
+    "LOGICAL_AND",
+    "LOGICAL_OR",
+    "LBRACKET",
+    "RPRACKET",
+    "LBRACE",
+    "RBRACE",
+    "LPAREN",
+    "RPAREN",
+    "DOT",
+    "COMMA",
+    "MINUS",
+    "EXCLAM",
+    "QUESTIONMARK",
+    "COLON",
+    "PLUS",
+    "STAR",
+    "SLASH",
+    "PERCENT",
+    "CEL_TRUE",
+    "CEL_FALSE",
+    "NUL",
+    "BACKSLASH",
+    "LETTER",
+    "DIGIT",
+    "EXPONENT",
+    "HEXDIGIT",
+    "RAW",
+    "ESC_SEQ",
+    "ESC_CHAR_SEQ",
+    "ESC_OCT_SEQ",
+    "ESC_BYTE_SEQ",
+    "ESC_UNI_SEQ",
+    "WHITESPACE",
+    "COMMENT",
+    "NUM_FLOAT",
+    "NUM_INT",
+    "NUM_UINT",
+    "STRING",
+    "BYTES",
+    "IDENTIFIER",
+    "ESC_IDENTIFIER",
+];
 
-	pub const ruleNames: [&'static str;48] = [
-		"EQUALS", "NOT_EQUALS", "IN", "LESS", "LESS_EQUALS", "GREATER_EQUALS", 
-		"GREATER", "LOGICAL_AND", "LOGICAL_OR", "LBRACKET", "RPRACKET", "LBRACE", 
-		"RBRACE", "LPAREN", "RPAREN", "DOT", "COMMA", "MINUS", "EXCLAM", "QUESTIONMARK", 
-		"COLON", "PLUS", "STAR", "SLASH", "PERCENT", "CEL_TRUE", "CEL_FALSE", 
-		"NUL", "BACKSLASH", "LETTER", "DIGIT", "EXPONENT", "HEXDIGIT", "RAW", 
-		"ESC_SEQ", "ESC_CHAR_SEQ", "ESC_OCT_SEQ", "ESC_BYTE_SEQ", "ESC_UNI_SEQ", 
-		"WHITESPACE", "COMMENT", "NUM_FLOAT", "NUM_INT", "NUM_UINT", "STRING", 
-		"BYTES", "IDENTIFIER", "ESC_IDENTIFIER"
-	];
+pub const _LITERAL_NAMES: [Option<&'static str>; 29] = [
+    None,
+    Some("'=='"),
+    Some("'!='"),
+    Some("'in'"),
+    Some("'<'"),
+    Some("'<='"),
+    Some("'>='"),
+    Some("'>'"),
+    Some("'&&'"),
+    Some("'||'"),
+    Some("'['"),
+    Some("']'"),
+    Some("'{'"),
+    Some("'}'"),
+    Some("'('"),
+    Some("')'"),
+    Some("'.'"),
+    Some("','"),
+    Some("'-'"),
+    Some("'!'"),
+    Some("'?'"),
+    Some("':'"),
+    Some("'+'"),
+    Some("'*'"),
+    Some("'/'"),
+    Some("'%'"),
+    Some("'true'"),
+    Some("'false'"),
+    Some("'null'"),
+];
+pub const _SYMBOLIC_NAMES: [Option<&'static str>; 38] = [
+    None,
+    Some("EQUALS"),
+    Some("NOT_EQUALS"),
+    Some("IN"),
+    Some("LESS"),
+    Some("LESS_EQUALS"),
+    Some("GREATER_EQUALS"),
+    Some("GREATER"),
+    Some("LOGICAL_AND"),
+    Some("LOGICAL_OR"),
+    Some("LBRACKET"),
+    Some("RPRACKET"),
+    Some("LBRACE"),
+    Some("RBRACE"),
+    Some("LPAREN"),
+    Some("RPAREN"),
+    Some("DOT"),
+    Some("COMMA"),
+    Some("MINUS"),
+    Some("EXCLAM"),
+    Some("QUESTIONMARK"),
+    Some("COLON"),
+    Some("PLUS"),
+    Some("STAR"),
+    Some("SLASH"),
+    Some("PERCENT"),
+    Some("CEL_TRUE"),
+    Some("CEL_FALSE"),
+    Some("NUL"),
+    Some("WHITESPACE"),
+    Some("COMMENT"),
+    Some("NUM_FLOAT"),
+    Some("NUM_INT"),
+    Some("NUM_UINT"),
+    Some("STRING"),
+    Some("BYTES"),
+    Some("IDENTIFIER"),
+    Some("ESC_IDENTIFIER"),
+];
+lazy_static! {
+    static ref _shared_context_cache: Arc<PredictionContextCache> =
+        Arc::new(PredictionContextCache::new());
+    static ref VOCABULARY: Box<dyn Vocabulary> = Box::new(VocabularyImpl::new(
+        _LITERAL_NAMES.iter(),
+        _SYMBOLIC_NAMES.iter(),
+        None
+    ));
+}
 
-
-	pub const _LITERAL_NAMES: [Option<&'static str>;29] = [
-		None, Some("'=='"), Some("'!='"), Some("'in'"), Some("'<'"), Some("'<='"), 
-		Some("'>='"), Some("'>'"), Some("'&&'"), Some("'||'"), Some("'['"), Some("']'"), 
-		Some("'{'"), Some("'}'"), Some("'('"), Some("')'"), Some("'.'"), Some("','"), 
-		Some("'-'"), Some("'!'"), Some("'?'"), Some("':'"), Some("'+'"), Some("'*'"), 
-		Some("'/'"), Some("'%'"), Some("'true'"), Some("'false'"), Some("'null'")
-	];
-	pub const _SYMBOLIC_NAMES: [Option<&'static str>;38]  = [
-		None, Some("EQUALS"), Some("NOT_EQUALS"), Some("IN"), Some("LESS"), Some("LESS_EQUALS"), 
-		Some("GREATER_EQUALS"), Some("GREATER"), Some("LOGICAL_AND"), Some("LOGICAL_OR"), 
-		Some("LBRACKET"), Some("RPRACKET"), Some("LBRACE"), Some("RBRACE"), Some("LPAREN"), 
-		Some("RPAREN"), Some("DOT"), Some("COMMA"), Some("MINUS"), Some("EXCLAM"), 
-		Some("QUESTIONMARK"), Some("COLON"), Some("PLUS"), Some("STAR"), Some("SLASH"), 
-		Some("PERCENT"), Some("CEL_TRUE"), Some("CEL_FALSE"), Some("NUL"), Some("WHITESPACE"), 
-		Some("COMMENT"), Some("NUM_FLOAT"), Some("NUM_INT"), Some("NUM_UINT"), 
-		Some("STRING"), Some("BYTES"), Some("IDENTIFIER"), Some("ESC_IDENTIFIER")
-	];
-	lazy_static!{
-	    static ref _shared_context_cache: Arc<PredictionContextCache> = Arc::new(PredictionContextCache::new());
-		static ref VOCABULARY: Box<dyn Vocabulary> = Box::new(VocabularyImpl::new(_LITERAL_NAMES.iter(), _SYMBOLIC_NAMES.iter(), None));
-	}
-
-
-pub type LexerContext<'input> = BaseRuleContext<'input,EmptyCustomRuleContext<'input,LocalTokenFactory<'input> >>;
+pub type LexerContext<'input> =
+    BaseRuleContext<'input, EmptyCustomRuleContext<'input, LocalTokenFactory<'input>>>;
 pub type LocalTokenFactory<'input> = CommonTokenFactory;
 
-type From<'a> = <LocalTokenFactory<'a> as TokenFactory<'a> >::From;
+type From<'a> = <LocalTokenFactory<'a> as TokenFactory<'a>>::From;
 
-pub struct CELLexer<'input, Input:CharStream<From<'input> >> {
-	base: BaseLexer<'input,CELLexerActions,Input,LocalTokenFactory<'input>>,
+pub struct CELLexer<'input, Input: CharStream<From<'input>>> {
+    base: BaseLexer<'input, CELLexerActions, Input, LocalTokenFactory<'input>>,
 }
 
 antlr_rust::tid! { impl<'input,Input> TidAble<'input> for CELLexer<'input,Input> where Input:CharStream<From<'input> > }
 
-impl<'input, Input:CharStream<From<'input> >> Deref for CELLexer<'input,Input>{
-	type Target = BaseLexer<'input,CELLexerActions,Input,LocalTokenFactory<'input>>;
+impl<'input, Input: CharStream<From<'input>>> Deref for CELLexer<'input, Input> {
+    type Target = BaseLexer<'input, CELLexerActions, Input, LocalTokenFactory<'input>>;
 
-	fn deref(&self) -> &Self::Target {
-		&self.base
-	}
+    fn deref(&self) -> &Self::Target {
+        &self.base
+    }
 }
 
-impl<'input, Input:CharStream<From<'input> >> DerefMut for CELLexer<'input,Input>{
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.base
-	}
+impl<'input, Input: CharStream<From<'input>>> DerefMut for CELLexer<'input, Input> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.base
+    }
 }
 
-
-impl<'input, Input:CharStream<From<'input> >> CELLexer<'input,Input>{
+impl<'input, Input: CharStream<From<'input>>> CELLexer<'input, Input> {
     fn get_rule_names(&self) -> &'static [&'static str] {
         &ruleNames
     }
@@ -151,50 +243,55 @@ impl<'input, Input:CharStream<From<'input> >> CELLexer<'input,Input>{
         "CELLexer.g4"
     }
 
-	pub fn new_with_token_factory(input: Input, tf: &'input LocalTokenFactory<'input>) -> Self {
-		antlr_rust::recognizer::check_version("0","3");
-    	Self {
-			base: BaseLexer::new_base_lexer(
-				input,
-				LexerATNSimulator::new_lexer_atnsimulator(
-					_ATN.clone(),
-					_decision_to_DFA.clone(),
-					_shared_context_cache.clone(),
-				),
-				CELLexerActions{},
-				tf
-			)
-	    }
-	}
+    pub fn new_with_token_factory(input: Input, tf: &'input LocalTokenFactory<'input>) -> Self {
+        antlr_rust::recognizer::check_version("0", "3");
+        Self {
+            base: BaseLexer::new_base_lexer(
+                input,
+                LexerATNSimulator::new_lexer_atnsimulator(
+                    _ATN.clone(),
+                    _decision_to_DFA.clone(),
+                    _shared_context_cache.clone(),
+                ),
+                CELLexerActions {},
+                tf,
+            ),
+        }
+    }
 }
 
-impl<'input, Input:CharStream<From<'input> >> CELLexer<'input,Input> where &'input LocalTokenFactory<'input>:Default{
-	pub fn new(input: Input) -> Self{
-		CELLexer::new_with_token_factory(input, <&LocalTokenFactory<'input> as Default>::default())
-	}
+impl<'input, Input: CharStream<From<'input>>> CELLexer<'input, Input>
+where
+    &'input LocalTokenFactory<'input>: Default,
+{
+    pub fn new(input: Input) -> Self {
+        CELLexer::new_with_token_factory(input, <&LocalTokenFactory<'input> as Default>::default())
+    }
 }
 
-pub struct CELLexerActions {
+pub struct CELLexerActions {}
+
+impl CELLexerActions {}
+
+impl<'input, Input: CharStream<From<'input>>>
+    Actions<'input, BaseLexer<'input, CELLexerActions, Input, LocalTokenFactory<'input>>>
+    for CELLexerActions
+{
 }
 
-impl CELLexerActions{
+impl<'input, Input: CharStream<From<'input>>> CELLexer<'input, Input> {}
+
+impl<'input, Input: CharStream<From<'input>>>
+    LexerRecog<'input, BaseLexer<'input, CELLexerActions, Input, LocalTokenFactory<'input>>>
+    for CELLexerActions
+{
+}
+impl<'input> TokenAware<'input> for CELLexerActions {
+    type TF = LocalTokenFactory<'input>;
 }
 
-impl<'input, Input:CharStream<From<'input> >> Actions<'input,BaseLexer<'input,CELLexerActions,Input,LocalTokenFactory<'input>>> for CELLexerActions{
-	}
-
-	impl<'input, Input:CharStream<From<'input> >> CELLexer<'input,Input>{
-
-}
-
-impl<'input, Input:CharStream<From<'input> >> LexerRecog<'input,BaseLexer<'input,CELLexerActions,Input,LocalTokenFactory<'input>>> for CELLexerActions{
-}
-impl<'input> TokenAware<'input> for CELLexerActions{
-	type TF = LocalTokenFactory<'input>;
-}
-
-impl<'input, Input:CharStream<From<'input> >> TokenSource<'input> for CELLexer<'input,Input>{
-	type TF = LocalTokenFactory<'input>;
+impl<'input, Input: CharStream<From<'input>>> TokenSource<'input> for CELLexer<'input, Input> {
+    type TF = LocalTokenFactory<'input>;
 
     fn next_token(&mut self) -> <Self::TF as TokenFactory<'input>>::Tok {
         self.base.next_token()
@@ -212,38 +309,30 @@ impl<'input, Input:CharStream<From<'input> >> TokenSource<'input> for CELLexer<'
         self.base.get_input_stream()
     }
 
-	fn get_source_name(&self) -> String {
-		self.base.get_source_name()
-	}
+    fn get_source_name(&self) -> String {
+        self.base.get_source_name()
+    }
 
     fn get_token_factory(&self) -> &'input Self::TF {
         self.base.get_token_factory()
     }
 }
 
+lazy_static! {
+    static ref _ATN: Arc<ATN> =
+        Arc::new(ATNDeserializer::new(None).deserialize(_serializedATN.chars()));
+    static ref _decision_to_DFA: Arc<Vec<antlr_rust::RwLock<DFA>>> = {
+        let mut dfa = Vec::new();
+        let size = _ATN.decision_to_state.len();
+        for i in 0..size {
+            dfa.push(DFA::new(_ATN.clone(), _ATN.get_decision_state(i), i as isize).into())
+        }
+        Arc::new(dfa)
+    };
+}
 
-
-	lazy_static! {
-	    static ref _ATN: Arc<ATN> =
-	        Arc::new(ATNDeserializer::new(None).deserialize(_serializedATN.chars()));
-	    static ref _decision_to_DFA: Arc<Vec<antlr_rust::RwLock<DFA>>> = {
-	        let mut dfa = Vec::new();
-	        let size = _ATN.decision_to_state.len();
-	        for i in 0..size {
-	            dfa.push(DFA::new(
-	                _ATN.clone(),
-	                _ATN.get_decision_state(i),
-	                i as isize,
-	            ).into())
-	        }
-	        Arc::new(dfa)
-	    };
-	}
-
-
-
-	const _serializedATN:&'static str =
-		"\x03\u{608b}\u{a72a}\u{8133}\u{b9ed}\u{417c}\u{3be7}\u{7786}\u{5964}\x02\
+const _serializedATN: &'static str =
+    "\x03\u{608b}\u{a72a}\u{8133}\u{b9ed}\u{417c}\u{3be7}\u{7786}\u{5964}\x02\
 		\x27\u{1b5}\x08\x01\x04\x02\x09\x02\x04\x03\x09\x03\x04\x04\x09\x04\x04\
 		\x05\x09\x05\x04\x06\x09\x06\x04\x07\x09\x07\x04\x08\x09\x08\x04\x09\x09\
 		\x09\x04\x0a\x09\x0a\x04\x0b\x09\x0b\x04\x0c\x09\x0c\x04\x0d\x09\x0d\x04\
