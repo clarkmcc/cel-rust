@@ -1269,15 +1269,16 @@ where
 
                                 _la = recog.base.input.la(1);
                                 if !(((_la) & !0x3f) == 0
-                                && ((1usize << _la)
-                                    & ((1usize << EQUALS)
-                                        | (1usize << NOT_EQUALS)
-                                        | (1usize << IN)
-                                        | (1usize << LESS)
-                                        | (1usize << LESS_EQUALS)
-                                        | (1usize << GREATER_EQUALS)
-                                        | (1usize << GREATER)))
-                                    != 0) {
+                                    && ((1usize << _la)
+                                        & ((1usize << EQUALS)
+                                            | (1usize << NOT_EQUALS)
+                                            | (1usize << IN)
+                                            | (1usize << LESS)
+                                            | (1usize << LESS_EQUALS)
+                                            | (1usize << GREATER_EQUALS)
+                                            | (1usize << GREATER)))
+                                        != 0)
+                                {
                                     let tmp = recog.err_handler.recover_inline(&mut recog.base)?;
                                     cast_mut::<_, RelationContext>(&mut _localctx).op =
                                         Some(tmp.clone());
@@ -1506,11 +1507,12 @@ where
 
                                         _la = recog.base.input.la(1);
                                         if !(((_la) & !0x3f) == 0
-                                        && ((1usize << _la)
-                                            & ((1usize << STAR)
-                                                | (1usize << SLASH)
-                                                | (1usize << PERCENT)))
-                                            != 0) {
+                                            && ((1usize << _la)
+                                                & ((1usize << STAR)
+                                                    | (1usize << SLASH)
+                                                    | (1usize << PERCENT)))
+                                                != 0)
+                                        {
                                             let tmp = recog
                                                 .err_handler
                                                 .recover_inline(&mut recog.base)?;
