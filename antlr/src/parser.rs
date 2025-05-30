@@ -1,8 +1,8 @@
-use crate::ast::{Expr, IdedExpr};
+use crate::ast::{CallExpr, Expr, IdedExpr};
 use crate::gen::{
     BoolFalseContext, BoolTrueContext, CalcContext, CalcContextAttrs, ConditionalAndContext,
-    ConditionalOrContext, ConstantLiteralContext, ConstantLiteralContextAttrs, ExprContext,
-    IntContext, MemberExprContext, MemberExprContextAttrs, PrimaryExprContext,
+    ConditionalOrContext, ConstantLiteralContext, ConstantLiteralContextAttrs, DoubleContext,
+    ExprContext, IntContext, MemberExprContext, MemberExprContextAttrs, PrimaryExprContext,
     PrimaryExprContextAttrs, RelationContext, RelationContextAttrs, StartContext,
     StartContextAttrs, StringContext, UintContext,
 };
@@ -113,15 +113,18 @@ impl gen::CELVisitorCompat<'_> for Parser {
         match &ctx.op {
             None => self.visit(ctx.unary().as_deref().unwrap()),
             Some(op) => {
-                let _lhs = self.visit(ctx.calc(0).unwrap().deref());
-                let _rhs = self.visit(ctx.calc(1).unwrap().deref());
-                println!(
-                    "{} {} {}",
-                    ctx.calc(0).unwrap().deref().get_text(),
-                    op.get_text(),
-                    ctx.calc(1).unwrap().deref().get_text()
-                );
-                self.helper.next_expr(Expr::Call)
+                let lhs = self.visit(ctx.calc(0).unwrap().deref());
+                let opId = self.helper.next_id();
+                let rhs = self.visit(ctx.calc(1).unwrap().deref());
+                IdedExpr {
+                    expr: Expr::Call(CallExpr {
+                        func_name: find_operator(op.get_text())
+                            .expect("operator not found!")
+                            .to_string(),
+                        args: vec![lhs, rhs],
+                    }),
+                    id: opId,
+                }
             }
         }
     }
@@ -173,6 +176,12 @@ impl gen::CELVisitorCompat<'_> for Parser {
     fn visit_BoolFalse(&mut self, _ctx: &BoolFalseContext<'_>) -> Self::Return {
         self.helper.next_expr(Expr::Literal(Val::Boolean(false)))
     }
+
+    fn visit_Double(&mut self, ctx: &DoubleContext<'_>) -> Self::Return {
+        self.helper.next_expr(Expr::Literal(Val::Double(
+            ctx.get_text().parse::<f64>().unwrap(),
+        )))
+    }
 }
 
 pub struct ParserHelper {
@@ -200,11 +209,23 @@ impl ParserHelper {
     }
 }
 
+fn find_operator(input: &str) -> Option<&str> {
+    for (op, operator) in OPERATORS {
+        if op == input {
+            return Some(operator);
+        }
+    }
+    None
+}
+
+const OPERATORS: [(&str, &str); 1] = [("-", "_-_")];
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::ast::Expr;
     use crate::reference::Val;
+    use std::iter;
 
     struct TestInfo {
         // I contains the input expression to be parsed.
@@ -226,7 +247,7 @@ mod tests {
     }
     #[test]
     fn test() {
-        let test_cases: [TestInfo; 11] = [
+        let test_cases = [
             TestInfo {
                 i: r#""A""#,
                 p: r#""A"^#1:*expr.Constant_StringValue#"#,
@@ -271,13 +292,27 @@ mod tests {
                 i: "-1",
                 p: "-1^#1:*expr.Constant_Int64Value#",
             },
+            TestInfo {
+                i: "4--4",
+                p: r#"_-_(
+    4^#1:*expr.Constant_Int64Value#,
+    -4^#3:*expr.Constant_Int64Value#
+)^#2:*expr.Expr_CallExpr#"#,
+            },
+            TestInfo {
+                i: "4--4.1",
+                p: r#"_-_(
+    4^#1:*expr.Constant_Int64Value#,
+    -4.1^#3:*expr.Constant_DoubleValue#
+)^#2:*expr.Expr_CallExpr#"#,
+            },
         ];
 
         for test_case in test_cases {
             let parser = Parser::new();
             let result = parser.parse(&test_case.i);
             assert_eq!(
-                to_go_like_string(result.unwrap().expr),
+                to_go_like_string(&result.unwrap()),
                 test_case.p,
                 "Expr `{}` failed",
                 test_case.i
@@ -285,30 +320,105 @@ mod tests {
         }
     }
 
-    fn to_go_like_string(expr: Expr) -> String {
-        match expr {
-            Expr::Unspecified => "*expr.Unspecified".to_string(),
-            Expr::Call => "*expr.Expr_CallExpr".to_string(),
-            Expr::Comprehension => "".to_string(),
-            Expr::Ident => "".to_string(),
-            Expr::List => "".to_string(),
-            Expr::Literal(v) => match v {
-                Val::String(s) => {
-                    format!("{s}^#{}:{}#", 1, "*expr.Constant_StringValue")
+    fn to_go_like_string(expr: &IdedExpr) -> String {
+        let mut writer = DebugWriter::default();
+        writer.buffer(expr);
+        writer.done()
+    }
+
+    struct DebugWriter {
+        buffer: String,
+        indents: usize,
+        line_start: bool,
+    }
+
+    impl Default for DebugWriter {
+        fn default() -> Self {
+            Self {
+                buffer: String::default(),
+                indents: 0,
+                line_start: true,
+            }
+        }
+    }
+
+    impl DebugWriter {
+        fn buffer(&mut self, expr: &IdedExpr) -> &Self {
+            let e = match &expr.expr {
+                Expr::Unspecified => "",
+                Expr::Call(call) => {
+                    self.push(call.func_name.as_str());
+                    self.push("(");
+                    if call.args.len() > 0 {
+                        self.inc_indent();
+                        self.newline();
+                        for i in 0..call.args.len() {
+                            if i > 0 {
+                                self.push(",");
+                                self.newline();
+                            }
+                            self.buffer(&call.args[i]);
+                        }
+                        self.dec_indent();
+                        self.newline();
+                    }
+                    self.push(")");
+                    &format!("^#{}:{}#", expr.id, "*expr.Expr_CallExpr")
                 }
-                Val::Boolean(b) => {
-                    format!("{b}^#{}:{}#", 1, "*expr.Constant_BoolValue")
-                }
-                Val::Int(i) => {
-                    format!("{i}^#{}:{}#", 1, "*expr.Constant_Int64Value")
-                }
-                Val::UInt(u) => {
-                    format!("{u}u^#{}:{}#", 1, "*expr.Constant_Uint64Value")
-                }
-            },
-            Expr::Map => "".to_string(),
-            Expr::Select => "".to_string(),
-            Expr::Struct => "".to_string(),
+                Expr::Comprehension => "",
+                Expr::Ident => "",
+                Expr::List => "",
+                Expr::Literal(val) => match val {
+                    Val::String(s) => {
+                        &format!("{s}^#{}:{}#", expr.id, "*expr.Constant_StringValue")
+                    }
+                    Val::Boolean(b) => &format!("{b}^#{}:{}#", expr.id, "*expr.Constant_BoolValue"),
+                    Val::Int(i) => &format!("{i}^#{}:{}#", expr.id, "*expr.Constant_Int64Value"),
+                    Val::UInt(u) => &format!("{u}u^#{}:{}#", expr.id, "*expr.Constant_Uint64Value"),
+                    Val::Double(f) => {
+                        &format!("{f}^#{}:{}#", expr.id, "*expr.Constant_DoubleValue")
+                    }
+                },
+                Expr::Map => "",
+                Expr::Select => "",
+                Expr::Struct => "",
+            };
+            self.push(e);
+            self
+        }
+
+        fn push(&mut self, literal: &str) {
+            self.indent();
+            self.buffer.push_str(literal);
+        }
+
+        fn indent(&mut self) {
+            if self.line_start {
+                self.line_start = false;
+                self.buffer.push_str(
+                    iter::repeat("    ")
+                        .take(self.indents)
+                        .collect::<String>()
+                        .as_str(),
+                )
+            }
+        }
+
+        fn newline(&mut self) {
+            self.buffer.push('\n');
+            self.line_start = true;
+        }
+
+        fn inc_indent(&mut self) {
+            self.indents = self.indents + 1;
+        }
+
+        fn dec_indent(&mut self) {
+            self.indents = self.indents - 1;
+        }
+
+        fn done(self) -> String {
+            self.buffer
         }
     }
 }
