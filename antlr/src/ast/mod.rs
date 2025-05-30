@@ -20,7 +20,7 @@ pub enum Expr {
     Comprehension,
 
     /// IdentKind represents a simple variable, constant, or type identifier.
-    Ident,
+    Ident(String),
 
     /// ListKind represents a list literal expression.
     List,

@@ -1,10 +1,11 @@
 use crate::ast::{CallExpr, Expr, IdedExpr};
 use crate::gen::{
-    BoolFalseContext, BoolTrueContext, CalcContext, CalcContextAttrs, ConditionalAndContext,
-    ConditionalOrContext, ConstantLiteralContext, ConstantLiteralContextAttrs, DoubleContext,
-    ExprContext, IntContext, MemberExprContext, MemberExprContextAttrs, PrimaryExprContext,
-    PrimaryExprContextAttrs, RelationContext, RelationContextAttrs, StartContext,
-    StartContextAttrs, StringContext, UintContext,
+    BoolFalseContext, BoolTrueContext, BytesContext, CalcContext, CalcContextAttrs,
+    ConditionalAndContext, ConditionalOrContext, ConstantLiteralContext,
+    ConstantLiteralContextAttrs, DoubleContext, ExprContext, IdentContext, IntContext,
+    LogicalNotContext, LogicalNotContextAttrs, MemberExprContext, MemberExprContextAttrs,
+    NullContext, PrimaryExprContext, PrimaryExprContextAttrs, RelationContext,
+    RelationContextAttrs, StartContext, StartContextAttrs, StringContext, UintContext,
 };
 use crate::reference::Val;
 use crate::{ast, gen};
@@ -133,8 +134,28 @@ impl gen::CELVisitorCompat<'_> for Parser {
         <Self as ParseTreeVisitorCompat>::visit(self, ctx.member().as_deref().unwrap())
     }
 
+    fn visit_LogicalNot(&mut self, ctx: &LogicalNotContext<'_>) -> Self::Return {
+        if ctx.ops.len() % 2 == 0 {
+            self.visit(ctx.member().as_deref().unwrap());
+        }
+        let op_id = self.helper.next_id();
+        let target = self.visit(ctx.member().as_deref().unwrap());
+        IdedExpr {
+            expr: Expr::Call(CallExpr {
+                func_name: "!_".to_string(),
+                args: vec![target],
+            }),
+            id: op_id,
+        }
+    }
+
     fn visit_PrimaryExpr(&mut self, ctx: &PrimaryExprContext<'_>) -> Self::Return {
         <Self as ParseTreeVisitorCompat>::visit(self, ctx.primary().as_deref().unwrap())
+    }
+
+    fn visit_Ident(&mut self, ctx: &IdentContext<'_>) -> Self::Return {
+        let id = ctx.id.clone().unwrap().text;
+        self.helper.next_expr(Expr::Ident(id.to_string()))
     }
 
     fn visit_ConstantLiteral(&mut self, ctx: &ConstantLiteralContext<'_>) -> Self::Return {
@@ -151,7 +172,6 @@ impl gen::CELVisitorCompat<'_> for Parser {
         .unwrap();
         self.helper.next_expr(Expr::Literal(Val::Int(val)))
     }
-
     fn visit_Uint(&mut self, ctx: &UintContext<'_>) -> Self::Return {
         let mut string = ctx.get_text();
         string.truncate(string.len() - 1);
@@ -164,9 +184,22 @@ impl gen::CELVisitorCompat<'_> for Parser {
         self.helper.next_expr(Expr::Literal(Val::UInt(val)))
     }
 
+    fn visit_Double(&mut self, ctx: &DoubleContext<'_>) -> Self::Return {
+        self.helper.next_expr(Expr::Literal(Val::Double(
+            ctx.get_text().parse::<f64>().unwrap(),
+        )))
+    }
+
     fn visit_String(&mut self, ctx: &StringContext<'_>) -> Self::Return {
         self.helper
             .next_expr(Expr::Literal(Val::String(ctx.get_text())))
+    }
+
+    fn visit_Bytes(&mut self, ctx: &BytesContext<'_>) -> Self::Return {
+        let string = ctx.get_text();
+        self.helper.next_expr(Expr::Literal(Val::Bytes(
+            string.as_bytes()[2..string.len() - 1].to_vec(),
+        )))
     }
 
     fn visit_BoolTrue(&mut self, _ctx: &BoolTrueContext<'_>) -> Self::Return {
@@ -177,10 +210,8 @@ impl gen::CELVisitorCompat<'_> for Parser {
         self.helper.next_expr(Expr::Literal(Val::Boolean(false)))
     }
 
-    fn visit_Double(&mut self, ctx: &DoubleContext<'_>) -> Self::Return {
-        self.helper.next_expr(Expr::Literal(Val::Double(
-            ctx.get_text().parse::<f64>().unwrap(),
-        )))
+    fn visit_Null(&mut self, _: &NullContext<'_>) -> Self::Return {
+        self.helper.next_expr(Expr::Literal(Val::Null))
     }
 }
 
@@ -306,6 +337,28 @@ mod tests {
     -4.1^#3:*expr.Constant_DoubleValue#
 )^#2:*expr.Expr_CallExpr#"#,
             },
+            TestInfo {
+                i: r#"b"abc""#,
+                p: r#"b"abc"^#1:*expr.Constant_BytesValue#"#,
+            },
+            TestInfo {
+                i: "23.39",
+                p: "23.39^#1:*expr.Constant_DoubleValue#",
+            },
+            TestInfo {
+                i: "!a",
+                p: "!_(
+    a^#2:*expr.Expr_IdentExpr#
+)^#1:*expr.Expr_CallExpr#",
+            },
+            TestInfo {
+                i: "null",
+                p: "null^#1:*expr.Constant_NullValue#",
+            },
+            TestInfo {
+                i: "a",
+                p: "a^#1:*expr.Expr_IdentExpr#",
+            },
         ];
 
         for test_case in test_cases {
@@ -366,7 +419,7 @@ mod tests {
                     &format!("^#{}:{}#", expr.id, "*expr.Expr_CallExpr")
                 }
                 Expr::Comprehension => "",
-                Expr::Ident => "",
+                Expr::Ident(id) => &format!("{}^#{}:{}#", id, expr.id, "*expr.Expr_IdentExpr"),
                 Expr::List => "",
                 Expr::Literal(val) => match val {
                     Val::String(s) => {
@@ -378,6 +431,13 @@ mod tests {
                     Val::Double(f) => {
                         &format!("{f}^#{}:{}#", expr.id, "*expr.Constant_DoubleValue")
                     }
+                    Val::Bytes(bytes) => &format!(
+                        "b\"{}\"^#{}:{}#",
+                        String::from_utf8_lossy(bytes),
+                        expr.id,
+                        "*expr.Constant_BytesValue"
+                    ),
+                    Val::Null => &format!("null^#{}:{}#", expr.id, "*expr.Constant_NullValue"),
                 },
                 Expr::Map => "",
                 Expr::Select => "",
