@@ -4,4 +4,5 @@ pub enum Val {
     Boolean(bool),
     Int(i64),
     UInt(u64),
+    Double(f64),
 }
