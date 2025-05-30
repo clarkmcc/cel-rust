@@ -1,7 +1,7 @@
 use crate::reference::Val;
 
 pub struct Ast {
-    pub expr: Expr,
+    pub expr: IdedExpr,
     //sourceInfo: SourceInfo,
     //typeMap:    map[int64]*types.Type,
     //refMap:     map[int64]*ReferenceInfo,
@@ -36,4 +36,10 @@ pub enum Expr {
 
     /// StructKind represents a struct literal expression.
     Struct,
+}
+
+#[derive(Debug, Default)]
+pub struct IdedExpr {
+    pub id: u64,
+    pub expr: Expr,
 }

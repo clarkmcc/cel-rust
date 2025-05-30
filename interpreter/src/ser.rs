@@ -93,7 +93,10 @@ impl ser::Serialize for Duration {
             ) -> std::result::Result<S::Ok, S::Error> {
                 let mut s = serializer.serialize_struct(Duration::STRUCT_NAME, 2)?;
                 s.serialize_field(Duration::SECS_FIELD, &self.0.num_seconds())?;
-                s.serialize_field(Duration::NANOS_FIELD, &(self.0.num_nanoseconds().unwrap_or(0) % 1_000_000_000))?;
+                s.serialize_field(
+                    Duration::NANOS_FIELD,
+                    &(self.0.num_nanoseconds().unwrap_or(0) % 1_000_000_000),
+                )?;
                 s.end()
             }
         }
