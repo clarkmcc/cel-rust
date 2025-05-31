@@ -3,10 +3,10 @@ use crate::gen::{
     BoolFalseContext, BoolTrueContext, BytesContext, CalcContext, CalcContextAttrs,
     ConditionalAndContext, ConditionalOrContext, ConstantLiteralContext,
     ConstantLiteralContextAttrs, DoubleContext, ExprContext, IdentContext, IntContext,
-    LogicalNotContext, LogicalNotContextAttrs, MemberExprContext, MemberExprContextAttrs,
-    NullContext, PrimaryExprContext, PrimaryExprContextAttrs, RelationContext,
-    RelationContextAttrs, SelectContext, SelectContextAttrs, StartContext, StartContextAttrs,
-    StringContext, UintContext,
+    LogicalNotContext, LogicalNotContextAttrs, MemberCallContext, MemberCallContextAttrs,
+    MemberExprContext, MemberExprContextAttrs, NullContext, PrimaryExprContext,
+    PrimaryExprContextAttrs, RelationContext, RelationContextAttrs, SelectContext,
+    SelectContextAttrs, StartContext, StartContextAttrs, StringContext, UintContext,
 };
 use crate::reference::Val;
 use crate::{ast, gen};
@@ -99,6 +99,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
             let if_false = self.visit(ctx.e2.as_deref().unwrap());
             IdedExpr {
                 expr: Expr::Call(CallExpr {
+                    target: None,
                     func_name: "_?_:_".to_string(),
                     args: vec![result, if_true, if_false],
                 }),
@@ -159,6 +160,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
                     let rhs = self.visit(ctx.relation(1).unwrap().deref());
                     IdedExpr {
                         expr: Expr::Call(CallExpr {
+                            target: None,
                             func_name: find_operator(op.get_text())
                                 .expect("operator not found!")
                                 .to_string(),
@@ -180,6 +182,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
                 let rhs = self.visit(ctx.calc(1).unwrap().deref());
                 IdedExpr {
                     expr: Expr::Call(CallExpr {
+                        target: None,
                         func_name: find_operator(op.get_text())
                             .expect("operator not found!")
                             .to_string(),
@@ -203,8 +206,32 @@ impl gen::CELVisitorCompat<'_> for Parser {
         let target = self.visit(ctx.member().as_deref().unwrap());
         IdedExpr {
             expr: Expr::Call(CallExpr {
+                target: None,
                 func_name: "!_".to_string(),
                 args: vec![target],
+            }),
+            id: op_id,
+        }
+    }
+
+    fn visit_MemberCall(&mut self, ctx: &MemberCallContext<'_>) -> Self::Return {
+        let operand = self.visit(ctx.member().as_deref().unwrap());
+        // Handle the error case where no valid identifier is specified.
+        // if ctx.id.is_none() {}
+        let id = ctx.id.as_deref().unwrap().get_text();
+
+        // return p.receiverCallOrMacro(opID, id, operand, p.visitExprList(ctx.GetArgs())...)
+        let op_id = self.helper.next_id();
+        let args = ctx
+            .args
+            .iter()
+            .map(|arg| self.visit(arg.deref()))
+            .collect::<Vec<IdedExpr>>();
+        IdedExpr {
+            expr: Expr::Call(CallExpr {
+                func_name: id.to_string(),
+                target: Some(Box::new(operand)),
+                args,
             }),
             id: op_id,
         }
@@ -246,6 +273,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
         .unwrap();
         self.helper.next_expr(Expr::Literal(Val::Int(val)))
     }
+
     fn visit_Uint(&mut self, ctx: &UintContext<'_>) -> Self::Return {
         let mut string = ctx.get_text();
         string.truncate(string.len() - 1);
@@ -352,6 +380,7 @@ impl LogicManager {
         IdedExpr {
             id: self.ops[mid],
             expr: Expr::Call(CallExpr {
+                target: None,
                 func_name: self.function.clone(),
                 args: vec![left, right],
             }),
@@ -671,6 +700,16 @@ mod tests {
                 i: "a.b.c",
                 p: "a^#1:*expr.Expr_IdentExpr#.b^#2:*expr.Expr_SelectExpr#.c^#3:*expr.Expr_SelectExpr#",
             },
+            TestInfo {
+                i: "a.b()",
+                p: "a^#1:*expr.Expr_IdentExpr#.b()^#2:*expr.Expr_CallExpr#",
+            },
+            TestInfo {
+                i: "a.b(c)",
+                p: "a^#1:*expr.Expr_IdentExpr#.b(
+    c^#3:*expr.Expr_IdentExpr#
+)^#2:*expr.Expr_CallExpr#",
+            },
         ];
 
         for test_case in test_cases {
@@ -710,8 +749,12 @@ mod tests {
     impl DebugWriter {
         fn buffer(&mut self, expr: &IdedExpr) -> &Self {
             let e = match &expr.expr {
-                Expr::Unspecified => "",
+                Expr::Unspecified => "UNSPECIFIED!",
                 Expr::Call(call) => {
+                    if let Some(target) = &call.target {
+                        self.buffer(target);
+                        self.push(".");
+                    }
                     self.push(call.func_name.as_str());
                     self.push("(");
                     if call.args.len() > 0 {
