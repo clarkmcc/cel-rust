@@ -26,6 +26,16 @@ pub struct Parser {
 }
 
 impl Parser {
+    fn new_logic_manager(&self, func: &str, term: IdedExpr) -> LogicManager {
+        LogicManager {
+            function: func.to_string(),
+            terms: vec![term],
+            ops: vec![],
+        }
+    }
+}
+
+impl Parser {
     pub fn new() -> Self {
         Self {
             ast: ast::Ast {
@@ -100,7 +110,19 @@ impl gen::CELVisitorCompat<'_> for Parser {
         if ctx.ops.is_empty() {
             <Self as ParseTreeVisitorCompat>::visit(self, ctx.e.as_deref().unwrap())
         } else {
-            <Self as ParseTreeVisitorCompat>::visit_children(self, ctx)
+            let result = self.visit(ctx.e.as_deref().unwrap());
+            let mut l = self.new_logic_manager("_||_", result);
+            let rest = &ctx.e1;
+            if ctx.ops.len() > rest.len() {
+                // why is >= not ok?
+                panic!("unexpected character, wanted '||'")
+            }
+            for (i, _op) in ctx.ops.iter().enumerate() {
+                let next = self.visit(rest[i].deref());
+                let op_id = self.helper.next_id();
+                l.add_term(op_id, next)
+            }
+            l.expr()
         }
     }
 
@@ -108,7 +130,19 @@ impl gen::CELVisitorCompat<'_> for Parser {
         if ctx.ops.is_empty() {
             <Self as ParseTreeVisitorCompat>::visit(self, ctx.e.as_deref().unwrap())
         } else {
-            <Self as ParseTreeVisitorCompat>::visit_children(self, ctx)
+            let result = self.visit(ctx.e.as_deref().unwrap());
+            let mut l = self.new_logic_manager("_&&_", result);
+            let rest = &ctx.e1;
+            if ctx.ops.len() > rest.len() {
+                // why is >= not ok?
+                panic!("unexpected character, wanted '&&'")
+            }
+            for (i, _op) in ctx.ops.iter().enumerate() {
+                let next = self.visit(rest[i].deref());
+                let op_id = self.helper.next_id();
+                l.add_term(op_id, next)
+            }
+            l.expr()
         }
     }
 
@@ -250,6 +284,51 @@ impl ParserHelper {
     }
 }
 
+struct LogicManager {
+    function: String,
+    terms: Vec<IdedExpr>,
+    ops: Vec<u64>,
+}
+
+impl LogicManager {
+    pub(crate) fn expr(mut self) -> IdedExpr {
+        if self.terms.len() == 1 {
+            self.terms.pop().unwrap()
+        } else {
+            self.balanced_tree(0, self.ops.len() - 1)
+        }
+    }
+
+    pub(crate) fn add_term(&mut self, op_id: u64, expr: IdedExpr) {
+        self.terms.push(expr);
+        self.ops.push(op_id);
+    }
+
+    fn balanced_tree(&mut self, lo: usize, hi: usize) -> IdedExpr {
+        let mid = (lo + hi).div_ceil(2);
+
+        let left = if mid == lo {
+            mem::take(&mut self.terms[mid])
+        } else {
+            self.balanced_tree(lo, mid - 1)
+        };
+
+        let right = if mid == hi {
+            mem::take(&mut self.terms[mid + 1])
+        } else {
+            self.balanced_tree(mid + 1, hi)
+        };
+
+        IdedExpr {
+            id: self.ops[mid],
+            expr: Expr::Call(CallExpr {
+                func_name: self.function.clone(),
+                args: vec![left, right],
+            }),
+        }
+    }
+}
+
 fn find_operator(input: &str) -> Option<&str> {
     for (op, operator) in OPERATORS {
         if op == input {
@@ -259,7 +338,7 @@ fn find_operator(input: &str) -> Option<&str> {
     None
 }
 
-const OPERATORS: [(&str, &str); 1] = [("-", "_-_")];
+const OPERATORS: [(&str, &str); 2] = [("-", "_-_"), ("+", "_+_")];
 
 #[cfg(test)]
 mod tests {
@@ -375,6 +454,100 @@ mod tests {
     a^#1:*expr.Expr_IdentExpr#,
     b^#3:*expr.Expr_IdentExpr#,
     c^#4:*expr.Expr_IdentExpr#
+)^#2:*expr.Expr_CallExpr#",
+            },
+            TestInfo {
+                i: "a || b",
+                p: "_||_(
+    a^#1:*expr.Expr_IdentExpr#,
+    b^#2:*expr.Expr_IdentExpr#
+)^#3:*expr.Expr_CallExpr#",
+            },
+            TestInfo {
+                i: "a || b || c || d || e || f ",
+                p: "_||_(
+    _||_(
+        _||_(
+            a^#1:*expr.Expr_IdentExpr#,
+            b^#2:*expr.Expr_IdentExpr#
+        )^#3:*expr.Expr_CallExpr#,
+        c^#4:*expr.Expr_IdentExpr#
+    )^#5:*expr.Expr_CallExpr#,
+    _||_(
+        _||_(
+            d^#6:*expr.Expr_IdentExpr#,
+            e^#8:*expr.Expr_IdentExpr#
+        )^#9:*expr.Expr_CallExpr#,
+        f^#10:*expr.Expr_IdentExpr#
+    )^#11:*expr.Expr_CallExpr#
+)^#7:*expr.Expr_CallExpr#",
+            },
+            TestInfo {
+                i: "a && b",
+                p: "_&&_(
+    a^#1:*expr.Expr_IdentExpr#,
+    b^#2:*expr.Expr_IdentExpr#
+)^#3:*expr.Expr_CallExpr#",
+            },
+            TestInfo {
+                i: "a && b && c && d && e && f && g",
+                p: "_&&_(
+    _&&_(
+        _&&_(
+            a^#1:*expr.Expr_IdentExpr#,
+            b^#2:*expr.Expr_IdentExpr#
+        )^#3:*expr.Expr_CallExpr#,
+        _&&_(
+            c^#4:*expr.Expr_IdentExpr#,
+            d^#6:*expr.Expr_IdentExpr#
+        )^#7:*expr.Expr_CallExpr#
+    )^#5:*expr.Expr_CallExpr#,
+    _&&_(
+        _&&_(
+            e^#8:*expr.Expr_IdentExpr#,
+            f^#10:*expr.Expr_IdentExpr#
+        )^#11:*expr.Expr_CallExpr#,
+        g^#12:*expr.Expr_IdentExpr#
+    )^#13:*expr.Expr_CallExpr#
+)^#9:*expr.Expr_CallExpr#",
+            },
+            TestInfo {
+                i: "a && b && c && d || e && f && g && h",
+                p: "_||_(
+    _&&_(
+        _&&_(
+            a^#1:*expr.Expr_IdentExpr#,
+            b^#2:*expr.Expr_IdentExpr#
+        )^#3:*expr.Expr_CallExpr#,
+        _&&_(
+            c^#4:*expr.Expr_IdentExpr#,
+            d^#6:*expr.Expr_IdentExpr#
+        )^#7:*expr.Expr_CallExpr#
+    )^#5:*expr.Expr_CallExpr#,
+    _&&_(
+        _&&_(
+            e^#8:*expr.Expr_IdentExpr#,
+            f^#9:*expr.Expr_IdentExpr#
+        )^#10:*expr.Expr_CallExpr#,
+        _&&_(
+            g^#11:*expr.Expr_IdentExpr#,
+            h^#13:*expr.Expr_IdentExpr#
+        )^#14:*expr.Expr_CallExpr#
+    )^#12:*expr.Expr_CallExpr#
+)^#15:*expr.Expr_CallExpr#",
+            },
+            TestInfo {
+                i: "a + b",
+                p: "_+_(
+    a^#1:*expr.Expr_IdentExpr#,
+    b^#3:*expr.Expr_IdentExpr#
+)^#2:*expr.Expr_CallExpr#",
+            },
+            TestInfo {
+                i: "a - b",
+                p: "_-_(
+    a^#1:*expr.Expr_IdentExpr#,
+    b^#3:*expr.Expr_IdentExpr#
 )^#2:*expr.Expr_CallExpr#",
             },
         ];
