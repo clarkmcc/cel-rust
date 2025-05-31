@@ -150,7 +150,23 @@ impl gen::CELVisitorCompat<'_> for Parser {
         if ctx.op.is_none() {
             <Self as ParseTreeVisitorCompat>::visit(self, ctx.calc().as_deref().unwrap())
         } else {
-            <Self as ParseTreeVisitorCompat>::visit_children(self, ctx)
+            match &ctx.op {
+                None => <Self as ParseTreeVisitorCompat>::visit_children(self, ctx),
+                Some(op) => {
+                    let lhs = self.visit(ctx.relation(0).unwrap().deref());
+                    let op_id = self.helper.next_id();
+                    let rhs = self.visit(ctx.relation(1).unwrap().deref());
+                    IdedExpr {
+                        expr: Expr::Call(CallExpr {
+                            func_name: find_operator(op.get_text())
+                                .expect("operator not found!")
+                                .to_string(),
+                            args: vec![lhs, rhs],
+                        }),
+                        id: op_id,
+                    }
+                }
+            }
         }
     }
 
@@ -159,7 +175,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
             None => self.visit(ctx.unary().as_deref().unwrap()),
             Some(op) => {
                 let lhs = self.visit(ctx.calc(0).unwrap().deref());
-                let opId = self.helper.next_id();
+                let op_id = self.helper.next_id();
                 let rhs = self.visit(ctx.calc(1).unwrap().deref());
                 IdedExpr {
                     expr: Expr::Call(CallExpr {
@@ -168,7 +184,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
                             .to_string(),
                         args: vec![lhs, rhs],
                     }),
-                    id: opId,
+                    id: op_id,
                 }
             }
         }
@@ -338,12 +354,19 @@ fn find_operator(input: &str) -> Option<&str> {
     None
 }
 
-const OPERATORS: [(&str, &str); 5] = [
+const OPERATORS: [(&str, &str); 12] = [
     ("-", "_-_"),
     ("+", "_+_"),
     ("*", "_*_"),
     ("/", "_/_"),
     ("%", "_%_"),
+    ("==", "_==_"),
+    ("!=", "_!=_"),
+    (">=", "_>=_"),
+    ("<=", "_<=_"),
+    (">", "_>_"),
+    ("<", "_<_"),
+    ("in", "@in"),
 ];
 
 #[cfg(test)]
@@ -573,6 +596,55 @@ mod tests {
             TestInfo {
                 i: "a % b",
                 p: "_%_(
+    a^#1:*expr.Expr_IdentExpr#,
+    b^#3:*expr.Expr_IdentExpr#
+)^#2:*expr.Expr_CallExpr#",
+            },
+            TestInfo {
+                i: "a in b",
+                p: "@in(
+    a^#1:*expr.Expr_IdentExpr#,
+    b^#3:*expr.Expr_IdentExpr#
+)^#2:*expr.Expr_CallExpr#",
+            },
+            TestInfo {
+                i: "a == b",
+                p: "_==_(
+    a^#1:*expr.Expr_IdentExpr#,
+    b^#3:*expr.Expr_IdentExpr#
+)^#2:*expr.Expr_CallExpr#",
+            },
+            TestInfo {
+                i: "a != b",
+                p: "_!=_(
+    a^#1:*expr.Expr_IdentExpr#,
+    b^#3:*expr.Expr_IdentExpr#
+)^#2:*expr.Expr_CallExpr#",
+            },
+            TestInfo {
+                i: "a > b",
+                p: "_>_(
+    a^#1:*expr.Expr_IdentExpr#,
+    b^#3:*expr.Expr_IdentExpr#
+)^#2:*expr.Expr_CallExpr#",
+            },
+            TestInfo {
+                i: "a >= b",
+                p: "_>=_(
+    a^#1:*expr.Expr_IdentExpr#,
+    b^#3:*expr.Expr_IdentExpr#
+)^#2:*expr.Expr_CallExpr#",
+            },
+            TestInfo {
+                i: "a < b",
+                p: "_<_(
+    a^#1:*expr.Expr_IdentExpr#,
+    b^#3:*expr.Expr_IdentExpr#
+)^#2:*expr.Expr_CallExpr#",
+            },
+            TestInfo {
+                i: "a <= b",
+                p: "_<=_(
     a^#1:*expr.Expr_IdentExpr#,
     b^#3:*expr.Expr_IdentExpr#
 )^#2:*expr.Expr_CallExpr#",
