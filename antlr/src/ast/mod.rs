@@ -47,6 +47,7 @@ pub struct IdedExpr {
 #[derive(Debug, Default)]
 pub struct CallExpr {
     pub func_name: String,
+    pub target: Option<Box<IdedExpr>>,
     pub args: Vec<IdedExpr>,
 }
 
