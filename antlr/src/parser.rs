@@ -82,7 +82,17 @@ impl gen::CELVisitorCompat<'_> for Parser {
         if ctx.op.is_none() {
             <Self as ParseTreeVisitorCompat>::visit(self, ctx.e.as_deref().unwrap())
         } else {
-            <Self as ParseTreeVisitorCompat>::visit_children(self, ctx)
+            let result = self.visit(ctx.e.as_deref().unwrap());
+            let op_id = self.helper.next_id();
+            let if_true = self.visit(ctx.e1.as_deref().unwrap());
+            let if_false = self.visit(ctx.e2.as_deref().unwrap());
+            IdedExpr {
+                expr: Expr::Call(CallExpr {
+                    func_name: "_?_:_".to_string(),
+                    args: vec![result, if_true, if_false],
+                }),
+                id: op_id,
+            }
         }
     }
 
@@ -358,6 +368,14 @@ mod tests {
             TestInfo {
                 i: "a",
                 p: "a^#1:*expr.Expr_IdentExpr#",
+            },
+            TestInfo {
+                i: "a?b:c",
+                p: "_?_:_(
+    a^#1:*expr.Expr_IdentExpr#,
+    b^#3:*expr.Expr_IdentExpr#,
+    c^#4:*expr.Expr_IdentExpr#
+)^#2:*expr.Expr_CallExpr#",
             },
         ];
 
