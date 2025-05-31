@@ -1,11 +1,12 @@
-use crate::ast::{CallExpr, Expr, IdedExpr};
+use crate::ast::{CallExpr, Expr, IdedExpr, SelectExpr};
 use crate::gen::{
     BoolFalseContext, BoolTrueContext, BytesContext, CalcContext, CalcContextAttrs,
     ConditionalAndContext, ConditionalOrContext, ConstantLiteralContext,
     ConstantLiteralContextAttrs, DoubleContext, ExprContext, IdentContext, IntContext,
     LogicalNotContext, LogicalNotContextAttrs, MemberExprContext, MemberExprContextAttrs,
     NullContext, PrimaryExprContext, PrimaryExprContextAttrs, RelationContext,
-    RelationContextAttrs, StartContext, StartContextAttrs, StringContext, UintContext,
+    RelationContextAttrs, SelectContext, SelectContextAttrs, StartContext, StartContextAttrs,
+    StringContext, UintContext,
 };
 use crate::reference::Val;
 use crate::{ast, gen};
@@ -207,6 +208,19 @@ impl gen::CELVisitorCompat<'_> for Parser {
             }),
             id: op_id,
         }
+    }
+
+    fn visit_Select(&mut self, ctx: &SelectContext<'_>) -> Self::Return {
+        let operand = self.visit(ctx.member().as_deref().unwrap());
+        // if ctx.id.is_none() || ctx.op.is_none() {
+        // ?
+        // }
+        let id = ctx.id.as_deref().unwrap().get_text();
+        self.helper.next_expr(Expr::Select(SelectExpr {
+            op: ctx.op.as_deref().unwrap().text.to_string(),
+            operand: Box::new(operand),
+            id,
+        }))
     }
 
     fn visit_PrimaryExpr(&mut self, ctx: &PrimaryExprContext<'_>) -> Self::Return {
@@ -649,6 +663,14 @@ mod tests {
     b^#3:*expr.Expr_IdentExpr#
 )^#2:*expr.Expr_CallExpr#",
             },
+            TestInfo {
+                i: "a.b",
+                p: "a^#1:*expr.Expr_IdentExpr#.b^#2:*expr.Expr_SelectExpr#",
+            },
+            TestInfo {
+                i: "a.b.c",
+                p: "a^#1:*expr.Expr_IdentExpr#.b^#2:*expr.Expr_SelectExpr#.c^#3:*expr.Expr_SelectExpr#",
+            },
         ];
 
         for test_case in test_cases {
@@ -730,7 +752,13 @@ mod tests {
                     Val::Null => &format!("null^#{}:{}#", expr.id, "*expr.Constant_NullValue"),
                 },
                 Expr::Map => "",
-                Expr::Select => "",
+                Expr::Select(select) => {
+                    self.buffer(select.operand.deref());
+                    &format!(
+                        "{}{}^#{}:{}#",
+                        select.op, select.id, expr.id, "*expr.Expr_SelectExpr"
+                    )
+                }
                 Expr::Struct => "",
             };
             self.push(e);

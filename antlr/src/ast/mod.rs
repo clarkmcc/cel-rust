@@ -32,7 +32,7 @@ pub enum Expr {
     Map,
 
     /// SelectKind represents a field selection expression.
-    Select,
+    Select(SelectExpr),
 
     /// StructKind represents a struct literal expression.
     Struct,
@@ -48,4 +48,11 @@ pub struct IdedExpr {
 pub struct CallExpr {
     pub func_name: String,
     pub args: Vec<IdedExpr>,
+}
+
+#[derive(Debug, Default)]
+pub struct SelectExpr {
+    pub op: String,
+    pub operand: Box<IdedExpr>,
+    pub id: String,
 }
