@@ -338,7 +338,13 @@ fn find_operator(input: &str) -> Option<&str> {
     None
 }
 
-const OPERATORS: [(&str, &str); 2] = [("-", "_-_"), ("+", "_+_")];
+const OPERATORS: [(&str, &str); 5] = [
+    ("-", "_-_"),
+    ("+", "_+_"),
+    ("*", "_*_"),
+    ("/", "_/_"),
+    ("%", "_%_"),
+];
 
 #[cfg(test)]
 mod tests {
@@ -546,6 +552,27 @@ mod tests {
             TestInfo {
                 i: "a - b",
                 p: "_-_(
+    a^#1:*expr.Expr_IdentExpr#,
+    b^#3:*expr.Expr_IdentExpr#
+)^#2:*expr.Expr_CallExpr#",
+            },
+            TestInfo {
+                i: "a * b",
+                p: "_*_(
+    a^#1:*expr.Expr_IdentExpr#,
+    b^#3:*expr.Expr_IdentExpr#
+)^#2:*expr.Expr_CallExpr#",
+            },
+            TestInfo {
+                i: "a / b",
+                p: "_/_(
+    a^#1:*expr.Expr_IdentExpr#,
+    b^#3:*expr.Expr_IdentExpr#
+)^#2:*expr.Expr_CallExpr#",
+            },
+            TestInfo {
+                i: "a % b",
+                p: "_%_(
     a^#1:*expr.Expr_IdentExpr#,
     b^#3:*expr.Expr_IdentExpr#
 )^#2:*expr.Expr_CallExpr#",
