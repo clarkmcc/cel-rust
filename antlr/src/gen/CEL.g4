@@ -64,7 +64,7 @@ primary
     | op='[' elems=listInit? ','? ']'                               # CreateList
     | op='{' entries=mapInitializerList? ','? '}'                   # CreateStruct
     | leadingDot='.'? ids+=IDENTIFIER (ops+='.' ids+=IDENTIFIER)*
-        op='{' entries=fieldInitializerList? ','? '}'               # CreateMessage
+        op='{' entries=field_initializer_list? ','? '}'               # CreateMessage
     | literal                                                       # ConstantLiteral
     ;
 
@@ -76,7 +76,7 @@ listInit
     : elems+=optExpr (',' elems+=optExpr)*
     ;
 
-fieldInitializerList
+field_initializer_list
     : fields+=optField cols+=':' values+=expr (',' fields+=optField cols+=':' values+=expr)*
     ;
 

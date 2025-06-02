@@ -1,11 +1,14 @@
-use crate::ast::{CallExpr, Expr, IdedExpr, SelectExpr};
+use crate::ast::{
+    CallExpr, EntryExpr, Expr, IdedEntryExpr, IdedExpr, SelectExpr, StructExpr, StructFieldExpr,
+};
 use crate::gen::{
     BoolFalseContext, BoolTrueContext, BytesContext, CalcContext, CalcContextAttrs,
     ConditionalAndContext, ConditionalOrContext, ConstantLiteralContext,
-    ConstantLiteralContextAttrs, DoubleContext, ExprContext, GlobalCallContext, IdentContext,
-    IndexContext, IndexContextAttrs, IntContext, LogicalNotContext, LogicalNotContextAttrs,
-    MemberCallContext, MemberCallContextAttrs, MemberExprContext, MemberExprContextAttrs,
-    NestedContext, NullContext, PrimaryExprContext, PrimaryExprContextAttrs, RelationContext,
+    ConstantLiteralContextAttrs, CreateMessageContext, DoubleContext, ExprContext,
+    FieldInitializerListContext, GlobalCallContext, IdentContext, IndexContext, IndexContextAttrs,
+    IntContext, LogicalNotContext, LogicalNotContextAttrs, MemberCallContext,
+    MemberCallContextAttrs, MemberExprContext, MemberExprContextAttrs, NestedContext, NullContext,
+    OptFieldContextAttrs, PrimaryExprContext, PrimaryExprContextAttrs, RelationContext,
     RelationContextAttrs, SelectContext, SelectContextAttrs, StartContext, StartContextAttrs,
     StringContext, UintContext,
 };
@@ -28,22 +31,19 @@ pub struct Parser {
 }
 
 impl Parser {
-    fn new_logic_manager(&self, func: &str, term: IdedExpr) -> LogicManager {
-        LogicManager {
-            function: func.to_string(),
-            terms: vec![term],
-            ops: vec![],
-        }
-    }
-}
-
-impl Parser {
     pub fn new() -> Self {
         Self {
             ast: ast::Ast {
                 expr: IdedExpr::default(),
             },
             helper: ParserHelper::default(),
+        }
+    }
+    fn new_logic_manager(&self, func: &str, term: IdedExpr) -> LogicManager {
+        LogicManager {
+            function: func.to_string(),
+            terms: vec![term],
+            ops: vec![],
         }
     }
 
@@ -58,6 +58,30 @@ impl Parser {
             Ok(t) => Ok(self.visit(t.deref())),
             Err(_) => Err(ParserError {}),
         }
+    }
+
+    fn field_initializer_list(
+        &mut self,
+        ctx: &FieldInitializerListContext<'_>,
+    ) -> Vec<IdedEntryExpr> {
+        let mut fields = Vec::with_capacity(ctx.fields.len());
+        for (i, field) in ctx.fields.iter().enumerate() {
+            if i >= ctx.cols.len() || i >= ctx.values.len() {
+                return vec![];
+            }
+            let id = self.helper.next_id();
+            let field = field.escapeIdent().unwrap().get_text().to_string();
+            let value = self.visit(ctx.values[i].as_ref());
+            fields.push(IdedEntryExpr {
+                id,
+                expr: EntryExpr::StructField(StructFieldExpr {
+                    field,
+                    value,
+                    optional: false,
+                }),
+            });
+        }
+        fields
     }
 }
 
@@ -307,6 +331,31 @@ impl gen::CELVisitorCompat<'_> for Parser {
 
     fn visit_Nested(&mut self, ctx: &NestedContext<'_>) -> Self::Return {
         self.visit(ctx.e.as_deref().unwrap())
+    }
+
+    fn visit_CreateMessage(&mut self, ctx: &CreateMessageContext<'_>) -> Self::Return {
+        let mut message_name = String::new();
+        for id in &ctx.ids {
+            if !message_name.is_empty() {
+                message_name.push('.');
+            }
+            message_name.push_str(id.get_text());
+        }
+        if ctx.leadingDot.is_some() {
+            message_name = format!(".{}", message_name);
+        }
+        let op_id = self.helper.next_id();
+        let entries = match &ctx.entries {
+            None => vec![],
+            Some(entries) => self.field_initializer_list(entries),
+        };
+        IdedExpr {
+            id: op_id,
+            expr: Expr::Struct(StructExpr {
+                type_name: message_name,
+                entries,
+            }),
+        }
     }
 
     fn visit_ConstantLiteral(&mut self, ctx: &ConstantLiteralContext<'_>) -> Self::Return {
@@ -792,6 +841,23 @@ mod tests {
     c^#3:*expr.Expr_IdentExpr#
 )^#2:*expr.Expr_CallExpr#",
             },
+            TestInfo {
+                i: "foo{ }",
+                p: "foo{}^#1:*expr.Expr_StructExpr#",
+            },
+            TestInfo {
+                i: "foo{ a:b }",
+                p: "foo{
+    a:b^#3:*expr.Expr_IdentExpr#^#2:*expr.Expr_CreateStruct_Entry#
+}^#1:*expr.Expr_StructExpr#",
+            },
+            TestInfo {
+                i: "foo{ a:b, c:d }",
+                p: "foo{
+    a:b^#3:*expr.Expr_IdentExpr#^#2:*expr.Expr_CreateStruct_Entry#,
+    c:d^#5:*expr.Expr_IdentExpr#^#4:*expr.Expr_CreateStruct_Entry#
+}^#1:*expr.Expr_StructExpr#",
+            },
         ];
 
         for test_case in test_cases {
@@ -884,7 +950,35 @@ mod tests {
                         select.op, select.id, expr.id, "*expr.Expr_SelectExpr"
                     )
                 }
-                Expr::Struct => "",
+                Expr::Struct(s) => {
+                    self.push(&s.type_name);
+                    self.push("{");
+                    self.inc_indent();
+                    if !s.entries.is_empty() {
+                        self.newline();
+                    }
+                    for (i, entry) in s.entries.iter().enumerate() {
+                        match &entry.expr {
+                            EntryExpr::StructField(field) => {
+                                self.push(&field.field);
+                                self.push(":");
+                                self.buffer(&field.value);
+                                self.push(&format!(
+                                    "^#{}:{}#",
+                                    entry.id, "*expr.Expr_CreateStruct_Entry"
+                                ));
+                            }
+                            EntryExpr::MapEntry => panic!("WAT?!"),
+                        }
+                        if i < s.entries.len() - 1 {
+                            self.push(",");
+                        }
+                        self.newline();
+                    }
+                    self.dec_indent();
+                    self.push("}");
+                    &format!("^#{}:{}#", expr.id, "*expr.Expr_StructExpr")
+                }
             };
             self.push(e);
             self
