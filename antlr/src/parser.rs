@@ -2,9 +2,9 @@ use crate::ast::{CallExpr, Expr, IdedExpr, SelectExpr};
 use crate::gen::{
     BoolFalseContext, BoolTrueContext, BytesContext, CalcContext, CalcContextAttrs,
     ConditionalAndContext, ConditionalOrContext, ConstantLiteralContext,
-    ConstantLiteralContextAttrs, DoubleContext, ExprContext, IdentContext, IntContext,
-    LogicalNotContext, LogicalNotContextAttrs, MemberCallContext, MemberCallContextAttrs,
-    MemberExprContext, MemberExprContextAttrs, NestedContext, NestedContextAttrs, NullContext,
+    ConstantLiteralContextAttrs, DoubleContext, ExprContext, GlobalCallContext, IdentContext,
+    IntContext, LogicalNotContext, LogicalNotContextAttrs, MemberCallContext,
+    MemberCallContextAttrs, MemberExprContext, MemberExprContextAttrs, NestedContext, NullContext,
     PrimaryExprContext, PrimaryExprContextAttrs, RelationContext, RelationContextAttrs,
     SelectContext, SelectContextAttrs, StartContext, StartContextAttrs, StringContext, UintContext,
 };
@@ -225,6 +225,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
         let args = ctx
             .args
             .iter()
+            .flat_map(|arg| &arg.e)
             .map(|arg| self.visit(arg.deref()))
             .collect::<Vec<IdedExpr>>();
         IdedExpr {
@@ -257,6 +258,33 @@ impl gen::CELVisitorCompat<'_> for Parser {
     fn visit_Ident(&mut self, ctx: &IdentContext<'_>) -> Self::Return {
         let id = ctx.id.clone().unwrap().text;
         self.helper.next_expr(Expr::Ident(id.to_string()))
+    }
+
+    fn visit_GlobalCall(&mut self, ctx: &GlobalCallContext<'_>) -> Self::Return {
+        match &ctx.id {
+            None => self.helper.next_expr(Expr::default()),
+            Some(id) => {
+                let mut id = id.get_text().to_string();
+                if ctx.leadingDot.is_some() {
+                    id = format!(".{}", id);
+                }
+                let op_id = self.helper.next_id();
+                let args = ctx
+                    .args
+                    .iter()
+                    .flat_map(|arg| &arg.e)
+                    .map(|arg| self.visit(arg.deref()))
+                    .collect::<Vec<IdedExpr>>();
+                IdedExpr {
+                    id: op_id,
+                    expr: Expr::Call(CallExpr {
+                        func_name: id,
+                        target: None,
+                        args,
+                    }),
+                }
+            }
+        }
     }
 
     fn visit_Nested(&mut self, ctx: &NestedContext<'_>) -> Self::Return {
@@ -711,6 +739,23 @@ mod tests {
             TestInfo {
                 i: "((a))",
                 p: "a^#1:*expr.Expr_IdentExpr#",
+            },
+            TestInfo {
+                i: "a()",
+                p: "a()^#1:*expr.Expr_CallExpr#",
+            },
+            TestInfo {
+                i: "a(b)",
+                p: "a(
+    b^#2:*expr.Expr_IdentExpr#
+)^#1:*expr.Expr_CallExpr#",
+            },
+            TestInfo {
+                i: "a(b, c)",
+                p: "a(
+    b^#2:*expr.Expr_IdentExpr#,
+    c^#3:*expr.Expr_IdentExpr#
+)^#1:*expr.Expr_CallExpr#",
             },
             TestInfo {
                 i: "a.b()",
