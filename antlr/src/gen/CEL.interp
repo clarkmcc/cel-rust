@@ -90,7 +90,7 @@ member
 primary
 exprList
 listInit
-fieldInitializerList
+field_initializer_list
 optField
 mapInitializerList
 escapeIdent

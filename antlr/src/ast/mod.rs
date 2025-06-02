@@ -35,13 +35,25 @@ pub enum Expr {
     Select(SelectExpr),
 
     /// StructKind represents a struct literal expression.
-    Struct,
+    Struct(StructExpr),
+}
+
+#[derive(Debug)]
+pub enum EntryExpr {
+    StructField(StructFieldExpr),
+    MapEntry,
 }
 
 #[derive(Debug, Default)]
 pub struct IdedExpr {
     pub id: u64,
     pub expr: Expr,
+}
+
+#[derive(Debug)]
+pub struct IdedEntryExpr {
+    pub id: u64,
+    pub expr: EntryExpr,
 }
 
 #[derive(Debug, Default)]
@@ -56,4 +68,17 @@ pub struct SelectExpr {
     pub op: String,
     pub operand: Box<IdedExpr>,
     pub id: String,
+}
+
+#[derive(Debug, Default)]
+pub struct StructExpr {
+    pub type_name: String,
+    pub entries: Vec<IdedEntryExpr>,
+}
+
+#[derive(Debug, Default)]
+pub struct StructFieldExpr {
+    pub field: String,
+    pub value: IdedExpr,
+    pub optional: bool,
 }
