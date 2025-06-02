@@ -4,9 +4,9 @@ use crate::gen::{
     ConditionalAndContext, ConditionalOrContext, ConstantLiteralContext,
     ConstantLiteralContextAttrs, DoubleContext, ExprContext, IdentContext, IntContext,
     LogicalNotContext, LogicalNotContextAttrs, MemberCallContext, MemberCallContextAttrs,
-    MemberExprContext, MemberExprContextAttrs, NullContext, PrimaryExprContext,
-    PrimaryExprContextAttrs, RelationContext, RelationContextAttrs, SelectContext,
-    SelectContextAttrs, StartContext, StartContextAttrs, StringContext, UintContext,
+    MemberExprContext, MemberExprContextAttrs, NestedContext, NestedContextAttrs, NullContext,
+    PrimaryExprContext, PrimaryExprContextAttrs, RelationContext, RelationContextAttrs,
+    SelectContext, SelectContextAttrs, StartContext, StartContextAttrs, StringContext, UintContext,
 };
 use crate::reference::Val;
 use crate::{ast, gen};
@@ -257,6 +257,10 @@ impl gen::CELVisitorCompat<'_> for Parser {
     fn visit_Ident(&mut self, ctx: &IdentContext<'_>) -> Self::Return {
         let id = ctx.id.clone().unwrap().text;
         self.helper.next_expr(Expr::Ident(id.to_string()))
+    }
+
+    fn visit_Nested(&mut self, ctx: &NestedContext<'_>) -> Self::Return {
+        self.visit(ctx.e.as_deref().unwrap())
     }
 
     fn visit_ConstantLiteral(&mut self, ctx: &ConstantLiteralContext<'_>) -> Self::Return {
@@ -699,6 +703,14 @@ mod tests {
             TestInfo {
                 i: "a.b.c",
                 p: "a^#1:*expr.Expr_IdentExpr#.b^#2:*expr.Expr_SelectExpr#.c^#3:*expr.Expr_SelectExpr#",
+            },
+            TestInfo {
+                i: "(a)",
+                p: "a^#1:*expr.Expr_IdentExpr#",
+            },
+            TestInfo {
+                i: "((a))",
+                p: "a^#1:*expr.Expr_IdentExpr#",
             },
             TestInfo {
                 i: "a.b()",
