@@ -29,7 +29,7 @@ pub enum Expr {
     Literal(Val),
 
     /// MapKind represents a map literal expression.
-    Map,
+    Map(MapExpr),
 
     /// SelectKind represents a field selection expression.
     Select(SelectExpr),
@@ -41,7 +41,7 @@ pub enum Expr {
 #[derive(Debug)]
 pub enum EntryExpr {
     StructField(StructFieldExpr),
-    MapEntry,
+    MapEntry(MapEntryExpr),
 }
 
 #[derive(Debug, Default)]
@@ -77,8 +77,20 @@ pub struct StructExpr {
 }
 
 #[derive(Debug, Default)]
+pub struct MapExpr {
+    pub entries: Vec<IdedEntryExpr>,
+}
+
+#[derive(Debug, Default)]
 pub struct StructFieldExpr {
     pub field: String,
+    pub value: IdedExpr,
+    pub optional: bool,
+}
+
+#[derive(Debug, Default)]
+pub struct MapEntryExpr {
+    pub key: IdedExpr,
     pub value: IdedExpr,
     pub optional: bool,
 }

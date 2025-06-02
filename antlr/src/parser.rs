@@ -1,16 +1,17 @@
 use crate::ast::{
-    CallExpr, EntryExpr, Expr, IdedEntryExpr, IdedExpr, SelectExpr, StructExpr, StructFieldExpr,
+    CallExpr, EntryExpr, Expr, IdedEntryExpr, IdedExpr, MapEntryExpr, MapExpr, SelectExpr,
+    StructExpr, StructFieldExpr,
 };
 use crate::gen::{
     BoolFalseContext, BoolTrueContext, BytesContext, CalcContext, CalcContextAttrs,
     ConditionalAndContext, ConditionalOrContext, ConstantLiteralContext,
-    ConstantLiteralContextAttrs, CreateMessageContext, DoubleContext, ExprContext,
-    FieldInitializerListContext, GlobalCallContext, IdentContext, IndexContext, IndexContextAttrs,
-    IntContext, LogicalNotContext, LogicalNotContextAttrs, MemberCallContext,
-    MemberCallContextAttrs, MemberExprContext, MemberExprContextAttrs, NestedContext, NullContext,
-    OptFieldContextAttrs, PrimaryExprContext, PrimaryExprContextAttrs, RelationContext,
-    RelationContextAttrs, SelectContext, SelectContextAttrs, StartContext, StartContextAttrs,
-    StringContext, UintContext,
+    ConstantLiteralContextAttrs, CreateMessageContext, CreateStructContext, DoubleContext,
+    ExprContext, FieldInitializerListContext, GlobalCallContext, IdentContext, IndexContext,
+    IndexContextAttrs, IntContext, LogicalNotContext, LogicalNotContextAttrs,
+    MapInitializerListContextAll, MemberCallContext, MemberCallContextAttrs, MemberExprContext,
+    MemberExprContextAttrs, NestedContext, NullContext, OptFieldContextAttrs, PrimaryExprContext,
+    PrimaryExprContextAttrs, RelationContext, RelationContextAttrs, SelectContext,
+    SelectContextAttrs, StartContext, StartContextAttrs, StringContext, UintContext,
 };
 use crate::reference::Val;
 use crate::{ast, gen};
@@ -82,6 +83,35 @@ impl Parser {
             });
         }
         fields
+    }
+
+    fn map_initializer_list(&mut self, ctx: &MapInitializerListContextAll) -> Vec<IdedEntryExpr> {
+        if ctx.keys.is_empty() {
+            return vec![];
+        }
+        let mut entries = Vec::with_capacity(ctx.cols.len());
+        let keys = &ctx.keys;
+        let vals = &ctx.values;
+        for (i, _col) in ctx.cols.iter().enumerate() {
+            if i >= keys.len() || i >= vals.len() {
+                return vec![];
+            }
+            if keys[i].opt.is_some() {
+                todo!("No support for `?` optional")
+            }
+            let id = self.helper.next_id();
+            let key = self.visit(keys[i].as_ref());
+            let value = self.visit(vals[i].as_ref());
+            entries.push(IdedEntryExpr {
+                id,
+                expr: EntryExpr::MapEntry(MapEntryExpr {
+                    key,
+                    value,
+                    optional: false,
+                }),
+            })
+        }
+        entries
     }
 }
 
@@ -331,6 +361,18 @@ impl gen::CELVisitorCompat<'_> for Parser {
 
     fn visit_Nested(&mut self, ctx: &NestedContext<'_>) -> Self::Return {
         self.visit(ctx.e.as_deref().unwrap())
+    }
+
+    fn visit_CreateStruct(&mut self, ctx: &CreateStructContext<'_>) -> Self::Return {
+        let struct_id = self.helper.next_id();
+        let entries = match &ctx.entries {
+            Some(entries) => self.map_initializer_list(entries.deref()),
+            None => Vec::default(),
+        };
+        IdedExpr {
+            id: struct_id,
+            expr: Expr::Map(MapExpr { entries }),
+        }
     }
 
     fn visit_CreateMessage(&mut self, ctx: &CreateMessageContext<'_>) -> Self::Return {
@@ -858,6 +900,17 @@ mod tests {
     c:d^#5:*expr.Expr_IdentExpr#^#4:*expr.Expr_CreateStruct_Entry#
 }^#1:*expr.Expr_StructExpr#",
             },
+            TestInfo {
+                i: "{}",
+                p: "{}^#1:*expr.Expr_StructExpr#",
+            },
+            TestInfo {
+                i: "{a: b, c: d}",
+                p: "{
+    a^#3:*expr.Expr_IdentExpr#:b^#4:*expr.Expr_IdentExpr#^#2:*expr.Expr_CreateStruct_Entry#,
+    c^#6:*expr.Expr_IdentExpr#:d^#7:*expr.Expr_IdentExpr#^#5:*expr.Expr_CreateStruct_Entry#
+}^#1:*expr.Expr_StructExpr#",
+            }
         ];
 
         for test_case in test_cases {
@@ -942,7 +995,34 @@ mod tests {
                     ),
                     Val::Null => &format!("null^#{}:{}#", expr.id, "*expr.Constant_NullValue"),
                 },
-                Expr::Map => "",
+                Expr::Map(map) => {
+                    self.push("{");
+                    self.inc_indent();
+                    if !map.entries.is_empty() {
+                        self.newline();
+                    }
+                    for (i, entry) in map.entries.iter().enumerate() {
+                        match &entry.expr {
+                            EntryExpr::StructField(_) => panic!("WAT?!"),
+                            EntryExpr::MapEntry(e) => {
+                                self.buffer(&e.key);
+                                self.push(":");
+                                self.buffer(&e.value);
+                                self.push(&format!(
+                                    "^#{}:{}#",
+                                    entry.id, "*expr.Expr_CreateStruct_Entry"
+                                ));
+                            }
+                        }
+                        if i < map.entries.len() - 1 {
+                            self.push(",");
+                        }
+                        self.newline();
+                    }
+                    self.dec_indent();
+                    self.push("}");
+                    &format!("^#{}:{}#", expr.id, "*expr.Expr_StructExpr")
+                }
                 Expr::Select(select) => {
                     self.buffer(select.operand.deref());
                     &format!(
@@ -968,7 +1048,7 @@ mod tests {
                                     entry.id, "*expr.Expr_CreateStruct_Entry"
                                 ));
                             }
-                            EntryExpr::MapEntry => panic!("WAT?!"),
+                            EntryExpr::MapEntry(_) => panic!("WAT?!"),
                         }
                         if i < s.entries.len() - 1 {
                             self.push(",");
