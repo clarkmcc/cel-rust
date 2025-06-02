@@ -3,10 +3,11 @@ use crate::gen::{
     BoolFalseContext, BoolTrueContext, BytesContext, CalcContext, CalcContextAttrs,
     ConditionalAndContext, ConditionalOrContext, ConstantLiteralContext,
     ConstantLiteralContextAttrs, DoubleContext, ExprContext, GlobalCallContext, IdentContext,
-    IntContext, LogicalNotContext, LogicalNotContextAttrs, MemberCallContext,
-    MemberCallContextAttrs, MemberExprContext, MemberExprContextAttrs, NestedContext, NullContext,
-    PrimaryExprContext, PrimaryExprContextAttrs, RelationContext, RelationContextAttrs,
-    SelectContext, SelectContextAttrs, StartContext, StartContextAttrs, StringContext, UintContext,
+    IndexContext, IndexContextAttrs, IntContext, LogicalNotContext, LogicalNotContextAttrs,
+    MemberCallContext, MemberCallContextAttrs, MemberExprContext, MemberExprContextAttrs,
+    NestedContext, NullContext, PrimaryExprContext, PrimaryExprContextAttrs, RelationContext,
+    RelationContextAttrs, SelectContext, SelectContextAttrs, StartContext, StartContextAttrs,
+    StringContext, UintContext,
 };
 use crate::reference::Val;
 use crate::{ast, gen};
@@ -253,6 +254,23 @@ impl gen::CELVisitorCompat<'_> for Parser {
 
     fn visit_PrimaryExpr(&mut self, ctx: &PrimaryExprContext<'_>) -> Self::Return {
         <Self as ParseTreeVisitorCompat>::visit(self, ctx.primary().as_deref().unwrap())
+    }
+
+    fn visit_Index(&mut self, ctx: &IndexContext<'_>) -> Self::Return {
+        let target = self.visit(ctx.member().as_deref().unwrap());
+        let op_id = self.helper.next_id();
+        let expr = match &ctx.op {
+            None => Expr::default(),
+            Some(_) => {
+                let index = self.visit(ctx.index.as_deref().unwrap());
+                Expr::Call(CallExpr {
+                    func_name: "_[_]".to_string(),
+                    target: None,
+                    args: vec![target, index],
+                })
+            }
+        };
+        IdedExpr { id: op_id, expr }
     }
 
     fn visit_Ident(&mut self, ctx: &IdentContext<'_>) -> Self::Return {
@@ -731,6 +749,13 @@ mod tests {
             TestInfo {
                 i: "a.b.c",
                 p: "a^#1:*expr.Expr_IdentExpr#.b^#2:*expr.Expr_SelectExpr#.c^#3:*expr.Expr_SelectExpr#",
+            },
+            TestInfo {
+                i: "a[b]",
+                p: "_[_](
+    a^#1:*expr.Expr_IdentExpr#,
+    b^#3:*expr.Expr_IdentExpr#
+)^#2:*expr.Expr_CallExpr#",
             },
             TestInfo {
                 i: "(a)",
