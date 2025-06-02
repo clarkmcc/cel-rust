@@ -1,17 +1,18 @@
 use crate::ast::{
-    CallExpr, EntryExpr, Expr, IdedEntryExpr, IdedExpr, MapEntryExpr, MapExpr, SelectExpr,
-    StructExpr, StructFieldExpr,
+    CallExpr, EntryExpr, Expr, IdedEntryExpr, IdedExpr, ListExpr, MapEntryExpr, MapExpr,
+    SelectExpr, StructExpr, StructFieldExpr,
 };
 use crate::gen::{
     BoolFalseContext, BoolTrueContext, BytesContext, CalcContext, CalcContextAttrs,
     ConditionalAndContext, ConditionalOrContext, ConstantLiteralContext,
-    ConstantLiteralContextAttrs, CreateMessageContext, CreateStructContext, DoubleContext,
-    ExprContext, FieldInitializerListContext, GlobalCallContext, IdentContext, IndexContext,
-    IndexContextAttrs, IntContext, LogicalNotContext, LogicalNotContextAttrs,
-    MapInitializerListContextAll, MemberCallContext, MemberCallContextAttrs, MemberExprContext,
-    MemberExprContextAttrs, NestedContext, NullContext, OptFieldContextAttrs, PrimaryExprContext,
-    PrimaryExprContextAttrs, RelationContext, RelationContextAttrs, SelectContext,
-    SelectContextAttrs, StartContext, StartContextAttrs, StringContext, UintContext,
+    ConstantLiteralContextAttrs, CreateListContext, CreateMessageContext, CreateStructContext,
+    DoubleContext, ExprContext, FieldInitializerListContext, GlobalCallContext, IdentContext,
+    IndexContext, IndexContextAttrs, IntContext, ListInitContextAll, LogicalNotContext,
+    LogicalNotContextAttrs, MapInitializerListContextAll, MemberCallContext,
+    MemberCallContextAttrs, MemberExprContext, MemberExprContextAttrs, NestedContext, NullContext,
+    OptFieldContextAttrs, PrimaryExprContext, PrimaryExprContextAttrs, RelationContext,
+    RelationContextAttrs, SelectContext, SelectContextAttrs, StartContext, StartContextAttrs,
+    StringContext, UintContext,
 };
 use crate::reference::Val;
 use crate::{ast, gen};
@@ -112,6 +113,13 @@ impl Parser {
             })
         }
         entries
+    }
+
+    fn list_initializer_list(&mut self, ctx: &ListInitContextAll) -> Vec<IdedExpr> {
+        ctx.elems
+            .iter()
+            .map(|e| self.visit(e.e.as_deref().unwrap()))
+            .collect()
     }
 }
 
@@ -361,6 +369,18 @@ impl gen::CELVisitorCompat<'_> for Parser {
 
     fn visit_Nested(&mut self, ctx: &NestedContext<'_>) -> Self::Return {
         self.visit(ctx.e.as_deref().unwrap())
+    }
+
+    fn visit_CreateList(&mut self, ctx: &CreateListContext<'_>) -> Self::Return {
+        let list_id = self.helper.next_id();
+        let elements = match &ctx.elems {
+            None => Vec::default(),
+            Some(elements) => self.list_initializer_list(elements.deref()),
+        };
+        IdedExpr {
+            id: list_id,
+            expr: Expr::List(ListExpr { elements }),
+        }
     }
 
     fn visit_CreateStruct(&mut self, ctx: &CreateStructContext<'_>) -> Self::Return {
@@ -910,7 +930,25 @@ mod tests {
     a^#3:*expr.Expr_IdentExpr#:b^#4:*expr.Expr_IdentExpr#^#2:*expr.Expr_CreateStruct_Entry#,
     c^#6:*expr.Expr_IdentExpr#:d^#7:*expr.Expr_IdentExpr#^#5:*expr.Expr_CreateStruct_Entry#
 }^#1:*expr.Expr_StructExpr#",
-            }
+            },
+            TestInfo {
+                i: "[]",
+                p: "[]^#1:*expr.Expr_ListExpr#",
+            },
+            TestInfo {
+                i: "[a]",
+                p: "[
+    a^#2:*expr.Expr_IdentExpr#
+]^#1:*expr.Expr_ListExpr#",
+            },
+            TestInfo {
+                i: "[a, b, c]",
+                p: "[
+    a^#2:*expr.Expr_IdentExpr#,
+    b^#3:*expr.Expr_IdentExpr#,
+    c^#4:*expr.Expr_IdentExpr#
+]^#1:*expr.Expr_ListExpr#",
+            },
         ];
 
         for test_case in test_cases {
@@ -976,7 +1014,24 @@ mod tests {
                 }
                 Expr::Comprehension => "",
                 Expr::Ident(id) => &format!("{}^#{}:{}#", id, expr.id, "*expr.Expr_IdentExpr"),
-                Expr::List => "",
+                Expr::List(list) => {
+                    self.push("[");
+                    if list.elements.len() > 0 {
+                        self.inc_indent();
+                        self.newline();
+                        for (i, element) in list.elements.iter().enumerate() {
+                            if i > 0 {
+                                self.push(",");
+                                self.newline();
+                            }
+                            self.buffer(element);
+                        }
+                        self.dec_indent();
+                        self.newline();
+                    }
+                    self.push("]");
+                    &format!("^#{}:{}#", expr.id, "*expr.Expr_ListExpr")
+                }
                 Expr::Literal(val) => match val {
                     Val::String(s) => {
                         &format!("{s}^#{}:{}#", expr.id, "*expr.Constant_StringValue")

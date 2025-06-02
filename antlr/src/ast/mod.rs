@@ -23,7 +23,7 @@ pub enum Expr {
     Ident(String),
 
     /// ListKind represents a list literal expression.
-    List,
+    List(ListExpr),
 
     /// LiteralKind represents a primitive scalar literal.
     Literal(Val),
@@ -79,6 +79,11 @@ pub struct StructExpr {
 #[derive(Debug, Default)]
 pub struct MapExpr {
     pub entries: Vec<IdedEntryExpr>,
+}
+
+#[derive(Debug, Default)]
+pub struct ListExpr {
+    pub elements: Vec<IdedExpr>,
 }
 
 #[derive(Debug, Default)]
