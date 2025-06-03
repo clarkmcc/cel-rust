@@ -61,6 +61,23 @@ impl Parser {
         }
     }
 
+    fn receiver_call_or_macro(
+        &self,
+        id: u64,
+        func_name: String,
+        target: IdedExpr,
+        args: Vec<IdedExpr>,
+    ) -> IdedExpr {
+        IdedExpr {
+            id,
+            expr: Expr::Call(CallExpr {
+                target: Some(Box::new(target)),
+                func_name,
+                args,
+            }),
+        }
+    }
+
     pub fn parse(mut self, source: &str) -> Result<IdedExpr, ParserError> {
         let stream = InputStream::new(source);
         let mut lexer = gen::CELLexer::new(stream);
@@ -284,7 +301,6 @@ impl gen::CELVisitorCompat<'_> for Parser {
         // if ctx.id.is_none() {}
         let id = ctx.id.as_deref().unwrap().get_text();
 
-        // return p.receiverCallOrMacro(opID, id, operand, p.visitExprList(ctx.GetArgs())...)
         let op_id = self.helper.next_id();
         let args = ctx
             .args
@@ -292,14 +308,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
             .flat_map(|arg| &arg.e)
             .map(|arg| self.visit(arg.deref()))
             .collect::<Vec<IdedExpr>>();
-        IdedExpr {
-            expr: Expr::Call(CallExpr {
-                func_name: id.to_string(),
-                target: Some(Box::new(operand)),
-                args,
-            }),
-            id: op_id,
-        }
+        self.receiver_call_or_macro(op_id, id.to_string(), operand, args)
     }
 
     fn visit_Select(&mut self, ctx: &SelectContext<'_>) -> Self::Return {
