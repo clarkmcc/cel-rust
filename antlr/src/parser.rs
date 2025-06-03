@@ -9,10 +9,10 @@ use crate::gen::{
     DoubleContext, ExprContext, FieldInitializerListContext, GlobalCallContext, IdentContext,
     IndexContext, IndexContextAttrs, IntContext, ListInitContextAll, LogicalNotContext,
     LogicalNotContextAttrs, MapInitializerListContextAll, MemberCallContext,
-    MemberCallContextAttrs, MemberExprContext, MemberExprContextAttrs, NestedContext, NullContext,
-    OptFieldContextAttrs, PrimaryExprContext, PrimaryExprContextAttrs, RelationContext,
-    RelationContextAttrs, SelectContext, SelectContextAttrs, StartContext, StartContextAttrs,
-    StringContext, UintContext,
+    MemberCallContextAttrs, MemberExprContext, MemberExprContextAttrs, NegateContext,
+    NegateContextAttrs, NestedContext, NullContext, OptFieldContextAttrs, PrimaryExprContext,
+    PrimaryExprContextAttrs, RelationContext, RelationContextAttrs, SelectContext,
+    SelectContextAttrs, StartContext, StartContextAttrs, StringContext, UintContext,
 };
 use crate::reference::Val;
 use crate::{ast, gen};
@@ -41,11 +41,23 @@ impl Parser {
             helper: ParserHelper::default(),
         }
     }
+
     fn new_logic_manager(&self, func: &str, term: IdedExpr) -> LogicManager {
         LogicManager {
             function: func.to_string(),
             terms: vec![term],
             ops: vec![],
+        }
+    }
+
+    fn global_call_or_macro(&self, id: u64, func_name: String, args: Vec<IdedExpr>) -> IdedExpr {
+        IdedExpr {
+            id,
+            expr: Expr::Call(CallExpr {
+                target: None,
+                func_name,
+                args,
+            }),
         }
     }
 
@@ -160,14 +172,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
             let op_id = self.helper.next_id();
             let if_true = self.visit(ctx.e1.as_deref().unwrap());
             let if_false = self.visit(ctx.e2.as_deref().unwrap());
-            IdedExpr {
-                expr: Expr::Call(CallExpr {
-                    target: None,
-                    func_name: "_?_:_".to_string(),
-                    args: vec![result, if_true, if_false],
-                }),
-                id: op_id,
-            }
+            self.global_call_or_macro(op_id, "_?_:_".to_string(), vec![result, if_true, if_false])
         }
     }
 
@@ -221,16 +226,13 @@ impl gen::CELVisitorCompat<'_> for Parser {
                     let lhs = self.visit(ctx.relation(0).unwrap().deref());
                     let op_id = self.helper.next_id();
                     let rhs = self.visit(ctx.relation(1).unwrap().deref());
-                    IdedExpr {
-                        expr: Expr::Call(CallExpr {
-                            target: None,
-                            func_name: find_operator(op.get_text())
-                                .expect("operator not found!")
-                                .to_string(),
-                            args: vec![lhs, rhs],
-                        }),
-                        id: op_id,
-                    }
+                    self.global_call_or_macro(
+                        op_id,
+                        find_operator(op.get_text())
+                            .expect("operator not found!")
+                            .to_string(),
+                        vec![lhs, rhs],
+                    )
                 }
             }
         }
@@ -243,16 +245,13 @@ impl gen::CELVisitorCompat<'_> for Parser {
                 let lhs = self.visit(ctx.calc(0).unwrap().deref());
                 let op_id = self.helper.next_id();
                 let rhs = self.visit(ctx.calc(1).unwrap().deref());
-                IdedExpr {
-                    expr: Expr::Call(CallExpr {
-                        target: None,
-                        func_name: find_operator(op.get_text())
-                            .expect("operator not found!")
-                            .to_string(),
-                        args: vec![lhs, rhs],
-                    }),
-                    id: op_id,
-                }
+                self.global_call_or_macro(
+                    op_id,
+                    find_operator(op.get_text())
+                        .expect("operator not found!")
+                        .to_string(),
+                    vec![lhs, rhs],
+                )
             }
         }
     }
@@ -267,14 +266,16 @@ impl gen::CELVisitorCompat<'_> for Parser {
         }
         let op_id = self.helper.next_id();
         let target = self.visit(ctx.member().as_deref().unwrap());
-        IdedExpr {
-            expr: Expr::Call(CallExpr {
-                target: None,
-                func_name: "!_".to_string(),
-                args: vec![target],
-            }),
-            id: op_id,
+        self.global_call_or_macro(op_id, "!_".to_string(), vec![target])
+    }
+
+    fn visit_Negate(&mut self, ctx: &NegateContext<'_>) -> Self::Return {
+        if ctx.ops.len() % 2 == 0 {
+            self.visit(ctx.member().as_deref().unwrap());
         }
+        let op_id = self.helper.next_id();
+        let target = self.visit(ctx.member().as_deref().unwrap());
+        self.global_call_or_macro(op_id, "-_".to_string(), vec![target])
     }
 
     fn visit_MemberCall(&mut self, ctx: &MemberCallContext<'_>) -> Self::Return {
@@ -321,18 +322,16 @@ impl gen::CELVisitorCompat<'_> for Parser {
     fn visit_Index(&mut self, ctx: &IndexContext<'_>) -> Self::Return {
         let target = self.visit(ctx.member().as_deref().unwrap());
         let op_id = self.helper.next_id();
-        let expr = match &ctx.op {
-            None => Expr::default(),
+        match &ctx.op {
+            None => IdedExpr {
+                id: op_id,
+                expr: Expr::default(),
+            },
             Some(_) => {
                 let index = self.visit(ctx.index.as_deref().unwrap());
-                Expr::Call(CallExpr {
-                    func_name: "_[_]".to_string(),
-                    target: None,
-                    args: vec![target, index],
-                })
+                self.global_call_or_macro(op_id, "_[_]".to_string(), vec![target, index])
             }
-        };
-        IdedExpr { id: op_id, expr }
+        }
     }
 
     fn visit_Ident(&mut self, ctx: &IdentContext<'_>) -> Self::Return {
@@ -355,14 +354,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
                     .flat_map(|arg| &arg.e)
                     .map(|arg| self.visit(arg.deref()))
                     .collect::<Vec<IdedExpr>>();
-                IdedExpr {
-                    id: op_id,
-                    expr: Expr::Call(CallExpr {
-                        func_name: id,
-                        target: None,
-                        args,
-                    }),
-                }
+                self.global_call_or_macro(op_id, id, args)
             }
         }
     }
