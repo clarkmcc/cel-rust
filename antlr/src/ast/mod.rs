@@ -65,9 +65,9 @@ pub struct CallExpr {
 
 #[derive(Debug, Default)]
 pub struct SelectExpr {
-    pub op: String,
     pub operand: Box<IdedExpr>,
-    pub id: String,
+    pub field: String,
+    pub test: bool,
 }
 
 #[derive(Debug, Default)]
