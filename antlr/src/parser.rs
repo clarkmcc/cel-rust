@@ -15,7 +15,7 @@ use crate::gen::{
     SelectContextAttrs, StartContext, StartContextAttrs, StringContext, UintContext,
 };
 use crate::reference::Val;
-use crate::{ast, gen};
+use crate::{ast, gen, macros};
 use antlr4rust::common_token_stream::CommonTokenStream;
 use antlr4rust::parser::ParserNodeType;
 use antlr4rust::token::Token;
@@ -23,6 +23,9 @@ use antlr4rust::tree::{ParseTree, ParseTreeVisitorCompat, VisitChildren};
 use antlr4rust::InputStream;
 use std::mem;
 use std::ops::Deref;
+
+type MacroExpander =
+    fn(helper: &mut ParserHelper, target: Option<IdedExpr>, args: Vec<IdedExpr>) -> IdedExpr;
 
 #[derive(Debug)]
 pub struct ParserError {}
@@ -50,14 +53,22 @@ impl Parser {
         }
     }
 
-    fn global_call_or_macro(&self, id: u64, func_name: String, args: Vec<IdedExpr>) -> IdedExpr {
-        IdedExpr {
-            id,
-            expr: Expr::Call(CallExpr {
-                target: None,
-                func_name,
-                args,
-            }),
+    fn global_call_or_macro(
+        &mut self,
+        id: u64,
+        func_name: String,
+        args: Vec<IdedExpr>,
+    ) -> IdedExpr {
+        match self.macro_expander(&func_name, None, &args) {
+            None => IdedExpr {
+                id,
+                expr: Expr::Call(CallExpr {
+                    target: None,
+                    func_name,
+                    args,
+                }),
+            },
+            Some(expander) => expander(&mut self.helper, None, args),
         }
     }
 
@@ -76,6 +87,18 @@ impl Parser {
                 args,
             }),
         }
+    }
+
+    fn macro_expander(
+        &mut self,
+        func_name: &str,
+        target: Option<&IdedExpr>,
+        args: &[IdedExpr],
+    ) -> Option<MacroExpander> {
+        if func_name == "has" && args.len() == 1 && target.is_none() {
+            return Some(macros::has_macro_expander);
+        }
+        None
     }
 
     pub fn parse(mut self, source: &str) -> Result<IdedExpr, ParserError> {
@@ -316,11 +339,11 @@ impl gen::CELVisitorCompat<'_> for Parser {
         // if ctx.id.is_none() || ctx.op.is_none() {
         // ?
         // }
-        let id = ctx.id.as_deref().unwrap().get_text();
+        let field = ctx.id.as_deref().unwrap().get_text();
         self.helper.next_expr(Expr::Select(SelectExpr {
-            op: ctx.op.as_deref().unwrap().text.to_string(),
             operand: Box::new(operand),
-            id,
+            field,
+            test: false,
         }))
     }
 
@@ -950,6 +973,10 @@ mod tests {
     c^#4:*expr.Expr_IdentExpr#
 ]^#1:*expr.Expr_ListExpr#",
             },
+            TestInfo {
+                i: "has(m.f)",
+                p: "m^#2:*expr.Expr_IdentExpr#.f~test-only~^#4:*expr.Expr_SelectExpr#",
+            }
         ];
 
         for test_case in test_cases {
@@ -1081,9 +1108,10 @@ mod tests {
                 }
                 Expr::Select(select) => {
                     self.buffer(select.operand.deref());
+                    let suffix = if select.test { "~test-only~" } else { "" };
                     &format!(
-                        "{}{}^#{}:{}#",
-                        select.op, select.id, expr.id, "*expr.Expr_SelectExpr"
+                        ".{}{}^#{}:{}#",
+                        select.field, suffix, expr.id, "*expr.Expr_SelectExpr"
                     )
                 }
                 Expr::Struct(s) => {
