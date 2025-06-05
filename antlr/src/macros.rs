@@ -160,6 +160,7 @@ pub fn exists_one_macro_expander(
         result: result.into(),
     }))
 }
+
 pub fn map_macro_expander(
     helper: &mut ParserHelper,
     target: Option<IdedExpr>,
@@ -201,6 +202,55 @@ pub fn map_macro_expander(
         }
         None => step,
     };
+
+    let result = helper.next_expr(Expr::Ident(result_binding.clone()));
+
+    helper.next_expr(Expr::Comprehension(ComprehensionExpr {
+        iter_range: Box::new(target.unwrap()),
+        iter_var: v,
+        iter_var2: None,
+        accu_var: result_binding,
+        accu_init: init.into(),
+        loop_cond: condition.into(),
+        loop_step: step.into(),
+        result: result.into(),
+    }))
+}
+
+pub fn filter_macro_expander(
+    helper: &mut ParserHelper,
+    target: Option<IdedExpr>,
+    mut args: Vec<IdedExpr>,
+) -> IdedExpr {
+    let var = args.remove(0);
+    let v = match &var.expr {
+        Expr::Ident(ident) => ident.clone(),
+        _ => panic!("Not an ident expression"),
+    };
+    let filter = args.pop().unwrap();
+
+    let init = helper.next_expr(Expr::List(ListExpr { elements: vec![] }));
+    let result_binding = "@result".to_string();
+    let condition = helper.next_expr(Expr::Literal(Boolean(true)));
+
+    let args = vec![
+        helper.next_expr(Expr::Ident(result_binding.clone())),
+        helper.next_expr(Expr::List(ListExpr {
+            elements: vec![var],
+        })),
+    ];
+    let step = helper.next_expr(Expr::Call(CallExpr {
+        func_name: "_+_".to_string(),
+        target: None,
+        args,
+    }));
+
+    let accu = helper.next_expr(Expr::Ident(result_binding.clone()));
+    let step = helper.next_expr(Expr::Call(CallExpr {
+        func_name: "_?_:_".to_string(),
+        target: None,
+        args: vec![filter, step, accu],
+    }));
 
     let result = helper.next_expr(Expr::Ident(result_binding.clone()));
 
