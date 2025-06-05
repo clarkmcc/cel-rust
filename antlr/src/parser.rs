@@ -108,6 +108,7 @@ impl Parser {
             "map" if (args.len() == 2 || args.len() == 3) && target.is_some() => {
                 Some(macros::map_macro_expander)
             }
+            "filter" if args.len() == 2 && target.is_some() => Some(macros::filter_macro_expander),
             _ => None,
         }
     }
@@ -1113,7 +1114,34 @@ _?_:_(
 )^#12:*expr.Expr_CallExpr#,
 // Result
 @result^#13:*expr.Expr_IdentExpr#)^#14:*expr.Expr_ComprehensionExpr#",
-            }
+            },
+            TestInfo {
+                i: "m.filter(v, p)",
+                p: "__comprehension__(
+// Variable
+v,
+// Target
+m^#1:*expr.Expr_IdentExpr#,
+// Accumulator
+@result,
+// Init
+[]^#5:*expr.Expr_ListExpr#,
+// LoopCondition
+true^#6:*expr.Constant_BoolValue#,
+// LoopStep
+_?_:_(
+    p^#4:*expr.Expr_IdentExpr#,
+    _+_(
+        @result^#7:*expr.Expr_IdentExpr#,
+        [
+            v^#3:*expr.Expr_IdentExpr#
+        ]^#8:*expr.Expr_ListExpr#
+    )^#9:*expr.Expr_CallExpr#,
+    @result^#10:*expr.Expr_IdentExpr#
+)^#11:*expr.Expr_CallExpr#,
+// Result
+@result^#12:*expr.Expr_IdentExpr#)^#13:*expr.Expr_ComprehensionExpr#",
+            },
         ];
 
         for test_case in test_cases {
