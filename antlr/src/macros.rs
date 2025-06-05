@@ -1,5 +1,5 @@
 use crate::ast::{CallExpr, ComprehensionExpr, Expr, IdedExpr};
-use crate::reference::Val::Boolean;
+use crate::reference::Val::{Boolean, Int};
 use crate::ParserHelper;
 
 pub fn has_macro_expander(
@@ -96,6 +96,58 @@ pub fn all_macro_expander(
     }));
 
     let result = helper.next_expr(Expr::Ident(result_binding.clone()));
+
+    helper.next_expr(Expr::Comprehension(ComprehensionExpr {
+        iter_range: Box::new(target.unwrap()),
+        iter_var: v,
+        iter_var2: None,
+        accu_var: result_binding,
+        accu_init: init.into(),
+        loop_cond: condition.into(),
+        loop_step: step.into(),
+        result: result.into(),
+    }))
+}
+
+pub fn exists_one_macro_expander(
+    helper: &mut ParserHelper,
+    target: Option<IdedExpr>,
+    mut args: Vec<IdedExpr>,
+) -> IdedExpr {
+    let mut arguments = vec![args.remove(1)];
+    let v = match args.remove(0).expr {
+        Expr::Ident(ident) => ident,
+        _ => panic!("Not an ident expression"),
+    };
+
+    let init = helper.next_expr(Expr::Literal(Int(0)));
+    let result_binding = "@result".to_string();
+    let condition = helper.next_expr(Expr::Literal(Boolean(true)));
+
+    let args = vec![
+        helper.next_expr(Expr::Ident(result_binding.clone())),
+        helper.next_expr(Expr::Literal(Int(1))),
+    ];
+    arguments.push(helper.next_expr(Expr::Call(CallExpr {
+        func_name: "_+_".to_string(),
+        target: None,
+        args,
+    })));
+    arguments.push(helper.next_expr(Expr::Ident(result_binding.clone())));
+
+    let step = helper.next_expr(Expr::Call(CallExpr {
+        func_name: "_?_:_".to_string(),
+        target: None,
+        args: arguments,
+    }));
+
+    let accu = helper.next_expr(Expr::Ident(result_binding.clone()));
+    let one = helper.next_expr(Expr::Literal(Int(1)));
+    let result = helper.next_expr(Expr::Call(CallExpr {
+        func_name: "_==_".to_string(),
+        target: None,
+        args: vec![accu, one],
+    }));
 
     helper.next_expr(Expr::Comprehension(ComprehensionExpr {
         iter_range: Box::new(target.unwrap()),

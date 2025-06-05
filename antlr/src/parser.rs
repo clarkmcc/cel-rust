@@ -102,6 +102,9 @@ impl Parser {
             "has" if args.len() == 1 && target.is_none() => Some(macros::has_macro_expander),
             "exists" if args.len() == 2 && target.is_some() => Some(macros::exists_macro_expander),
             "all" if args.len() == 2 && target.is_some() => Some(macros::all_macro_expander),
+            "existsOne" if args.len() == 2 && target.is_some() => {
+                Some(macros::exists_one_macro_expander)
+            }
             _ => None,
         }
     }
@@ -518,7 +521,7 @@ impl Default for ParserHelper {
 }
 
 impl ParserHelper {
-    pub(crate) fn next_id(&mut self) -> u64 {
+    fn next_id(&mut self) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
         id
@@ -1029,15 +1032,43 @@ _&&_(
 )^#9:*expr.Expr_CallExpr#,
 // Result
 @result^#10:*expr.Expr_IdentExpr#)^#11:*expr.Expr_ComprehensionExpr#",
-            }
+            },
+            TestInfo {
+                i: "m.existsOne(v, f)",
+                p: "__comprehension__(
+// Variable
+v,
+// Target
+m^#1:*expr.Expr_IdentExpr#,
+// Accumulator
+@result,
+// Init
+0^#5:*expr.Constant_Int64Value#,
+// LoopCondition
+true^#6:*expr.Constant_BoolValue#,
+// LoopStep
+_?_:_(
+    f^#4:*expr.Expr_IdentExpr#,
+    _+_(
+        @result^#7:*expr.Expr_IdentExpr#,
+        1^#8:*expr.Constant_Int64Value#
+    )^#9:*expr.Expr_CallExpr#,
+    @result^#10:*expr.Expr_IdentExpr#
+)^#11:*expr.Expr_CallExpr#,
+// Result
+_==_(
+    @result^#12:*expr.Expr_IdentExpr#,
+    1^#13:*expr.Constant_Int64Value#
+)^#14:*expr.Expr_CallExpr#)^#15:*expr.Expr_ComprehensionExpr#",  
+            },
         ];
 
         for test_case in test_cases {
             let parser = Parser::new();
             let result = parser.parse(&test_case.i);
             assert_eq!(
-                to_go_like_string(&result.unwrap()),
                 test_case.p,
+                to_go_like_string(&result.unwrap()),
                 "Expr `{}` failed",
                 test_case.i
             );
