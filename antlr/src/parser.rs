@@ -105,6 +105,9 @@ impl Parser {
             "existsOne" if args.len() == 2 && target.is_some() => {
                 Some(macros::exists_one_macro_expander)
             }
+            "map" if (args.len() == 2 || args.len() == 3) && target.is_some() => {
+                Some(macros::map_macro_expander)
+            }
             _ => None,
         }
     }
@@ -1061,14 +1064,64 @@ _==_(
     1^#13:*expr.Constant_Int64Value#
 )^#14:*expr.Expr_CallExpr#)^#15:*expr.Expr_ComprehensionExpr#",  
             },
+            TestInfo {
+                i: "m.map(v, f)",
+                p: "__comprehension__(
+// Variable
+v,
+// Target
+m^#1:*expr.Expr_IdentExpr#,
+// Accumulator
+@result,
+// Init
+[]^#5:*expr.Expr_ListExpr#,
+// LoopCondition
+true^#6:*expr.Constant_BoolValue#,
+// LoopStep
+_+_(
+    @result^#7:*expr.Expr_IdentExpr#,
+    [
+        f^#4:*expr.Expr_IdentExpr#
+    ]^#8:*expr.Expr_ListExpr#
+)^#9:*expr.Expr_CallExpr#,
+// Result
+@result^#10:*expr.Expr_IdentExpr#)^#11:*expr.Expr_ComprehensionExpr#",
+            },
+            TestInfo {
+                i: "m.map(v, p, f)",
+                p: "__comprehension__(
+// Variable
+v,
+// Target
+m^#1:*expr.Expr_IdentExpr#,
+// Accumulator
+@result,
+// Init
+[]^#6:*expr.Expr_ListExpr#,
+// LoopCondition
+true^#7:*expr.Constant_BoolValue#,
+// LoopStep
+_?_:_(
+    p^#4:*expr.Expr_IdentExpr#,
+    _+_(
+        @result^#8:*expr.Expr_IdentExpr#,
+        [
+            f^#5:*expr.Expr_IdentExpr#
+        ]^#9:*expr.Expr_ListExpr#
+    )^#10:*expr.Expr_CallExpr#,
+    @result^#11:*expr.Expr_IdentExpr#
+)^#12:*expr.Expr_CallExpr#,
+// Result
+@result^#13:*expr.Expr_IdentExpr#)^#14:*expr.Expr_ComprehensionExpr#",
+            }
         ];
 
         for test_case in test_cases {
             let parser = Parser::new();
             let result = parser.parse(&test_case.i);
             assert_eq!(
-                test_case.p,
                 to_go_like_string(&result.unwrap()),
+                test_case.p,
                 "Expr `{}` failed",
                 test_case.i
             );

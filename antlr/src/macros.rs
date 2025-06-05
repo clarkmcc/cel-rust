@@ -1,4 +1,4 @@
-use crate::ast::{CallExpr, ComprehensionExpr, Expr, IdedExpr};
+use crate::ast::{CallExpr, ComprehensionExpr, Expr, IdedExpr, ListExpr};
 use crate::reference::Val::{Boolean, Int};
 use crate::ParserHelper;
 
@@ -148,6 +148,61 @@ pub fn exists_one_macro_expander(
         target: None,
         args: vec![accu, one],
     }));
+
+    helper.next_expr(Expr::Comprehension(ComprehensionExpr {
+        iter_range: Box::new(target.unwrap()),
+        iter_var: v,
+        iter_var2: None,
+        accu_var: result_binding,
+        accu_init: init.into(),
+        loop_cond: condition.into(),
+        loop_step: step.into(),
+        result: result.into(),
+    }))
+}
+pub fn map_macro_expander(
+    helper: &mut ParserHelper,
+    target: Option<IdedExpr>,
+    mut args: Vec<IdedExpr>,
+) -> IdedExpr {
+    let func = args.pop().unwrap();
+
+    let v = match args.remove(0).expr {
+        Expr::Ident(ident) => ident,
+        _ => panic!("Not an ident expression"),
+    };
+
+    let init = helper.next_expr(Expr::List(ListExpr { elements: vec![] }));
+    let result_binding = "@result".to_string();
+    let condition = helper.next_expr(Expr::Literal(Boolean(true)));
+
+    let filter = args.pop();
+
+    let args = vec![
+        helper.next_expr(Expr::Ident(result_binding.clone())),
+        helper.next_expr(Expr::List(ListExpr {
+            elements: vec![func],
+        })),
+    ];
+    let step = helper.next_expr(Expr::Call(CallExpr {
+        func_name: "_+_".to_string(),
+        target: None,
+        args,
+    }));
+
+    let step = match filter {
+        Some(filter) => {
+            let accu = helper.next_expr(Expr::Ident(result_binding.clone()));
+            helper.next_expr(Expr::Call(CallExpr {
+                func_name: "_?_:_".to_string(),
+                target: None,
+                args: vec![filter, step, accu],
+            }))
+        }
+        None => step,
+    };
+
+    let result = helper.next_expr(Expr::Ident(result_binding.clone()));
 
     helper.next_expr(Expr::Comprehension(ComprehensionExpr {
         iter_range: Box::new(target.unwrap()),
