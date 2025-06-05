@@ -73,19 +73,22 @@ impl Parser {
     }
 
     fn receiver_call_or_macro(
-        &self,
+        &mut self,
         id: u64,
         func_name: String,
         target: IdedExpr,
         args: Vec<IdedExpr>,
     ) -> IdedExpr {
-        IdedExpr {
-            id,
-            expr: Expr::Call(CallExpr {
-                target: Some(Box::new(target)),
-                func_name,
-                args,
-            }),
+        match self.macro_expander(&func_name, Some(&target), &args) {
+            None => IdedExpr {
+                id,
+                expr: Expr::Call(CallExpr {
+                    target: Some(Box::new(target)),
+                    func_name,
+                    args,
+                }),
+            },
+            Some(expander) => expander(&mut self.helper, Some(target), args),
         }
     }
 
@@ -95,10 +98,11 @@ impl Parser {
         target: Option<&IdedExpr>,
         args: &[IdedExpr],
     ) -> Option<MacroExpander> {
-        if func_name == "has" && args.len() == 1 && target.is_none() {
-            return Some(macros::has_macro_expander);
+        match func_name {
+            "has" if args.len() == 1 && target.is_none() => Some(macros::has_macro_expander),
+            "exists" if args.len() == 2 && target.is_some() => Some(macros::exists_macro_expander),
+            _ => None,
         }
-        None
     }
 
     pub fn parse(mut self, source: &str) -> Result<IdedExpr, ParserError> {
@@ -513,7 +517,7 @@ impl Default for ParserHelper {
 }
 
 impl ParserHelper {
-    fn next_id(&mut self) -> u64 {
+    pub(crate) fn next_id(&mut self) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
         id
@@ -600,7 +604,7 @@ const OPERATORS: [(&str, &str); 12] = [
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::Expr;
+    use crate::ast::{ComprehensionExpr, Expr};
     use crate::reference::Val;
     use std::iter;
 
@@ -976,6 +980,31 @@ mod tests {
             TestInfo {
                 i: "has(m.f)",
                 p: "m^#2:*expr.Expr_IdentExpr#.f~test-only~^#4:*expr.Expr_SelectExpr#",
+            },
+            TestInfo {
+                i: "m.exists(v, f)",
+                p: "__comprehension__(
+// Variable
+v,
+// Target
+m^#1:*expr.Expr_IdentExpr#,
+// Accumulator
+@result,
+// Init
+false^#5:*expr.Constant_BoolValue#,
+// LoopCondition
+@not_strictly_false(
+    !_(
+        @result^#6:*expr.Expr_IdentExpr#
+    )^#7:*expr.Expr_CallExpr#
+)^#8:*expr.Expr_CallExpr#,
+// LoopStep
+_||_(
+    @result^#9:*expr.Expr_IdentExpr#,
+    f^#4:*expr.Expr_IdentExpr#
+)^#10:*expr.Expr_CallExpr#,
+// Result
+@result^#11:*expr.Expr_IdentExpr#)^#12:*expr.Expr_ComprehensionExpr#",
             }
         ];
 
@@ -1040,7 +1069,11 @@ mod tests {
                     self.push(")");
                     &format!("^#{}:{}#", expr.id, "*expr.Expr_CallExpr")
                 }
-                Expr::Comprehension => "",
+                Expr::Comprehension(comprehension) => {
+                    self.push("__comprehension__(\n");
+                    self.push_comprehension(comprehension);
+                    &format!(")^#{}:{}#", expr.id, "*expr.Expr_ComprehensionExpr")
+                }
                 Expr::Ident(id) => &format!("{}^#{}:{}#", id, expr.id, "*expr.Expr_IdentExpr"),
                 Expr::List(list) => {
                     self.push("[");
@@ -1180,6 +1213,29 @@ mod tests {
 
         fn done(self) -> String {
             self.buffer
+        }
+
+        fn push_comprehension(&mut self, comprehension: &ComprehensionExpr) {
+            self.push("// Variable\n");
+            self.push(comprehension.iter_var.as_str());
+            self.push(",\n");
+            self.push("// Target\n");
+            self.buffer(comprehension.iter_range.as_ref());
+            self.push(",\n");
+            self.push("// Accumulator\n");
+            self.push(comprehension.accu_var.as_str());
+            self.push(",\n");
+            self.push("// Init\n");
+            self.buffer(comprehension.accu_init.as_ref());
+            self.push(",\n");
+            self.push("// LoopCondition\n");
+            self.buffer(comprehension.loop_cond.as_ref());
+            self.push(",\n");
+            self.push("// LoopStep\n");
+            self.buffer(comprehension.loop_step.as_ref());
+            self.push(",\n");
+            self.push("// Result\n");
+            self.buffer(comprehension.result.as_ref());
         }
     }
 }
