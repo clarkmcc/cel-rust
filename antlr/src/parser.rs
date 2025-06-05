@@ -101,6 +101,7 @@ impl Parser {
         match func_name {
             "has" if args.len() == 1 && target.is_none() => Some(macros::has_macro_expander),
             "exists" if args.len() == 2 && target.is_some() => Some(macros::exists_macro_expander),
+            "all" if args.len() == 2 && target.is_some() => Some(macros::all_macro_expander),
             _ => None,
         }
     }
@@ -1005,6 +1006,29 @@ _||_(
 )^#10:*expr.Expr_CallExpr#,
 // Result
 @result^#11:*expr.Expr_IdentExpr#)^#12:*expr.Expr_ComprehensionExpr#",
+            },
+            TestInfo {
+                i: "m.all(v, f)",
+                p: "__comprehension__(
+// Variable
+v,
+// Target
+m^#1:*expr.Expr_IdentExpr#,
+// Accumulator
+@result,
+// Init
+true^#5:*expr.Constant_BoolValue#,
+// LoopCondition
+@not_strictly_false(
+    @result^#6:*expr.Expr_IdentExpr#
+)^#7:*expr.Expr_CallExpr#,
+// LoopStep
+_&&_(
+    @result^#8:*expr.Expr_IdentExpr#,
+    f^#4:*expr.Expr_IdentExpr#
+)^#9:*expr.Expr_CallExpr#,
+// Result
+@result^#10:*expr.Expr_IdentExpr#)^#11:*expr.Expr_ComprehensionExpr#",
             }
         ];
 
