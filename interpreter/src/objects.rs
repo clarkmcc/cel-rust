@@ -7,9 +7,9 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::{Infallible, TryFrom, TryInto};
 use std::fmt::{Display, Formatter};
+use std::ops;
 use std::ops::Deref;
 use std::sync::Arc;
-use std::ops;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Map {
@@ -445,58 +445,74 @@ impl Value {
                 }
                 if call.args.len() == 2 {
                     let left = Value::resolve(&call.args[0], ctx)?;
-                    let right = Value::resolve(&call.args[1], ctx)?;
                     match call.func_name.as_str() {
-                        operators::ADD => return left + right,
-                        operators::SUBSTRACT => return left - right,
-                        operators::DIVIDE => return left / right,
-                        operators::MULTIPLY => return left * right,
-                        operators::MODULO => return left % right,
-                        operators::EQUALS => return Value::Bool(left.eq(&right)).into(),
-                        operators::NOT_EQUALS => return Value::Bool(left.ne(&right)).into(),
+                        operators::ADD => return left + Value::resolve(&call.args[1], ctx)?,
+                        operators::SUBSTRACT => return left - Value::resolve(&call.args[1], ctx)?,
+                        operators::DIVIDE => return left / Value::resolve(&call.args[1], ctx)?,
+                        operators::MULTIPLY => return left * Value::resolve(&call.args[1], ctx)?,
+                        operators::MODULO => return left % Value::resolve(&call.args[1], ctx)?,
+                        operators::EQUALS => {
+                            return Value::Bool(left.eq(&Value::resolve(&call.args[1], ctx)?))
+                                .into()
+                        }
+                        operators::NOT_EQUALS => {
+                            return Value::Bool(left.ne(&Value::resolve(&call.args[1], ctx)?))
+                                .into()
+                        }
                         operators::LESS => {
+                            let right = Value::resolve(&call.args[1], ctx)?;
                             return Value::Bool(
                                 left.partial_cmp(&right)
                                     .ok_or(ExecutionError::ValuesNotComparable(left, right))?
                                     == Ordering::Less,
                             )
-                            .into()
+                            .into();
                         }
                         operators::LESS_EQUALS => {
+                            let right = Value::resolve(&call.args[1], ctx)?;
                             return Value::Bool(
                                 left.partial_cmp(&right)
                                     .ok_or(ExecutionError::ValuesNotComparable(left, right))?
                                     != Ordering::Greater,
                             )
-                            .into()
+                            .into();
                         }
                         operators::GREATER => {
+                            let right = Value::resolve(&call.args[1], ctx)?;
                             return Value::Bool(
                                 left.partial_cmp(&right)
                                     .ok_or(ExecutionError::ValuesNotComparable(left, right))?
                                     == Ordering::Greater,
                             )
-                            .into()
+                            .into();
                         }
                         operators::GREATER_EQUALS => {
+                            let right = Value::resolve(&call.args[1], ctx)?;
                             return Value::Bool(
                                 left.partial_cmp(&right)
                                     .ok_or(ExecutionError::ValuesNotComparable(left, right))?
                                     != Ordering::Less,
                             )
-                            .into()
+                            .into();
                         }
-                        operators::IN => match (left, right) {
-                            (Value::String(l), Value::String(r)) => {
-                                return Value::Bool(r.contains(&*l)).into()
+                        operators::IN => {
+                            let right = Value::resolve(&call.args[1], ctx)?;
+                            match (left, right) {
+                                (Value::String(l), Value::String(r)) => {
+                                    return Value::Bool(r.contains(&*l)).into()
+                                }
+                                (any, Value::List(v)) => {
+                                    return Value::Bool(v.contains(&any)).into()
+                                }
+                                (any, Value::Map(m)) => match any.try_into() {
+                                    Ok(key) => return Value::Bool(m.map.contains_key(&key)).into(),
+                                    Err(_) => return Value::Bool(false).into(),
+                                },
+                                (left, right) => {
+                                    Err(ExecutionError::ValuesNotComparable(left, right))?
+                                }
                             }
-                            (any, Value::List(v)) => return Value::Bool(v.contains(&any)).into(),
-                            (any, Value::Map(m)) => match any.try_into() {
-                                Ok(key) => return Value::Bool(m.map.contains_key(&key)).into(),
-                                Err(_) => return Value::Bool(false).into(),
-                            },
-                            (left, right) => Err(ExecutionError::ValuesNotComparable(left, right))?,
-                        },
+                        }
                         operators::LOGICAL_OR => {
                             let left = Value::resolve(&call.args[0], ctx)?;
                             return if left.to_bool() {
@@ -516,7 +532,7 @@ impl Value {
                             .into();
                         }
                         operators::INDEX => {
-                            let value = Value::resolve(&call.args[0], ctx)?;
+                            let value = left;
                             let idx = Value::resolve(&call.args[1], ctx)?;
                             return match (value, idx) {
                                 (Value::List(items), Value::Int(idx)) => items
@@ -1056,6 +1072,7 @@ mod tests {
 
         let program = Program::compile("has(data.x) && data.x.startsWith(\"foo\")").unwrap();
         let value = program.execute(&context);
+        println!("{:?}", value);
         assert!(
             value.is_ok(),
             "The AND expression should support short-circuit evaluation."
