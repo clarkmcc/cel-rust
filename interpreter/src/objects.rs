@@ -1,20 +1,15 @@
 use crate::context::Context;
 use crate::functions::FunctionContext;
 use crate::{ExecutionError, Expression};
-use cel_antlr_parser::ast::{operators, EntryExpr, Expr, IdedEntryExpr};
+use cel_antlr_parser::ast::{operators, EntryExpr, Expr};
 use cel_antlr_parser::reference::Val;
-use chrono::expect;
-use nom::combinator::into;
-use nom::error::ErrorKind::Fix;
-use paste::item;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::{Infallible, TryFrom, TryInto};
 use std::fmt::{Display, Formatter};
+use std::ops;
 use std::ops::Deref;
-use std::panic::panic_any;
 use std::sync::Arc;
-use std::{clone, ops};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Map {
@@ -578,14 +573,14 @@ impl Value {
                 if select.test {
                     match &left {
                         Value::Map(map) => {
-                            for (key, _value) in map.map.deref() {
+                            for key in map.map.deref().keys() {
                                 if key.to_string().eq(&select.field) {
                                     return Ok(Value::Bool(true));
                                 }
                             }
                             Ok(Value::Bool(false))
-                        },
-                        val => panic!("has() not supported on {val:?}")
+                        }
+                        val => panic!("has() not supported on {val:?}"),
                     }
                 } else {
                     left.member(&select.field, ctx)
@@ -631,20 +626,20 @@ impl Value {
                             }
                             ctx.add_variable(&comprehension.iter_var, item.clone())
                                 .expect("Failed to add iter variable");
-                            let accu = Value::resolve(&comprehension.loop_step.deref(), &ctx)
+                            let accu = Value::resolve(comprehension.loop_step.deref(), &ctx)
                                 .expect("Failed to resolve loop step");
                             ctx.add_variable(&comprehension.accu_var, accu)
                                 .expect("Failed to add accu variable");
                         }
                     }
                     Value::Map(map) => {
-                        for (key, _value) in map.map.deref() {
+                        for key in map.map.deref().keys() {
                             if !Value::resolve(&comprehension.loop_cond, &ctx)?.to_bool() {
                                 break;
                             }
                             ctx.add_variable(&comprehension.iter_var, key.clone())
                                 .expect("Failed to add iter variable");
-                            let accu = Value::resolve(&comprehension.loop_step.deref(), &ctx)
+                            let accu = Value::resolve(comprehension.loop_step.deref(), &ctx)
                                 .expect("Failed to resolve loop step");
                             ctx.add_variable(&comprehension.accu_var, accu)
                                 .expect("Failed to add accu variable");
@@ -652,7 +647,7 @@ impl Value {
                     }
                     t => todo!("Support {t:?}"),
                 }
-                Value::resolve(&comprehension.result.deref(), &ctx)
+                Value::resolve(comprehension.result.deref(), &ctx)
             }
             Expr::Struct(_) => todo!("Support structs!"),
             Expr::Unspecified => panic!("Can't evaluate Unspecified Expr"),
