@@ -1,7 +1,7 @@
 use crate::macros::{impl_conversions, impl_handler};
 use crate::resolvers::{AllArguments, Argument};
 use crate::{ExecutionError, Expression, FunctionContext, ResolveResult, Value};
-use cel_antlr_parser::ast::{Expr, IdedExpr};
+use cel_antlr_parser::ast::Expr;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -255,11 +255,7 @@ impl<'a, 'context> FromContext<'a, 'context> for Expression {
     where
         Self: Sized,
     {
-        let arg = arg_expr_from_context(ctx);
-        Ok(IdedExpr {
-            id: arg.id,
-            expr: Expr::default(),
-        })
+        Ok(arg_expr_from_context(ctx).clone())
     }
 }
 
