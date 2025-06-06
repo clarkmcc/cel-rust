@@ -7,35 +7,35 @@ pub fn find_operator(input: &str) -> Option<&str> {
     None
 }
 
-pub const CONDITIONAL: &'static str = "_?_:_";
-pub const LOGICAL_AND: &'static str = "_&&_";
-pub const LOGICAL_OR: &'static str = "_||_";
-pub const LOGICAL_NOT: &'static str = "!_";
-pub const SUBSTRACT: &'static str = "_-_";
-pub const ADD: &'static str = "_+_";
-pub const MULTIPLY: &'static str = "_*_";
-pub const DIVIDE: &'static str = "_/_";
-pub const MODULO: &'static str = "_%_";
-pub const EQUALS: &'static str = "_==_";
-pub const NOT_EQUALS: &'static str = "_!=_";
-pub const GREATER_EQUALS: &'static str = "_>=_";
-pub const LESS_EQUALS: &'static str = "_<=_";
-pub const GREATER: &'static str = "_>_";
-pub const LESS: &'static str = "_<_";
-pub const NEGATE: &'static str = "-_";
-pub const INDEX: &'static str = "_[_]";
-pub const OPT_INDEX: &'static str = "_[?_]";
-pub const OPT_SELECT: &'static str = "_?._";
+pub const CONDITIONAL: &str = "_?_:_";
+pub const LOGICAL_AND: &str = "_&&_";
+pub const LOGICAL_OR: &str = "_||_";
+pub const LOGICAL_NOT: &str = "!_";
+pub const SUBSTRACT: &str = "_-_";
+pub const ADD: &str = "_+_";
+pub const MULTIPLY: &str = "_*_";
+pub const DIVIDE: &str = "_/_";
+pub const MODULO: &str = "_%_";
+pub const EQUALS: &str = "_==_";
+pub const NOT_EQUALS: &str = "_!=_";
+pub const GREATER_EQUALS: &str = "_>=_";
+pub const LESS_EQUALS: &str = "_<=_";
+pub const GREATER: &str = "_>_";
+pub const LESS: &str = "_<_";
+pub const NEGATE: &str = "-_";
+pub const INDEX: &str = "_[_]";
+pub const OPT_INDEX: &str = "_[?_]";
+pub const OPT_SELECT: &str = "_?._";
 
-pub const EXISTS_ONE: &'static str = "exists_one";
-pub const HAS: &'static str = "has";
-pub const ALL: &'static str = "all";
-pub const EXISTS: &'static str = "exists";
-pub const MAP: &'static str = "map";
-pub const FILTER: &'static str = "filter";
+pub const EXISTS_ONE: &str = "exists_one";
+pub const HAS: &str = "has";
+pub const ALL: &str = "all";
+pub const EXISTS: &str = "exists";
+pub const MAP: &str = "map";
+pub const FILTER: &str = "filter";
 
-pub const NOT_STRICTLY_FALSE: &'static str = "@not_strictly_false";
-pub const IN: &'static str = "@in";
+pub const NOT_STRICTLY_FALSE: &str = "@not_strictly_false";
+pub const IN: &str = "@in";
 
 const OPERATORS: [(&str, &str); 12] = [
     ("-", SUBSTRACT),
