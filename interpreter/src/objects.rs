@@ -1,7 +1,7 @@
 use crate::context::Context;
 use crate::functions::FunctionContext;
 use crate::{ExecutionError, Expression};
-use cel_antlr_parser::ast::{operators, EntryExpr, Expr};
+use cel_antlr_parser::ast::{operators, EntryExpr, Expr, IdedEntryExpr};
 use cel_antlr_parser::reference::Val;
 use chrono::expect;
 use nom::combinator::into;
@@ -575,7 +575,21 @@ impl Value {
             Expr::Ident(name) => ctx.get_variable(name),
             Expr::Select(select) => {
                 let left = Value::resolve(select.operand.deref(), ctx)?;
-                left.member(&select.field, ctx)
+                if select.test {
+                    match &left {
+                        Value::Map(map) => {
+                            for (key, _value) in map.map.deref() {
+                                if key.to_string().eq(&select.field) {
+                                    return Ok(Value::Bool(true));
+                                }
+                            }
+                            Ok(Value::Bool(false))
+                        },
+                        val => panic!("has() not supported on {val:?}")
+                    }
+                } else {
+                    left.member(&select.field, ctx)
+                }
             }
             Expr::List(list_expr) => {
                 let list = list_expr
