@@ -1,4 +1,4 @@
-use crate::ast::{CallExpr, ComprehensionExpr, Expr, IdedExpr, ListExpr};
+use crate::ast::{operators, CallExpr, ComprehensionExpr, Expr, IdedExpr, ListExpr};
 use crate::reference::Val::{Boolean, Int};
 use crate::ParserHelper;
 
@@ -38,19 +38,19 @@ pub fn exists_macro_expander(
     let result_binding = "@result".to_string();
     let accu_ident = helper.next_expr(Expr::Ident(result_binding.clone()));
     let arg = helper.next_expr(Expr::Call(CallExpr {
-        func_name: "!_".to_string(),
+        func_name: operators::LOGICAL_NOT.to_string(),
         target: None,
         args: vec![accu_ident],
     }));
     let condition = helper.next_expr(Expr::Call(CallExpr {
-        func_name: "@not_strictly_false".to_string(),
+        func_name: operators::NOT_STRICTLY_FALSE.to_string(),
         target: None,
         args: vec![arg],
     }));
 
     arguments.insert(0, helper.next_expr(Expr::Ident(result_binding.clone())));
     let step = helper.next_expr(Expr::Call(CallExpr {
-        func_name: "_||_".to_string(),
+        func_name: operators::LOGICAL_OR.to_string(),
         target: None,
         args: arguments,
     }));
@@ -83,14 +83,14 @@ pub fn all_macro_expander(
     let result_binding = "@result".to_string();
     let accu_ident = helper.next_expr(Expr::Ident(result_binding.clone()));
     let condition = helper.next_expr(Expr::Call(CallExpr {
-        func_name: "@not_strictly_false".to_string(),
+        func_name: operators::NOT_STRICTLY_FALSE.to_string(),
         target: None,
         args: vec![accu_ident],
     }));
 
     arguments.insert(0, helper.next_expr(Expr::Ident(result_binding.clone())));
     let step = helper.next_expr(Expr::Call(CallExpr {
-        func_name: "_&&_".to_string(),
+        func_name: operators::LOGICAL_AND.to_string(),
         target: None,
         args: arguments,
     }));
@@ -129,14 +129,14 @@ pub fn exists_one_macro_expander(
         helper.next_expr(Expr::Literal(Int(1))),
     ];
     arguments.push(helper.next_expr(Expr::Call(CallExpr {
-        func_name: "_+_".to_string(),
+        func_name: operators::ADD.to_string(),
         target: None,
         args,
     })));
     arguments.push(helper.next_expr(Expr::Ident(result_binding.clone())));
 
     let step = helper.next_expr(Expr::Call(CallExpr {
-        func_name: "_?_:_".to_string(),
+        func_name: operators::CONDITIONAL.to_string(),
         target: None,
         args: arguments,
     }));
@@ -144,7 +144,7 @@ pub fn exists_one_macro_expander(
     let accu = helper.next_expr(Expr::Ident(result_binding.clone()));
     let one = helper.next_expr(Expr::Literal(Int(1)));
     let result = helper.next_expr(Expr::Call(CallExpr {
-        func_name: "_==_".to_string(),
+        func_name: operators::EQUALS.to_string(),
         target: None,
         args: vec![accu, one],
     }));
@@ -186,7 +186,7 @@ pub fn map_macro_expander(
         })),
     ];
     let step = helper.next_expr(Expr::Call(CallExpr {
-        func_name: "_+_".to_string(),
+        func_name: operators::ADD.to_string(),
         target: None,
         args,
     }));
@@ -195,7 +195,7 @@ pub fn map_macro_expander(
         Some(filter) => {
             let accu = helper.next_expr(Expr::Ident(result_binding.clone()));
             helper.next_expr(Expr::Call(CallExpr {
-                func_name: "_?_:_".to_string(),
+                func_name: operators::CONDITIONAL.to_string(),
                 target: None,
                 args: vec![filter, step, accu],
             }))
@@ -240,14 +240,14 @@ pub fn filter_macro_expander(
         })),
     ];
     let step = helper.next_expr(Expr::Call(CallExpr {
-        func_name: "_+_".to_string(),
+        func_name: operators::ADD.to_string(),
         target: None,
         args,
     }));
 
     let accu = helper.next_expr(Expr::Ident(result_binding.clone()));
     let step = helper.next_expr(Expr::Call(CallExpr {
-        func_name: "_?_:_".to_string(),
+        func_name: operators::CONDITIONAL.to_string(),
         target: None,
         args: vec![filter, step, accu],
     }));
