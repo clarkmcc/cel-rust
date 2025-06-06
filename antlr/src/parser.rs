@@ -1,5 +1,5 @@
 use crate::ast::{
-    CallExpr, EntryExpr, Expr, IdedEntryExpr, IdedExpr, ListExpr, MapEntryExpr, MapExpr,
+    operators, CallExpr, EntryExpr, Expr, IdedEntryExpr, IdedExpr, ListExpr, MapEntryExpr, MapExpr,
     SelectExpr, StructExpr, StructFieldExpr,
 };
 use crate::gen::{
@@ -99,16 +99,24 @@ impl Parser {
         args: &[IdedExpr],
     ) -> Option<MacroExpander> {
         match func_name {
-            "has" if args.len() == 1 && target.is_none() => Some(macros::has_macro_expander),
-            "exists" if args.len() == 2 && target.is_some() => Some(macros::exists_macro_expander),
-            "all" if args.len() == 2 && target.is_some() => Some(macros::all_macro_expander),
-            "existsOne" if args.len() == 2 && target.is_some() => {
+            operators::HAS if args.len() == 1 && target.is_none() => {
+                Some(macros::has_macro_expander)
+            }
+            operators::EXISTS if args.len() == 2 && target.is_some() => {
+                Some(macros::exists_macro_expander)
+            }
+            operators::ALL if args.len() == 2 && target.is_some() => {
+                Some(macros::all_macro_expander)
+            }
+            operators::EXISTS_ONE | "existsOne" if args.len() == 2 && target.is_some() => {
                 Some(macros::exists_one_macro_expander)
             }
-            "map" if (args.len() == 2 || args.len() == 3) && target.is_some() => {
+            operators::MAP if (args.len() == 2 || args.len() == 3) && target.is_some() => {
                 Some(macros::map_macro_expander)
             }
-            "filter" if args.len() == 2 && target.is_some() => Some(macros::filter_macro_expander),
+            operators::FILTER if args.len() == 2 && target.is_some() => {
+                Some(macros::filter_macro_expander)
+            }
             _ => None,
         }
     }
@@ -224,7 +232,11 @@ impl gen::CELVisitorCompat<'_> for Parser {
             let op_id = self.helper.next_id();
             let if_true = self.visit(ctx.e1.as_deref().unwrap());
             let if_false = self.visit(ctx.e2.as_deref().unwrap());
-            self.global_call_or_macro(op_id, "_?_:_".to_string(), vec![result, if_true, if_false])
+            self.global_call_or_macro(
+                op_id,
+                operators::CONDITIONAL.to_string(),
+                vec![result, if_true, if_false],
+            )
         }
     }
 
@@ -233,7 +245,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
             <Self as ParseTreeVisitorCompat>::visit(self, ctx.e.as_deref().unwrap())
         } else {
             let result = self.visit(ctx.e.as_deref().unwrap());
-            let mut l = self.new_logic_manager("_||_", result);
+            let mut l = self.new_logic_manager(operators::LOGICAL_OR, result);
             let rest = &ctx.e1;
             if ctx.ops.len() > rest.len() {
                 // why is >= not ok?
@@ -253,7 +265,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
             <Self as ParseTreeVisitorCompat>::visit(self, ctx.e.as_deref().unwrap())
         } else {
             let result = self.visit(ctx.e.as_deref().unwrap());
-            let mut l = self.new_logic_manager("_&&_", result);
+            let mut l = self.new_logic_manager(operators::LOGICAL_AND, result);
             let rest = &ctx.e1;
             if ctx.ops.len() > rest.len() {
                 // why is >= not ok?
@@ -280,7 +292,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
                     let rhs = self.visit(ctx.relation(1).unwrap().deref());
                     self.global_call_or_macro(
                         op_id,
-                        find_operator(op.get_text())
+                        operators::find_operator(op.get_text())
                             .expect("operator not found!")
                             .to_string(),
                         vec![lhs, rhs],
@@ -299,7 +311,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
                 let rhs = self.visit(ctx.calc(1).unwrap().deref());
                 self.global_call_or_macro(
                     op_id,
-                    find_operator(op.get_text())
+                    operators::find_operator(op.get_text())
                         .expect("operator not found!")
                         .to_string(),
                     vec![lhs, rhs],
@@ -318,7 +330,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
         }
         let op_id = self.helper.next_id();
         let target = self.visit(ctx.member().as_deref().unwrap());
-        self.global_call_or_macro(op_id, "!_".to_string(), vec![target])
+        self.global_call_or_macro(op_id, operators::LOGICAL_NOT.to_string(), vec![target])
     }
 
     fn visit_Negate(&mut self, ctx: &NegateContext<'_>) -> Self::Return {
@@ -327,7 +339,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
         }
         let op_id = self.helper.next_id();
         let target = self.visit(ctx.member().as_deref().unwrap());
-        self.global_call_or_macro(op_id, "-_".to_string(), vec![target])
+        self.global_call_or_macro(op_id, operators::NEGATE.to_string(), vec![target])
     }
 
     fn visit_MemberCall(&mut self, ctx: &MemberCallContext<'_>) -> Self::Return {
@@ -373,7 +385,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
             },
             Some(_) => {
                 let index = self.visit(ctx.index.as_deref().unwrap());
-                self.global_call_or_macro(op_id, "_[_]".to_string(), vec![target, index])
+                self.global_call_or_macro(op_id, operators::INDEX.to_string(), vec![target, index])
             }
         }
     }
@@ -584,30 +596,6 @@ impl LogicManager {
         }
     }
 }
-
-fn find_operator(input: &str) -> Option<&str> {
-    for (op, operator) in OPERATORS {
-        if op == input {
-            return Some(operator);
-        }
-    }
-    None
-}
-
-const OPERATORS: [(&str, &str); 12] = [
-    ("-", "_-_"),
-    ("+", "_+_"),
-    ("*", "_*_"),
-    ("/", "_/_"),
-    ("%", "_%_"),
-    ("==", "_==_"),
-    ("!=", "_!=_"),
-    (">=", "_>=_"),
-    ("<=", "_<=_"),
-    (">", "_>_"),
-    ("<", "_<_"),
-    ("in", "@in"),
-];
 
 #[cfg(test)]
 mod tests {
