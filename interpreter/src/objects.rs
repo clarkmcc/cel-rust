@@ -7,9 +7,9 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::{Infallible, TryFrom, TryInto};
 use std::fmt::{Display, Formatter};
-use std::ops;
 use std::ops::Deref;
 use std::sync::Arc;
+use std::ops;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Map {
@@ -516,7 +516,50 @@ impl Value {
                             .into();
                         }
                         operators::INDEX => {
-                            todo!("Fix index accesses")
+                            let value = Value::resolve(&call.args[0], ctx)?;
+                            let idx = Value::resolve(&call.args[1], ctx)?;
+                            return match (value, idx) {
+                                (Value::List(items), Value::Int(idx)) => items
+                                    .get(idx as usize)
+                                    .cloned()
+                                    .unwrap_or(Value::Null)
+                                    .into(),
+                                (Value::String(str), Value::Int(idx)) => {
+                                    match str.get(idx as usize..(idx + 1) as usize) {
+                                        None => Ok(Value::Null),
+                                        Some(str) => Ok(Value::String(str.to_string().into())),
+                                    }
+                                }
+                                (Value::Map(map), Value::String(property)) => map
+                                    .get(&property.into())
+                                    .cloned()
+                                    .unwrap_or(Value::Null)
+                                    .into(),
+                                (Value::Map(map), Value::Bool(property)) => map
+                                    .get(&property.into())
+                                    .cloned()
+                                    .unwrap_or(Value::Null)
+                                    .into(),
+                                (Value::Map(map), Value::Int(property)) => map
+                                    .get(&property.into())
+                                    .cloned()
+                                    .unwrap_or(Value::Null)
+                                    .into(),
+                                (Value::Map(map), Value::UInt(property)) => map
+                                    .get(&property.into())
+                                    .cloned()
+                                    .unwrap_or(Value::Null)
+                                    .into(),
+                                (Value::Map(_), index) => {
+                                    Err(ExecutionError::UnsupportedMapIndex(index))
+                                }
+                                (Value::List(_), index) => {
+                                    Err(ExecutionError::UnsupportedListIndex(index))
+                                }
+                                (value, index) => {
+                                    Err(ExecutionError::UnsupportedIndex(value, index))
+                                }
+                            };
                         }
                         _ => (),
                     }
