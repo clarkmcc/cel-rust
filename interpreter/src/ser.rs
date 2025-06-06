@@ -1074,7 +1074,9 @@ mod tests {
 
         // Test with CEL because iterator is not implemented for Value::Map
         let program = Program::compile(
-            "expected.all(key, (has(serialized[key]) && (serialized[key] == expected[key])))",
+            // todo: I don't think `has(_[_])` is a thing in CEL
+            //"expected.all(key, (has(serialized[key]) && (serialized[key] == expected[key])))",
+            "expected.all(key, serialized[key] == expected[key])",
         )
         .unwrap();
         let mut context = Context::default();

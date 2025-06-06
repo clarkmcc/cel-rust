@@ -19,7 +19,7 @@ pub fn has_macro_expander(
             select.test = true;
             helper.next_expr(Expr::Select(select))
         }
-        _ => panic!("Not a select expression"),
+        e => panic!("Not a select expression: {e:?}"),
     }
 }
 
