@@ -509,9 +509,8 @@ impl gen::CELVisitorCompat<'_> for Parser {
 
     fn visit_Bytes(&mut self, ctx: &BytesContext<'_>) -> Self::Return {
         let string = ctx.get_text();
-        self.helper.next_expr(Expr::Literal(Val::Bytes(
-            string.as_bytes()[2..string.len() - 1].to_vec(),
-        )))
+        let bytes = parse::parse_bytes(&string[2..string.len() - 1]).unwrap();
+        self.helper.next_expr(Expr::Literal(Val::Bytes(bytes)))
     }
 
     fn visit_BoolTrue(&mut self, _ctx: &BoolTrueContext<'_>) -> Self::Return {
