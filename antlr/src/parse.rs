@@ -404,8 +404,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::parse::ParseSequenceError;
-    use crate::{parse_bytes, parse_string};
+    use super::{parse_bytes, parse_string, ParseSequenceError};
 
     #[test]
     fn single_quotes_interprets_escapes() {
