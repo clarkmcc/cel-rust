@@ -502,8 +502,9 @@ impl gen::CELVisitorCompat<'_> for Parser {
     }
 
     fn visit_String(&mut self, ctx: &StringContext<'_>) -> Self::Return {
-        self.helper
-            .next_expr(Expr::Literal(Val::String(parse::parse_string(&ctx.get_text()).expect("invalid string"))))
+        self.helper.next_expr(Expr::Literal(Val::String(
+            parse::parse_string(&ctx.get_text()).expect("invalid string"),
+        )))
     }
 
     fn visit_Bytes(&mut self, ctx: &BytesContext<'_>) -> Self::Return {
