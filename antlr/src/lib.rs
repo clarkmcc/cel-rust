@@ -1,8 +1,11 @@
 #[allow(clippy::all)]
 mod gen;
 
-mod ast;
-mod reference;
+pub mod ast;
+pub mod reference;
+pub mod references;
+
+pub use ast::IdedExpr as Expression;
 
 mod macros;
 pub mod parse;
@@ -10,3 +13,4 @@ pub mod parse;
 mod parser;
 
 pub use parser::*;
+pub use references::ExpressionReferences;

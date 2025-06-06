@@ -9,7 +9,7 @@ pub struct Ast {
     //refMap:     map[int64]*ReferenceInfo,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub enum Expr {
     #[default]
     /// UnspecifiedExprKind represents an unset expression with no specified properties.
@@ -40,69 +40,69 @@ pub enum Expr {
     Struct(StructExpr),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum EntryExpr {
     StructField(StructFieldExpr),
     MapEntry(MapEntryExpr),
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct IdedExpr {
     pub id: u64,
     pub expr: Expr,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct IdedEntryExpr {
     pub id: u64,
     pub expr: EntryExpr,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct CallExpr {
     pub func_name: String,
     pub target: Option<Box<IdedExpr>>,
     pub args: Vec<IdedExpr>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct SelectExpr {
     pub operand: Box<IdedExpr>,
     pub field: String,
     pub test: bool,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct StructExpr {
     pub type_name: String,
     pub entries: Vec<IdedEntryExpr>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct MapExpr {
     pub entries: Vec<IdedEntryExpr>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct ListExpr {
     pub elements: Vec<IdedExpr>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct StructFieldExpr {
     pub field: String,
     pub value: IdedExpr,
     pub optional: bool,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct MapEntryExpr {
     pub key: IdedExpr,
     pub value: IdedExpr,
     pub optional: bool,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct ComprehensionExpr {
     pub iter_range: Box<IdedExpr>,
     pub iter_var: String,
