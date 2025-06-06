@@ -21,6 +21,8 @@ use antlr4rust::parser::ParserNodeType;
 use antlr4rust::token::Token;
 use antlr4rust::tree::{ParseTree, ParseTreeVisitorCompat, VisitChildren};
 use antlr4rust::InputStream;
+use std::error::Error;
+use std::fmt::Display;
 use std::mem;
 use std::ops::Deref;
 
@@ -29,6 +31,14 @@ type MacroExpander =
 
 #[derive(Debug)]
 pub struct ParseError {}
+
+impl Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Parse error")
+    }
+}
+
+impl Error for ParseError {}
 
 pub struct Parser {
     ast: ast::Ast,
