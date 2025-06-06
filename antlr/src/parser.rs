@@ -1144,7 +1144,7 @@ _?_:_(
 
         for test_case in test_cases {
             let parser = Parser::new();
-            let result = parser.parse(&test_case.i);
+            let result = parser.parse(test_case.i);
             assert_eq!(
                 to_go_like_string(&result.unwrap()),
                 test_case.p,
@@ -1187,7 +1187,7 @@ _?_:_(
                     }
                     self.push(call.func_name.as_str());
                     self.push("(");
-                    if call.args.len() > 0 {
+                    if !call.args.is_empty() {
                         self.inc_indent();
                         self.newline();
                         for i in 0..call.args.len() {
@@ -1211,7 +1211,7 @@ _?_:_(
                 Expr::Ident(id) => &format!("{}^#{}:{}#", id, expr.id, "*expr.Expr_IdentExpr"),
                 Expr::List(list) => {
                     self.push("[");
-                    if list.elements.len() > 0 {
+                    if !list.elements.is_empty() {
                         self.inc_indent();
                         self.newline();
                         for (i, element) in list.elements.iter().enumerate() {
@@ -1324,8 +1324,7 @@ _?_:_(
             if self.line_start {
                 self.line_start = false;
                 self.buffer.push_str(
-                    iter::repeat("    ")
-                        .take(self.indents)
+                    iter::repeat_n("    ", self.indents)
                         .collect::<String>()
                         .as_str(),
                 )
@@ -1338,11 +1337,11 @@ _?_:_(
         }
 
         fn inc_indent(&mut self) {
-            self.indents = self.indents + 1;
+            self.indents += 1;
         }
 
         fn dec_indent(&mut self) {
-            self.indents = self.indents - 1;
+            self.indents -= 1;
         }
 
         fn done(self) -> String {
