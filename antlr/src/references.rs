@@ -13,8 +13,8 @@ impl<'expr> ExpressionReferences<'expr> {
     ///
     /// # Example
     /// ```rust
-    /// # use cel_antlr::parse;
-    /// let expression = parse("foo.bar == true").unwrap();
+    /// # use cel_antlr_parser::Parser;
+    /// let expression = Parser::new().parse("foo.bar == true").unwrap();
     /// let references = expression.references();
     /// assert!(references.has_variable("foo"));
     /// ```
@@ -26,8 +26,8 @@ impl<'expr> ExpressionReferences<'expr> {
     ///
     /// # Example
     /// ```rust
-    /// # use cel_antlr::parse;
-    /// let expression = parse("size(foo) > 0").unwrap();
+    /// # use cel_antlr_parser::Parser;
+    /// let expression = Parser::new().parse("size(foo) > 0").unwrap();
     /// let references = expression.references();
     /// assert!(references.has_function("size"));
     /// ```
@@ -39,8 +39,8 @@ impl<'expr> ExpressionReferences<'expr> {
     ///
     /// # Example
     /// ```rust
-    /// # use cel_antlr::parse;
-    /// let expression = parse("foo.bar == true").unwrap();
+    /// # use cel_antlr_parser::Parser;
+    /// let expression = Parser::new().parse("foo.bar == true").unwrap();
     /// let references = expression.references();
     /// assert_eq!(vec!["foo"], references.variables());
     /// ```
@@ -52,10 +52,11 @@ impl<'expr> ExpressionReferences<'expr> {
     ///
     /// # Example
     /// ```rust
-    /// # use cel_antlr::parse;
-    /// let expression = parse("size(foo) > 0").unwrap();
+    /// # use cel_antlr_parser::Parser;
+    /// let expression = Parser::new().parse("size(foo) > 0").unwrap();
     /// let references = expression.references();
-    /// assert_eq!(vec!["size"], references.functions());
+    /// assert!(references.functions().contains(&"_>_"));
+    /// assert!(references.functions().contains(&"size"));
     /// ```
     pub fn functions(&self) -> Vec<&str> {
         self.functions.iter().copied().collect()
@@ -67,8 +68,8 @@ impl IdedExpr {
     ///
     /// # Example
     /// ```rust
-    /// # use cel_antlr::parse;
-    /// let expression = parse("foo && size(foo) > 0").unwrap();
+    /// # use cel_antlr_parser::Parser;
+    /// let expression = Parser::new().parse("foo && size(foo) > 0").unwrap();
     /// let references = expression.references();
     ///
     /// assert!(references.has_variable("foo"));
