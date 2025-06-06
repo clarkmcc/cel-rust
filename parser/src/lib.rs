@@ -3,9 +3,6 @@ use lalrpop_util::lalrpop_mod;
 pub mod ast;
 pub use ast::*;
 
-pub mod parse;
-pub use parse::*;
-
 pub mod error;
 pub use error::ParseError;
 

@@ -15,7 +15,7 @@ use crate::gen::{
     SelectContextAttrs, StartContext, StartContextAttrs, StringContext, UintContext,
 };
 use crate::reference::Val;
-use crate::{ast, gen, macros};
+use crate::{ast, gen, macros, parse};
 use antlr4rust::common_token_stream::CommonTokenStream;
 use antlr4rust::parser::ParserNodeType;
 use antlr4rust::token::Token;
@@ -503,7 +503,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
 
     fn visit_String(&mut self, ctx: &StringContext<'_>) -> Self::Return {
         self.helper
-            .next_expr(Expr::Literal(Val::String(ctx.get_text())))
+            .next_expr(Expr::Literal(Val::String(parse::parse_string(&ctx.get_text()).expect("invalid string"))))
     }
 
     fn visit_Bytes(&mut self, ctx: &BytesContext<'_>) -> Self::Return {
@@ -1219,7 +1219,7 @@ _?_:_(
                 }
                 Expr::Literal(val) => match val {
                     Val::String(s) => {
-                        &format!("{s}^#{}:{}#", expr.id, "*expr.Constant_StringValue")
+                        &format!("\"{s}\"^#{}:{}#", expr.id, "*expr.Constant_StringValue")
                     }
                     Val::Boolean(b) => &format!("{b}^#{}:{}#", expr.id, "*expr.Constant_BoolValue"),
                     Val::Int(i) => &format!("{i}^#{}:{}#", expr.id, "*expr.Constant_Int64Value"),
