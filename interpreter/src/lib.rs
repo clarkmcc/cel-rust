@@ -7,10 +7,10 @@ use thiserror::Error;
 mod macros;
 
 pub mod context;
-pub use cel_antlr_parser::ParseError;
 pub use cel_antlr_parser::ast::IdedExpr;
-use cel_antlr_parser::{Expression, ExpressionReferences, Parser};
 use cel_antlr_parser::ast::SelectExpr;
+pub use cel_antlr_parser::ParseError;
+use cel_antlr_parser::{Expression, ExpressionReferences, Parser};
 pub use context::Context;
 pub use functions::FunctionContext;
 pub use objects::{ResolveResult, Value};
@@ -145,7 +145,9 @@ pub struct Program {
 impl Program {
     pub fn compile(source: &str) -> Result<Program, ParseError> {
         let parser = Parser::default();
-        parser.parse(source).map(|expression| Program { expression })
+        parser
+            .parse(source)
+            .map(|expression| Program { expression })
     }
 
     pub fn execute(&self, context: &Context) -> ResolveResult {
