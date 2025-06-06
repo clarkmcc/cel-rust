@@ -1,13 +1,15 @@
 use crate::context::Context;
 use crate::functions::FunctionContext;
-use crate::ExecutionError;
-use cel_parser::ast::*;
+use crate::{ExecutionError, Expression};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::{Infallible, TryFrom, TryInto};
 use std::fmt::{Display, Formatter};
 use std::ops;
+use std::ops::Deref;
 use std::sync::Arc;
+use cel_antlr_parser::ast::{operators, EntryExpr, Expr};
+use cel_antlr_parser::reference::Val;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Map {
@@ -172,6 +174,20 @@ pub enum Value {
     #[cfg(feature = "chrono")]
     Timestamp(chrono::DateTime<chrono::FixedOffset>),
     Null,
+}
+
+impl From<Val> for Value {
+    fn from(val: Val) -> Self {
+        match val {
+            Val::String(s) => Value::String(Arc::new(s)),
+            Val::Boolean(b) => Value::Bool(b),
+            Val::Int(i) => Value::Int(i),
+            Val::UInt(u) => Value::UInt(u),
+            Val::Double(d) => Value::Float(d),
+            Val::Bytes(bytes) => Value::Bytes(Arc::new(bytes)),
+            Val::Null => Value::Null,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -416,115 +432,116 @@ impl Value {
 
     #[inline(always)]
     pub fn resolve(expr: &Expression, ctx: &Context) -> ResolveResult {
-        match expr {
-            Expression::Atom(atom) => Ok(atom.into()),
-            Expression::Arithmetic(left, op, right) => {
-                let left = Value::resolve(left, ctx)?;
-                let right = Value::resolve(right, ctx)?;
-
-                match op {
-                    ArithmeticOp::Add => left + right,
-                    ArithmeticOp::Subtract => left - right,
-                    ArithmeticOp::Divide => left / right,
-                    ArithmeticOp::Multiply => left * right,
-                    ArithmeticOp::Modulus => left % right,
+        match &expr.expr {
+            Expr::Literal(val) => Ok(val.clone().into()),
+            Expr::Call(call) => {
+                if call.args.len() == 3 && call.func_name == operators::CONDITIONAL {
+                    let cond = Value::resolve(&call.args[0], ctx)?;
+                    return if cond.to_bool() {
+                        Value::resolve(&call.args[1], ctx)
+                    } else {
+                        Value::resolve(&call.args[2], ctx)
+                    }
                 }
-            }
-            Expression::Relation(left, op, right) => {
-                let left = Value::resolve(left, ctx)?;
-                let right = Value::resolve(right, ctx)?;
-                let res = match op {
-                    RelationOp::LessThan => {
-                        left.partial_cmp(&right)
-                            .ok_or(ExecutionError::ValuesNotComparable(left, right))?
-                            == Ordering::Less
-                    }
-                    RelationOp::LessThanEq => {
-                        left.partial_cmp(&right)
-                            .ok_or(ExecutionError::ValuesNotComparable(left, right))?
-                            != Ordering::Greater
-                    }
-                    RelationOp::GreaterThan => {
-                        left.partial_cmp(&right)
-                            .ok_or(ExecutionError::ValuesNotComparable(left, right))?
-                            == Ordering::Greater
-                    }
-                    RelationOp::GreaterThanEq => {
-                        left.partial_cmp(&right)
-                            .ok_or(ExecutionError::ValuesNotComparable(left, right))?
-                            != Ordering::Less
-                    }
-                    RelationOp::Equals => right.eq(&left),
-                    RelationOp::NotEquals => right.ne(&left),
-                    RelationOp::In => match (left, right) {
-                        (Value::String(l), Value::String(r)) => r.contains(&*l),
-                        (any, Value::List(v)) => v.contains(&any),
-                        (any, Value::Map(m)) => match any.try_into() {
-                            Ok(key) => m.map.contains_key(&key),
-                            Err(_) => false,
+                if call.args.len() == 2 {
+                    let left = Value::resolve(&call.args[0], ctx)?;
+                    let right = Value::resolve(&call.args[1], ctx)?;
+                    match call.func_name.as_str() {
+                        operators::ADD => return left + right,
+                        operators::SUBSTRACT => return left - right,
+                        operators::DIVIDE => return left / right,
+                        operators::MULTIPLY => return left * right,
+                        operators::MODULO => return left % right,
+                        operators::EQUALS => return Value::Bool(left.eq(&right)).into(),
+                        operators::NOT_EQUALS => return Value::Bool(left.ne(&right)).into(),
+                        operators::LESS => return Value::Bool(left.partial_cmp(&right).ok_or(ExecutionError::ValuesNotComparable(left, right))? == Ordering::Less).into(),
+                        operators::LESS_EQUALS => return Value::Bool(left.partial_cmp(&right).ok_or(ExecutionError::ValuesNotComparable(left, right))? != Ordering::Greater).into(),
+                        operators::GREATER => return Value::Bool(left.partial_cmp(&right).ok_or(ExecutionError::ValuesNotComparable(left, right))? == Ordering::Greater).into(),
+                        operators::GREATER_EQUALS => return Value::Bool(left.partial_cmp(&right).ok_or(ExecutionError::ValuesNotComparable(left, right))? != Ordering::Less).into(),
+                        operators::IN => match (left, right) {
+                            (Value::String(l), Value::String(r)) => return Value::Bool(r.contains(&*l)).into(),
+                            (any, Value::List(v)) => return Value::Bool(v.contains(&any)).into(),
+                            (any, Value::Map(m)) => match any.try_into() {
+                                Ok(key) => return Value::Bool(m.map.contains_key(&key)).into(),
+                                Err(_) => return Value::Bool(false).into(),
+                            },
+                            (left, right) => Err(ExecutionError::ValuesNotComparable(left, right))?,
                         },
-                        (left, right) => Err(ExecutionError::ValuesNotComparable(left, right))?,
-                    },
-                };
-                Value::Bool(res).into()
-            }
-            Expression::Ternary(cond, left, right) => {
-                let cond = Value::resolve(cond, ctx)?;
-                if cond.to_bool() {
-                    Value::resolve(left, ctx)
-                } else {
-                    Value::resolve(right, ctx)
+                        operators::LOGICAL_OR => {
+                            let left = Value::resolve(&call.args[0], ctx)?;
+                            return if left.to_bool() {
+                                left.into()
+                            } else {
+                                Value::resolve(&call.args[1], ctx)
+                            }
+                        },
+                        operators::LOGICAL_AND => {
+                            let left = Value::resolve(&call.args[0], ctx)?;
+                            return if !left.to_bool() {
+                                Value::Bool(false)
+                            } else {
+                                let right = Value::resolve(&call.args[1], ctx)?;
+                                Value::Bool(right.to_bool())
+                            }.into() 
+                        },
+                        _ => (), 
+                    }
                 }
-            }
-            Expression::Or(left, right) => {
-                let left = Value::resolve(left, ctx)?;
-                if left.to_bool() {
-                    left.into()
-                } else {
-                    Value::resolve(right, ctx)
+                if call.args.len() == 1 {
+                    let expr = Value::resolve(&call.args[0], ctx)?;
+                    match call.func_name.as_str() {
+                        operators::LOGICAL_NOT => return Ok(Value::Bool(!expr.to_bool())),
+                        operators::NEGATE => {
+                            return match expr {
+                                Value::Int(i) => Ok(Value::Int(-i)),
+                                Value::Float(f) => Ok(Value::Float(-f)),
+                                value => Err(ExecutionError::UnsupportedUnaryOperator("minus", value)),
+                            }
+                        }
+                        _ => (),
+                    }
                 }
+                    let func = ctx
+                        .get_function(call.func_name.as_str())
+                        .ok_or_else(|| ExecutionError::UndeclaredReference(call.func_name.clone().into()))?;
+                    match &call.target {
+                        None => {
+                            let mut ctx =
+                                FunctionContext::new(call.func_name.clone().into(), None, ctx, call.args.clone());
+                            (func)(&mut ctx)
+                        }
+                        Some(target) => {
+                            let mut ctx = FunctionContext::new(
+                                call.func_name.clone().into(),
+                                Some(Value::resolve(target, ctx)?),
+                                ctx,
+                                call.args.clone(),
+                            );
+                            (func)(&mut ctx)
+                        }
+                    }
             }
-            Expression::And(left, right) => {
-                let left = Value::resolve(left, ctx)?;
-                if !left.to_bool() {
-                    Value::Bool(false).into()
-                } else {
-                    let right = Value::resolve(right, ctx)?;
-                    Value::Bool(right.to_bool()).into()
-                }
+            Expr::Ident(name) => ctx.get_variable(name),
+            Expr::Select(select) => {
+                let left = Value::resolve(select.operand.deref(), ctx)?;
+                left.member(&select.field, ctx)
             }
-            Expression::Unary(op, expr) => {
-                let expr = Value::resolve(expr, ctx)?;
-                match op {
-                    UnaryOp::Not => Ok(Value::Bool(!expr.to_bool())),
-                    UnaryOp::DoubleNot => Ok(Value::Bool(expr.to_bool())),
-                    UnaryOp::Minus => match expr {
-                        Value::Int(i) => Ok(Value::Int(-i)),
-                        Value::Float(i) => Ok(Value::Float(-i)),
-                        value => Err(ExecutionError::UnsupportedUnaryOperator("minus", value)),
-                    },
-                    UnaryOp::DoubleMinus => match expr {
-                        Value::Int(_) => Ok(expr),
-                        Value::UInt(_) => Ok(expr),
-                        Value::Float(_) => Ok(expr),
-                        value => Err(ExecutionError::UnsupportedUnaryOperator("negate", value)),
-                    },
-                }
-            }
-            Expression::Member(left, right) => {
-                let left = Value::resolve(left, ctx)?;
-                left.member(right, ctx)
-            }
-            Expression::List(items) => {
-                let list = items
+            Expr::List(list_expr) => {
+                let list = list_expr.elements
                     .iter()
                     .map(|i| Value::resolve(i, ctx))
                     .collect::<Result<Vec<_>, _>>()?;
                 Value::List(list.into()).into()
             }
-            Expression::Map(items) => {
+            Expr::Map(map_expr) => {
                 let mut map = HashMap::default();
-                for (k, v) in items.iter() {
+                for entry in map_expr.entries.iter() {
+                    let (k, v) = match &entry.expr {
+                        EntryExpr::StructField(_) => panic!("WAT?"),
+                        EntryExpr::MapEntry(e) => {
+                            (&e.key, &e.value)
+                        }
+                    };
                     let key = Value::resolve(k, ctx)?
                         .try_into()
                         .map_err(ExecutionError::UnsupportedKeyType)?;
@@ -535,34 +552,9 @@ impl Value {
                     map: Arc::from(map),
                 }))
             }
-            Expression::Ident(name) => ctx.get_variable(&***name),
-            Expression::FunctionCall(name, target, args) => {
-                if let Expression::Ident(name) = &**name {
-                    let func = ctx
-                        .get_function(&**name)
-                        .ok_or_else(|| ExecutionError::UndeclaredReference(Arc::clone(name)))?;
-                    match target {
-                        None => {
-                            let mut ctx =
-                                FunctionContext::new(name.clone(), None, ctx, args.clone());
-                            (func)(&mut ctx)
-                        }
-                        Some(target) => {
-                            let mut ctx = FunctionContext::new(
-                                name.clone(),
-                                Some(Value::resolve(target, ctx)?),
-                                ctx,
-                                args.clone(),
-                            );
-                            (func)(&mut ctx)
-                        }
-                    }
-                } else {
-                    Err(ExecutionError::UnsupportedFunctionCallIdentifierType(
-                        (**name).clone(),
-                    ))
-                }
-            }
+            Expr::Comprehension(_) => todo!("Support Comprehensions"),
+            Expr::Struct(_) => todo!("Support structs!"),
+            Expr::Unspecified => panic!("Can't evaluate Unspecified Expr"),
         }
     }
 
@@ -574,51 +566,7 @@ impl Value {
     //               Attribute("b")),
     //        FunctionCall([Ident("c")]))
 
-    fn member(self, member: &Member, ctx: &Context) -> ResolveResult {
-        match member {
-            Member::Index(idx) => {
-                let idx = Value::resolve(idx, ctx)?;
-                match (self, idx) {
-                    (Value::List(items), Value::Int(idx)) => items
-                        .get(idx as usize)
-                        .cloned()
-                        .unwrap_or(Value::Null)
-                        .into(),
-                    (Value::String(str), Value::Int(idx)) => {
-                        match str.get(idx as usize..(idx + 1) as usize) {
-                            None => Ok(Value::Null),
-                            Some(str) => Ok(Value::String(str.to_string().into())),
-                        }
-                    }
-                    (Value::Map(map), Value::String(property)) => map
-                        .get(&property.into())
-                        .cloned()
-                        .unwrap_or(Value::Null)
-                        .into(),
-                    (Value::Map(map), Value::Bool(property)) => map
-                        .get(&property.into())
-                        .cloned()
-                        .unwrap_or(Value::Null)
-                        .into(),
-                    (Value::Map(map), Value::Int(property)) => map
-                        .get(&property.into())
-                        .cloned()
-                        .unwrap_or(Value::Null)
-                        .into(),
-                    (Value::Map(map), Value::UInt(property)) => map
-                        .get(&property.into())
-                        .cloned()
-                        .unwrap_or(Value::Null)
-                        .into(),
-                    (Value::Map(_), index) => Err(ExecutionError::UnsupportedMapIndex(index)),
-                    (Value::List(_), index) => Err(ExecutionError::UnsupportedListIndex(index)),
-                    (value, index) => Err(ExecutionError::UnsupportedIndex(value, index)),
-                }
-            }
-            Member::Fields(_) => Err(ExecutionError::UnsupportedFieldsConstruction(
-                member.clone(),
-            )),
-            Member::Attribute(name) => {
+    fn member(self, name: &String, ctx: &Context) -> ResolveResult {
                 // This will always either be because we're trying to access
                 // a property on self, or a method on self.
                 let child = match self {
@@ -629,13 +577,11 @@ impl Value {
                 // If the property is both an attribute and a method, then we
                 // give priority to the property. Maybe we can implement lookahead
                 // to see if the next token is a function call?
-                match (child, ctx.has_function(&***name)) {
-                    (None, false) => ExecutionError::NoSuchKey(name.clone()).into(),
+                match (child, ctx.has_function(name)) {
+                    (None, false) => ExecutionError::NoSuchKey(name.clone().into()).into(),
                     (Some(child), _) => child.into(),
-                    (None, true) => Value::Function(name.clone(), Some(self.into())).into(),
+                    (None, true) => Value::Function(name.clone().into(), Some(self.into())).into(),
                 }
-            }
-        }
     }
 
     #[inline(always)]
@@ -655,21 +601,6 @@ impl Value {
             #[cfg(feature = "chrono")]
             Value::Timestamp(v) => v.timestamp_nanos_opt().unwrap_or_default() > 0,
             Value::Function(_, _) => false,
-        }
-    }
-}
-
-impl From<&Atom> for Value {
-    #[inline(always)]
-    fn from(atom: &Atom) -> Self {
-        match atom {
-            Atom::Int(v) => Value::Int(*v),
-            Atom::UInt(v) => Value::UInt(*v),
-            Atom::Float(v) => Value::Float(*v),
-            Atom::String(v) => Value::String(v.clone()),
-            Atom::Bytes(v) => Value::Bytes(v.clone()),
-            Atom::Bool(v) => Value::Bool(*v),
-            Atom::Null => Value::Null,
         }
     }
 }

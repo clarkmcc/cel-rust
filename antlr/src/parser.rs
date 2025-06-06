@@ -28,7 +28,7 @@ type MacroExpander =
     fn(helper: &mut ParserHelper, target: Option<IdedExpr>, args: Vec<IdedExpr>) -> IdedExpr;
 
 #[derive(Debug)]
-pub struct ParserError {}
+pub struct ParseError {}
 
 pub struct Parser {
     ast: ast::Ast,
@@ -121,7 +121,7 @@ impl Parser {
         }
     }
 
-    pub fn parse(mut self, source: &str) -> Result<IdedExpr, ParserError> {
+    pub fn parse(mut self, source: &str) -> Result<IdedExpr, ParseError> {
         let stream = InputStream::new(source);
         let mut lexer = gen::CELLexer::new(stream);
         lexer.remove_error_listeners();
@@ -130,7 +130,7 @@ impl Parser {
         let mut prsr = gen::CELParser::new(CommonTokenStream::new(lexer));
         match prsr.start() {
             Ok(t) => Ok(self.visit(t.deref())),
-            Err(_) => Err(ParserError {}),
+            Err(_) => Err(ParseError {}),
         }
     }
 

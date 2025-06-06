@@ -1,6 +1,5 @@
 extern crate core;
 
-use cel_parser::{parse, ExpressionReferences, Member};
 use std::convert::TryFrom;
 use std::sync::Arc;
 use thiserror::Error;
@@ -8,8 +7,10 @@ use thiserror::Error;
 mod macros;
 
 pub mod context;
-pub use cel_parser::error::ParseError;
-pub use cel_parser::Expression;
+pub use cel_antlr_parser::ParseError;
+pub use cel_antlr_parser::ast::IdedExpr;
+use cel_antlr_parser::{Expression, ExpressionReferences, Parser};
+use cel_antlr_parser::ast::SelectExpr;
 pub use context::Context;
 pub use functions::FunctionContext;
 pub use objects::{ResolveResult, Value};
@@ -38,7 +39,7 @@ pub mod extractors {
     pub use crate::magic::{Arguments, Identifier, This};
 }
 
-#[derive(Error, Debug, PartialEq, Clone)]
+#[derive(Error, Debug, PartialEq)]
 pub enum ExecutionError {
     #[error("Invalid argument count: expected {expected}, got {actual}")]
     InvalidArgumentCount { expected: usize, actual: usize },
@@ -90,7 +91,7 @@ pub enum ExecutionError {
     /// Indicates that a [`Member::Fields`] construction was attempted
     /// which is not yet supported.
     #[error("Unsupported fields construction: {0:?}")]
-    UnsupportedFieldsConstruction(Member),
+    UnsupportedFieldsConstruction(SelectExpr),
     /// Indicates that a function had an error during execution.
     #[error("Error executing function '{function}': {message}")]
     FunctionError { function: String, message: String },
@@ -143,7 +144,8 @@ pub struct Program {
 
 impl Program {
     pub fn compile(source: &str) -> Result<Program, ParseError> {
-        parse(source).map(|expression| Program { expression })
+        let parser = Parser::default();
+        parser.parse(source).map(|expression| Program { expression })
     }
 
     pub fn execute(&self, context: &Context) -> ResolveResult {
