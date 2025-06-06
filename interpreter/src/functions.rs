@@ -2,11 +2,11 @@ use crate::context::Context;
 use crate::magic::{Arguments, Identifier, This};
 use crate::objects::{Value, ValueType};
 use crate::resolvers::{Argument, Resolver};
-use crate::{ExecutionError};
+use crate::ExecutionError;
+use cel_antlr_parser::Expression;
 use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::sync::Arc;
-use cel_antlr_parser::Expression;
 
 type Result<T> = std::result::Result<T, ExecutionError>;
 

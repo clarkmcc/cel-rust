@@ -1,15 +1,20 @@
 use crate::context::Context;
 use crate::functions::FunctionContext;
 use crate::{ExecutionError, Expression};
+use cel_antlr_parser::ast::{operators, EntryExpr, Expr};
+use cel_antlr_parser::reference::Val;
+use chrono::expect;
+use nom::combinator::into;
+use nom::error::ErrorKind::Fix;
+use paste::item;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::{Infallible, TryFrom, TryInto};
 use std::fmt::{Display, Formatter};
-use std::ops;
 use std::ops::Deref;
+use std::panic::panic_any;
 use std::sync::Arc;
-use cel_antlr_parser::ast::{operators, EntryExpr, Expr};
-use cel_antlr_parser::reference::Val;
+use std::{clone, ops};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Map {
@@ -441,7 +446,7 @@ impl Value {
                         Value::resolve(&call.args[1], ctx)
                     } else {
                         Value::resolve(&call.args[2], ctx)
-                    }
+                    };
                 }
                 if call.args.len() == 2 {
                     let left = Value::resolve(&call.args[0], ctx)?;
@@ -454,12 +459,42 @@ impl Value {
                         operators::MODULO => return left % right,
                         operators::EQUALS => return Value::Bool(left.eq(&right)).into(),
                         operators::NOT_EQUALS => return Value::Bool(left.ne(&right)).into(),
-                        operators::LESS => return Value::Bool(left.partial_cmp(&right).ok_or(ExecutionError::ValuesNotComparable(left, right))? == Ordering::Less).into(),
-                        operators::LESS_EQUALS => return Value::Bool(left.partial_cmp(&right).ok_or(ExecutionError::ValuesNotComparable(left, right))? != Ordering::Greater).into(),
-                        operators::GREATER => return Value::Bool(left.partial_cmp(&right).ok_or(ExecutionError::ValuesNotComparable(left, right))? == Ordering::Greater).into(),
-                        operators::GREATER_EQUALS => return Value::Bool(left.partial_cmp(&right).ok_or(ExecutionError::ValuesNotComparable(left, right))? != Ordering::Less).into(),
+                        operators::LESS => {
+                            return Value::Bool(
+                                left.partial_cmp(&right)
+                                    .ok_or(ExecutionError::ValuesNotComparable(left, right))?
+                                    == Ordering::Less,
+                            )
+                            .into()
+                        }
+                        operators::LESS_EQUALS => {
+                            return Value::Bool(
+                                left.partial_cmp(&right)
+                                    .ok_or(ExecutionError::ValuesNotComparable(left, right))?
+                                    != Ordering::Greater,
+                            )
+                            .into()
+                        }
+                        operators::GREATER => {
+                            return Value::Bool(
+                                left.partial_cmp(&right)
+                                    .ok_or(ExecutionError::ValuesNotComparable(left, right))?
+                                    == Ordering::Greater,
+                            )
+                            .into()
+                        }
+                        operators::GREATER_EQUALS => {
+                            return Value::Bool(
+                                left.partial_cmp(&right)
+                                    .ok_or(ExecutionError::ValuesNotComparable(left, right))?
+                                    != Ordering::Less,
+                            )
+                            .into()
+                        }
                         operators::IN => match (left, right) {
-                            (Value::String(l), Value::String(r)) => return Value::Bool(r.contains(&*l)).into(),
+                            (Value::String(l), Value::String(r)) => {
+                                return Value::Bool(r.contains(&*l)).into()
+                            }
                             (any, Value::List(v)) => return Value::Bool(v.contains(&any)).into(),
                             (any, Value::Map(m)) => match any.try_into() {
                                 Ok(key) => return Value::Bool(m.map.contains_key(&key)).into(),
@@ -473,8 +508,8 @@ impl Value {
                                 left.into()
                             } else {
                                 Value::resolve(&call.args[1], ctx)
-                            }
-                        },
+                            };
+                        }
                         operators::LOGICAL_AND => {
                             let left = Value::resolve(&call.args[0], ctx)?;
                             return if !left.to_bool() {
@@ -482,9 +517,13 @@ impl Value {
                             } else {
                                 let right = Value::resolve(&call.args[1], ctx)?;
                                 Value::Bool(right.to_bool())
-                            }.into() 
-                        },
-                        _ => (), 
+                            }
+                            .into();
+                        }
+                        operators::INDEX => {
+                            todo!("Fix index accesses")
+                        }
+                        _ => (),
                     }
                 }
                 if call.args.len() == 1 {
@@ -495,31 +534,43 @@ impl Value {
                             return match expr {
                                 Value::Int(i) => Ok(Value::Int(-i)),
                                 Value::Float(f) => Ok(Value::Float(-f)),
-                                value => Err(ExecutionError::UnsupportedUnaryOperator("minus", value)),
+                                value => {
+                                    Err(ExecutionError::UnsupportedUnaryOperator("minus", value))
+                                }
+                            }
+                        }
+                        operators::NOT_STRICTLY_FALSE => {
+                            return match expr {
+                                Value::Bool(b) => Ok(Value::Bool(b)),
+                                _ => Ok(Value::Bool(true)),
                             }
                         }
                         _ => (),
                     }
                 }
-                    let func = ctx
-                        .get_function(call.func_name.as_str())
-                        .ok_or_else(|| ExecutionError::UndeclaredReference(call.func_name.clone().into()))?;
-                    match &call.target {
-                        None => {
-                            let mut ctx =
-                                FunctionContext::new(call.func_name.clone().into(), None, ctx, call.args.clone());
-                            (func)(&mut ctx)
-                        }
-                        Some(target) => {
-                            let mut ctx = FunctionContext::new(
-                                call.func_name.clone().into(),
-                                Some(Value::resolve(target, ctx)?),
-                                ctx,
-                                call.args.clone(),
-                            );
-                            (func)(&mut ctx)
-                        }
+                let func = ctx.get_function(call.func_name.as_str()).ok_or_else(|| {
+                    ExecutionError::UndeclaredReference(call.func_name.clone().into())
+                })?;
+                match &call.target {
+                    None => {
+                        let mut ctx = FunctionContext::new(
+                            call.func_name.clone().into(),
+                            None,
+                            ctx,
+                            call.args.clone(),
+                        );
+                        (func)(&mut ctx)
                     }
+                    Some(target) => {
+                        let mut ctx = FunctionContext::new(
+                            call.func_name.clone().into(),
+                            Some(Value::resolve(target, ctx)?),
+                            ctx,
+                            call.args.clone(),
+                        );
+                        (func)(&mut ctx)
+                    }
+                }
             }
             Expr::Ident(name) => ctx.get_variable(name),
             Expr::Select(select) => {
@@ -527,7 +578,8 @@ impl Value {
                 left.member(&select.field, ctx)
             }
             Expr::List(list_expr) => {
-                let list = list_expr.elements
+                let list = list_expr
+                    .elements
                     .iter()
                     .map(|i| Value::resolve(i, ctx))
                     .collect::<Result<Vec<_>, _>>()?;
@@ -538,9 +590,7 @@ impl Value {
                 for entry in map_expr.entries.iter() {
                     let (k, v) = match &entry.expr {
                         EntryExpr::StructField(_) => panic!("WAT?"),
-                        EntryExpr::MapEntry(e) => {
-                            (&e.key, &e.value)
-                        }
+                        EntryExpr::MapEntry(e) => (&e.key, &e.value),
                     };
                     let key = Value::resolve(k, ctx)?
                         .try_into()
@@ -552,7 +602,44 @@ impl Value {
                     map: Arc::from(map),
                 }))
             }
-            Expr::Comprehension(_) => todo!("Support Comprehensions"),
+            Expr::Comprehension(comprehension) => {
+                let accu_init = Value::resolve(comprehension.accu_init.deref(), ctx)?;
+                let iter = Value::resolve(comprehension.iter_range.deref(), ctx)?;
+                let mut ctx = ctx.new_inner_scope();
+                ctx.add_variable(&comprehension.accu_var, accu_init)
+                    .expect("Failed to add accu variable");
+
+                match iter {
+                    Value::List(items) => {
+                        for item in items.deref() {
+                            if !Value::resolve(&comprehension.loop_cond, &ctx)?.to_bool() {
+                                break;
+                            }
+                            ctx.add_variable(&comprehension.iter_var, item.clone())
+                                .expect("Failed to add iter variable");
+                            let accu = Value::resolve(&comprehension.loop_step.deref(), &ctx)
+                                .expect("Failed to resolve loop step");
+                            ctx.add_variable(&comprehension.accu_var, accu)
+                                .expect("Failed to add accu variable");
+                        }
+                    }
+                    Value::Map(map) => {
+                        for (key, _value) in map.map.deref() {
+                            if !Value::resolve(&comprehension.loop_cond, &ctx)?.to_bool() {
+                                break;
+                            }
+                            ctx.add_variable(&comprehension.iter_var, key.clone())
+                                .expect("Failed to add iter variable");
+                            let accu = Value::resolve(&comprehension.loop_step.deref(), &ctx)
+                                .expect("Failed to resolve loop step");
+                            ctx.add_variable(&comprehension.accu_var, accu)
+                                .expect("Failed to add accu variable");
+                        }
+                    }
+                    t => todo!("Support {t:?}"),
+                }
+                Value::resolve(&comprehension.result.deref(), &ctx)
+            }
             Expr::Struct(_) => todo!("Support structs!"),
             Expr::Unspecified => panic!("Can't evaluate Unspecified Expr"),
         }
@@ -567,21 +654,21 @@ impl Value {
     //        FunctionCall([Ident("c")]))
 
     fn member(self, name: &String, ctx: &Context) -> ResolveResult {
-                // This will always either be because we're trying to access
-                // a property on self, or a method on self.
-                let child = match self {
-                    Value::Map(ref m) => m.map.get(&name.clone().into()).cloned(),
-                    _ => None,
-                };
+        // This will always either be because we're trying to access
+        // a property on self, or a method on self.
+        let child = match self {
+            Value::Map(ref m) => m.map.get(&name.clone().into()).cloned(),
+            _ => None,
+        };
 
-                // If the property is both an attribute and a method, then we
-                // give priority to the property. Maybe we can implement lookahead
-                // to see if the next token is a function call?
-                match (child, ctx.has_function(name)) {
-                    (None, false) => ExecutionError::NoSuchKey(name.clone().into()).into(),
-                    (Some(child), _) => child.into(),
-                    (None, true) => Value::Function(name.clone().into(), Some(self.into())).into(),
-                }
+        // If the property is both an attribute and a method, then we
+        // give priority to the property. Maybe we can implement lookahead
+        // to see if the next token is a function call?
+        match (child, ctx.has_function(name)) {
+            (None, false) => ExecutionError::NoSuchKey(name.clone().into()).into(),
+            (Some(child), _) => child.into(),
+            (None, true) => Value::Function(name.clone().into(), Some(self.into())).into(),
+        }
     }
 
     #[inline(always)]
