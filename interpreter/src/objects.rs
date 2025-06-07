@@ -638,7 +638,7 @@ impl Value {
                                 }
                             }
                             Ok(Value::Bool(false))
-                        },
+                        }
                         _ => Ok(Value::Bool(false)),
                     }
                 } else {

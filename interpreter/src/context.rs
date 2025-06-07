@@ -168,10 +168,6 @@ impl Default for Context<'_> {
 
         ctx.add_function("contains", functions::contains);
         ctx.add_function("size", functions::size);
-        ctx.add_function("has", functions::has);
-        ctx.add_function("map", functions::map);
-        ctx.add_function("filter", functions::filter);
-        ctx.add_function("all", functions::all);
         ctx.add_function("max", functions::max);
         ctx.add_function("min", functions::min);
         ctx.add_function("startsWith", functions::starts_with);
@@ -179,8 +175,6 @@ impl Default for Context<'_> {
         ctx.add_function("string", functions::string);
         ctx.add_function("bytes", functions::bytes);
         ctx.add_function("double", functions::double);
-        ctx.add_function("exists", functions::exists);
-        ctx.add_function("exists_one", functions::exists_one);
         ctx.add_function("int", functions::int);
         ctx.add_function("uint", functions::uint);
 
