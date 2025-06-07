@@ -638,8 +638,8 @@ impl Value {
                                 }
                             }
                             Ok(Value::Bool(false))
-                        }
-                        val => panic!("has() not supported on {val:?}"),
+                        },
+                        _ => Ok(Value::Bool(false)),
                     }
                 } else {
                     left.member(&select.field, ctx)
