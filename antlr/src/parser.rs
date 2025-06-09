@@ -18,7 +18,7 @@ use crate::reference::Val;
 use crate::{ast, gen, macros, parse};
 use antlr4rust::common_token_stream::CommonTokenStream;
 use antlr4rust::parser::ParserNodeType;
-use antlr4rust::token::Token;
+use antlr4rust::token::{CommonToken, Token};
 use antlr4rust::tree::{ParseTree, ParseTreeVisitorCompat, VisitChildren};
 use antlr4rust::InputStream;
 use std::error::Error;
@@ -26,8 +26,19 @@ use std::fmt::Display;
 use std::mem;
 use std::ops::Deref;
 
+pub struct MacroExprHelper<'a> {
+    helper: &'a mut ParserHelper,
+    id: u64,
+}
+
+impl MacroExprHelper<'_> {
+    pub fn next_expr(&mut self, expr: Expr) -> IdedExpr {
+        self.helper.next_expr_for(self.id, expr)
+    }
+}
+
 type MacroExpander =
-    fn(helper: &mut ParserHelper, target: Option<IdedExpr>, args: Vec<IdedExpr>) -> IdedExpr;
+    fn(helper: &mut MacroExprHelper, target: Option<IdedExpr>, args: Vec<IdedExpr>) -> IdedExpr;
 
 #[derive(Debug)]
 pub struct ParseError {}
@@ -78,7 +89,13 @@ impl Parser {
                     args,
                 }),
             },
-            Some(expander) => expander(&mut self.helper, None, args),
+            Some(expander) => {
+                let mut helper = MacroExprHelper {
+                    helper: &mut self.helper,
+                    id,
+                };
+                expander(&mut helper, None, args)
+            }
         }
     }
 
@@ -98,7 +115,13 @@ impl Parser {
                     args,
                 }),
             },
-            Some(expander) => expander(&mut self.helper, Some(target), args),
+            Some(expander) => {
+                let mut helper = MacroExprHelper {
+                    helper: &mut self.helper,
+                    id,
+                };
+                expander(&mut helper, Some(target), args)
+            }
         }
     }
 
@@ -153,7 +176,7 @@ impl Parser {
             if i >= ctx.cols.len() || i >= ctx.values.len() {
                 return vec![];
             }
-            let id = self.helper.next_id();
+            let id = self.helper.next_id(&ctx.cols[i]);
             let field = field.escapeIdent().unwrap().get_text().to_string();
             let value = self.visit(ctx.values[i].as_ref());
             fields.push(IdedEntryExpr {
@@ -175,14 +198,14 @@ impl Parser {
         let mut entries = Vec::with_capacity(ctx.cols.len());
         let keys = &ctx.keys;
         let vals = &ctx.values;
-        for (i, _col) in ctx.cols.iter().enumerate() {
+        for (i, col) in ctx.cols.iter().enumerate() {
             if i >= keys.len() || i >= vals.len() {
                 return vec![];
             }
             if keys[i].opt.is_some() {
                 todo!("No support for `?` optional")
             }
-            let id = self.helper.next_id();
+            let id = self.helper.next_id(col);
             let key = self.visit(keys[i].as_ref());
             let value = self.visit(vals[i].as_ref());
             entries.push(IdedEntryExpr {
@@ -235,18 +258,19 @@ impl gen::CELVisitorCompat<'_> for Parser {
     }
 
     fn visit_expr(&mut self, ctx: &ExprContext<'_>) -> Self::Return {
-        if ctx.op.is_none() {
-            <Self as ParseTreeVisitorCompat>::visit(self, ctx.e.as_deref().unwrap())
-        } else {
-            let result = self.visit(ctx.e.as_deref().unwrap());
-            let op_id = self.helper.next_id();
-            let if_true = self.visit(ctx.e1.as_deref().unwrap());
-            let if_false = self.visit(ctx.e2.as_deref().unwrap());
-            self.global_call_or_macro(
-                op_id,
-                operators::CONDITIONAL.to_string(),
-                vec![result, if_true, if_false],
-            )
+        match &ctx.op {
+            None => <Self as ParseTreeVisitorCompat>::visit(self, ctx.e.as_deref().unwrap()),
+            Some(op) => {
+                let result = self.visit(ctx.e.as_deref().unwrap());
+                let op_id = self.helper.next_id(op);
+                let if_true = self.visit(ctx.e1.as_deref().unwrap());
+                let if_false = self.visit(ctx.e2.as_deref().unwrap());
+                self.global_call_or_macro(
+                    op_id,
+                    operators::CONDITIONAL.to_string(),
+                    vec![result, if_true, if_false],
+                )
+            }
         }
     }
 
@@ -261,9 +285,9 @@ impl gen::CELVisitorCompat<'_> for Parser {
                 // why is >= not ok?
                 panic!("unexpected character, wanted '||'")
             }
-            for (i, _op) in ctx.ops.iter().enumerate() {
+            for (i, op) in ctx.ops.iter().enumerate() {
                 let next = self.visit(rest[i].deref());
-                let op_id = self.helper.next_id();
+                let op_id = self.helper.next_id(op);
                 l.add_term(op_id, next)
             }
             l.expr()
@@ -281,9 +305,9 @@ impl gen::CELVisitorCompat<'_> for Parser {
                 // why is >= not ok?
                 panic!("unexpected character, wanted '&&'")
             }
-            for (i, _op) in ctx.ops.iter().enumerate() {
+            for (i, op) in ctx.ops.iter().enumerate() {
                 let next = self.visit(rest[i].deref());
-                let op_id = self.helper.next_id();
+                let op_id = self.helper.next_id(op);
                 l.add_term(op_id, next)
             }
             l.expr()
@@ -298,7 +322,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
                 None => <Self as ParseTreeVisitorCompat>::visit_children(self, ctx),
                 Some(op) => {
                     let lhs = self.visit(ctx.relation(0).unwrap().deref());
-                    let op_id = self.helper.next_id();
+                    let op_id = self.helper.next_id(ctx.op.as_deref().unwrap());
                     let rhs = self.visit(ctx.relation(1).unwrap().deref());
                     self.global_call_or_macro(
                         op_id,
@@ -317,7 +341,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
             None => self.visit(ctx.unary().as_deref().unwrap()),
             Some(op) => {
                 let lhs = self.visit(ctx.calc(0).unwrap().deref());
-                let op_id = self.helper.next_id();
+                let op_id = self.helper.next_id(op);
                 let rhs = self.visit(ctx.calc(1).unwrap().deref());
                 self.global_call_or_macro(
                     op_id,
@@ -338,7 +362,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
         if ctx.ops.len() % 2 == 0 {
             self.visit(ctx.member().as_deref().unwrap());
         }
-        let op_id = self.helper.next_id();
+        let op_id = self.helper.next_id(&ctx.ops[0]);
         let target = self.visit(ctx.member().as_deref().unwrap());
         self.global_call_or_macro(op_id, operators::LOGICAL_NOT.to_string(), vec![target])
     }
@@ -347,7 +371,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
         if ctx.ops.len() % 2 == 0 {
             self.visit(ctx.member().as_deref().unwrap());
         }
-        let op_id = self.helper.next_id();
+        let op_id = self.helper.next_id(&ctx.ops[0]);
         let target = self.visit(ctx.member().as_deref().unwrap());
         self.global_call_or_macro(op_id, operators::NEGATE.to_string(), vec![target])
     }
@@ -358,7 +382,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
         // if ctx.id.is_none() {}
         let id = ctx.id.as_deref().unwrap().get_text();
 
-        let op_id = self.helper.next_id();
+        let op_id = self.helper.next_id(ctx.open.as_deref().unwrap());
         let args = ctx
             .args
             .iter()
@@ -374,11 +398,14 @@ impl gen::CELVisitorCompat<'_> for Parser {
         // ?
         // }
         let field = ctx.id.as_deref().unwrap().get_text();
-        self.helper.next_expr(Expr::Select(SelectExpr {
-            operand: Box::new(operand),
-            field,
-            test: false,
-        }))
+        self.helper.next_expr(
+            ctx.op.as_deref().unwrap(),
+            Expr::Select(SelectExpr {
+                operand: Box::new(operand),
+                field,
+                test: false,
+            }),
+        )
     }
 
     fn visit_PrimaryExpr(&mut self, ctx: &PrimaryExprContext<'_>) -> Self::Return {
@@ -387,13 +414,13 @@ impl gen::CELVisitorCompat<'_> for Parser {
 
     fn visit_Index(&mut self, ctx: &IndexContext<'_>) -> Self::Return {
         let target = self.visit(ctx.member().as_deref().unwrap());
-        let op_id = self.helper.next_id();
         match &ctx.op {
             None => IdedExpr {
-                id: op_id,
+                id: 0,
                 expr: Expr::default(),
             },
-            Some(_) => {
+            Some(op) => {
+                let op_id = self.helper.next_id(op);
                 let index = self.visit(ctx.index.as_deref().unwrap());
                 self.global_call_or_macro(op_id, operators::INDEX.to_string(), vec![target, index])
             }
@@ -402,18 +429,19 @@ impl gen::CELVisitorCompat<'_> for Parser {
 
     fn visit_Ident(&mut self, ctx: &IdentContext<'_>) -> Self::Return {
         let id = ctx.id.clone().unwrap().text;
-        self.helper.next_expr(Expr::Ident(id.to_string()))
+        self.helper
+            .next_expr(ctx.id.as_deref().unwrap(), Expr::Ident(id.to_string()))
     }
 
     fn visit_GlobalCall(&mut self, ctx: &GlobalCallContext<'_>) -> Self::Return {
         match &ctx.id {
-            None => self.helper.next_expr(Expr::default()),
+            None => IdedExpr::default(),
             Some(id) => {
                 let mut id = id.get_text().to_string();
                 if ctx.leadingDot.is_some() {
                     id = format!(".{}", id);
                 }
-                let op_id = self.helper.next_id();
+                let op_id = self.helper.next_id(ctx.op.as_deref().unwrap());
                 let args = ctx
                     .args
                     .iter()
@@ -430,7 +458,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
     }
 
     fn visit_CreateList(&mut self, ctx: &CreateListContext<'_>) -> Self::Return {
-        let list_id = self.helper.next_id();
+        let list_id = self.helper.next_id(ctx.op.as_deref().unwrap());
         let elements = match &ctx.elems {
             None => Vec::default(),
             Some(elements) => self.list_initializer_list(elements.deref()),
@@ -442,7 +470,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
     }
 
     fn visit_CreateStruct(&mut self, ctx: &CreateStructContext<'_>) -> Self::Return {
-        let struct_id = self.helper.next_id();
+        let struct_id = self.helper.next_id(ctx.op.as_deref().unwrap());
         let entries = match &ctx.entries {
             Some(entries) => self.map_initializer_list(entries.deref()),
             None => Vec::default(),
@@ -464,7 +492,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
         if ctx.leadingDot.is_some() {
             message_name = format!(".{}", message_name);
         }
-        let op_id = self.helper.next_id();
+        let op_id = self.helper.next_id(ctx.op.as_deref().unwrap());
         let entries = match &ctx.entries {
             None => vec![],
             Some(entries) => self.field_initializer_list(entries),
@@ -490,7 +518,8 @@ impl gen::CELVisitorCompat<'_> for Parser {
             string.parse::<i64>()
         }
         .unwrap();
-        self.helper.next_expr(Expr::Literal(Val::Int(val)))
+        self.helper
+            .next_expr(ctx.tok.as_deref().unwrap(), Expr::Literal(Val::Int(val)))
     }
 
     fn visit_Uint(&mut self, ctx: &UintContext<'_>) -> Self::Return {
@@ -502,37 +531,52 @@ impl gen::CELVisitorCompat<'_> for Parser {
             string.parse::<u64>()
         }
         .unwrap();
-        self.helper.next_expr(Expr::Literal(Val::UInt(val)))
+        self.helper
+            .next_expr(ctx.tok.as_deref().unwrap(), Expr::Literal(Val::UInt(val)))
     }
 
     fn visit_Double(&mut self, ctx: &DoubleContext<'_>) -> Self::Return {
-        self.helper.next_expr(Expr::Literal(Val::Double(
-            ctx.get_text().parse::<f64>().unwrap(),
-        )))
+        self.helper.next_expr(
+            ctx.tok.as_deref().unwrap(),
+            Expr::Literal(Val::Double(ctx.get_text().parse::<f64>().unwrap())),
+        )
     }
 
     fn visit_String(&mut self, ctx: &StringContext<'_>) -> Self::Return {
-        self.helper.next_expr(Expr::Literal(Val::String(
-            parse::parse_string(&ctx.get_text()).expect("invalid string"),
-        )))
+        self.helper.next_expr(
+            ctx.tok.as_deref().unwrap(),
+            Expr::Literal(Val::String(
+                parse::parse_string(&ctx.get_text()).expect("invalid string"),
+            )),
+        )
     }
 
     fn visit_Bytes(&mut self, ctx: &BytesContext<'_>) -> Self::Return {
         let string = ctx.get_text();
         let bytes = parse::parse_bytes(&string[2..string.len() - 1]).unwrap();
-        self.helper.next_expr(Expr::Literal(Val::Bytes(bytes)))
+        self.helper.next_expr(
+            ctx.tok.as_deref().unwrap(),
+            Expr::Literal(Val::Bytes(bytes)),
+        )
     }
 
-    fn visit_BoolTrue(&mut self, _ctx: &BoolTrueContext<'_>) -> Self::Return {
-        self.helper.next_expr(Expr::Literal(Val::Boolean(true)))
+    fn visit_BoolTrue(&mut self, ctx: &BoolTrueContext<'_>) -> Self::Return {
+        self.helper.next_expr(
+            ctx.tok.as_deref().unwrap(),
+            Expr::Literal(Val::Boolean(true)),
+        )
     }
 
-    fn visit_BoolFalse(&mut self, _ctx: &BoolFalseContext<'_>) -> Self::Return {
-        self.helper.next_expr(Expr::Literal(Val::Boolean(false)))
+    fn visit_BoolFalse(&mut self, ctx: &BoolFalseContext<'_>) -> Self::Return {
+        self.helper.next_expr(
+            ctx.tok.as_deref().unwrap(),
+            Expr::Literal(Val::Boolean(false)),
+        )
     }
 
-    fn visit_Null(&mut self, _: &NullContext<'_>) -> Self::Return {
-        self.helper.next_expr(Expr::Literal(Val::Null))
+    fn visit_Null(&mut self, ctx: &NullContext<'_>) -> Self::Return {
+        self.helper
+            .next_expr(ctx.tok.as_deref().unwrap(), Expr::Literal(Val::Null))
     }
 }
 
@@ -547,15 +591,28 @@ impl Default for ParserHelper {
 }
 
 impl ParserHelper {
-    fn next_id(&mut self) -> u64 {
+    fn next_id(&mut self, _token: &CommonToken) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
         id
     }
 
-    pub fn next_expr(&mut self, expr: Expr) -> IdedExpr {
+    fn next_id_for(&mut self, _id: u64) -> u64 {
+        let id = self.next_id;
+        self.next_id += 1;
+        id
+    }
+
+    pub fn next_expr(&mut self, token: &CommonToken, expr: Expr) -> IdedExpr {
         IdedExpr {
-            id: self.next_id(),
+            id: self.next_id(token),
+            expr,
+        }
+    }
+
+    pub fn next_expr_for(&mut self, id: u64, expr: Expr) -> IdedExpr {
+        IdedExpr {
+            id: self.next_id_for(id),
             expr,
         }
     }

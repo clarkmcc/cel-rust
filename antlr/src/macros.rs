@@ -1,9 +1,9 @@
 use crate::ast::{operators, CallExpr, ComprehensionExpr, Expr, IdedExpr, ListExpr};
 use crate::reference::Val::{Boolean, Int};
-use crate::ParserHelper;
+use crate::MacroExprHelper;
 
 pub fn has_macro_expander(
-    helper: &mut ParserHelper,
+    helper: &mut MacroExprHelper,
     target: Option<IdedExpr>,
     mut args: Vec<IdedExpr>,
 ) -> IdedExpr {
@@ -24,7 +24,7 @@ pub fn has_macro_expander(
 }
 
 pub fn exists_macro_expander(
-    helper: &mut ParserHelper,
+    helper: &mut MacroExprHelper,
     target: Option<IdedExpr>,
     mut args: Vec<IdedExpr>,
 ) -> IdedExpr {
@@ -69,7 +69,7 @@ pub fn exists_macro_expander(
     }))
 }
 pub fn all_macro_expander(
-    helper: &mut ParserHelper,
+    helper: &mut MacroExprHelper,
     target: Option<IdedExpr>,
     mut args: Vec<IdedExpr>,
 ) -> IdedExpr {
@@ -110,7 +110,7 @@ pub fn all_macro_expander(
 }
 
 pub fn exists_one_macro_expander(
-    helper: &mut ParserHelper,
+    helper: &mut MacroExprHelper,
     target: Option<IdedExpr>,
     mut args: Vec<IdedExpr>,
 ) -> IdedExpr {
@@ -162,7 +162,7 @@ pub fn exists_one_macro_expander(
 }
 
 pub fn map_macro_expander(
-    helper: &mut ParserHelper,
+    helper: &mut MacroExprHelper,
     target: Option<IdedExpr>,
     mut args: Vec<IdedExpr>,
 ) -> IdedExpr {
@@ -218,7 +218,7 @@ pub fn map_macro_expander(
 }
 
 pub fn filter_macro_expander(
-    helper: &mut ParserHelper,
+    helper: &mut MacroExprHelper,
     target: Option<IdedExpr>,
     mut args: Vec<IdedExpr>,
 ) -> IdedExpr {
