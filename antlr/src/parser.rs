@@ -1,6 +1,6 @@
 use crate::ast::{
     operators, CallExpr, EntryExpr, Expr, IdedEntryExpr, IdedExpr, ListExpr, MapEntryExpr, MapExpr,
-    SelectExpr, StructExpr, StructFieldExpr,
+    SelectExpr, SourceInfo, StructExpr, StructFieldExpr,
 };
 use crate::gen::{
     BoolFalseContext, BoolTrueContext, BytesContext, CalcContext, CalcContextAttrs,
@@ -581,24 +581,32 @@ impl gen::CELVisitorCompat<'_> for Parser {
 }
 
 pub struct ParserHelper {
+    source_info: SourceInfo,
     next_id: u64,
 }
 
 impl Default for ParserHelper {
     fn default() -> Self {
-        Self { next_id: 1 }
+        Self {
+            source_info: SourceInfo::default(),
+            next_id: 1,
+        }
     }
 }
 
 impl ParserHelper {
-    fn next_id(&mut self, _token: &CommonToken) -> u64 {
+    fn next_id(&mut self, token: &CommonToken) -> u64 {
         let id = self.next_id;
+        self.source_info
+            .add_offset(id, token.start as u32, token.stop as u32);
         self.next_id += 1;
         id
     }
 
-    fn next_id_for(&mut self, _id: u64) -> u64 {
+    fn next_id_for(&mut self, id: u64) -> u64 {
+        let (start, stop) = self.source_info.offset_for(id).expect("invalid offset");
         let id = self.next_id;
+        self.source_info.add_offset(id, start, stop);
         self.next_id += 1;
         id
     }

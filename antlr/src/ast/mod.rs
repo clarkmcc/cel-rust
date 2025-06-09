@@ -1,4 +1,5 @@
 use crate::reference::Val;
+use std::collections::BTreeMap;
 
 pub mod operators;
 
@@ -112,4 +113,24 @@ pub struct ComprehensionExpr {
     pub loop_cond: Box<IdedExpr>,
     pub loop_step: Box<IdedExpr>,
     pub result: Box<IdedExpr>,
+}
+
+#[derive(Default)]
+pub struct SourceInfo {
+    offsets: BTreeMap<u64, OffsetRange>,
+}
+
+impl SourceInfo {
+    pub fn add_offset(&mut self, id: u64, start: u32, stop: u32) {
+        self.offsets.insert(id, OffsetRange { start, stop });
+    }
+
+    pub fn offset_for(&self, id: u64) -> Option<(u32, u32)> {
+        self.offsets.get(&id).map(|range| (range.start, range.stop))
+    }
+}
+
+pub struct OffsetRange {
+    pub start: u32,
+    pub stop: u32,
 }
