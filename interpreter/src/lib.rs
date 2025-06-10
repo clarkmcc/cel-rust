@@ -7,10 +7,10 @@ use thiserror::Error;
 mod macros;
 
 pub mod context;
-pub use cel_antlr_parser::ast::IdedExpr;
-use cel_antlr_parser::ast::SelectExpr;
-use cel_antlr_parser::{Expression, ExpressionReferences, Parser};
-pub use cel_antlr_parser::{ParseError, ParseErrors};
+pub use cel_parser::ast::IdedExpr;
+use cel_parser::ast::SelectExpr;
+use cel_parser::{Expression, ExpressionReferences, Parser};
+pub use cel_parser::{ParseError, ParseErrors};
 pub use context::Context;
 pub use functions::FunctionContext;
 pub use objects::{ResolveResult, Value};

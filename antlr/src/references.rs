@@ -13,7 +13,7 @@ impl ExpressionReferences<'_> {
     ///
     /// # Example
     /// ```rust
-    /// # use cel_antlr_parser::Parser;
+    /// # use cel_parser::Parser;
     /// let expression = Parser::new().parse("foo.bar == true").unwrap();
     /// let references = expression.references();
     /// assert!(references.has_variable("foo"));
@@ -26,7 +26,7 @@ impl ExpressionReferences<'_> {
     ///
     /// # Example
     /// ```rust
-    /// # use cel_antlr_parser::Parser;
+    /// # use cel_parser::Parser;
     /// let expression = Parser::new().parse("size(foo) > 0").unwrap();
     /// let references = expression.references();
     /// assert!(references.has_function("size"));
@@ -39,7 +39,7 @@ impl ExpressionReferences<'_> {
     ///
     /// # Example
     /// ```rust
-    /// # use cel_antlr_parser::Parser;
+    /// # use cel_parser::Parser;
     /// let expression = Parser::new().parse("foo.bar == true").unwrap();
     /// let references = expression.references();
     /// assert_eq!(vec!["foo"], references.variables());
@@ -52,7 +52,7 @@ impl ExpressionReferences<'_> {
     ///
     /// # Example
     /// ```rust
-    /// # use cel_antlr_parser::Parser;
+    /// # use cel_parser::Parser;
     /// let expression = Parser::new().parse("size(foo) > 0").unwrap();
     /// let references = expression.references();
     /// assert!(references.functions().contains(&"_>_"));
@@ -68,7 +68,7 @@ impl IdedExpr {
     ///
     /// # Example
     /// ```rust
-    /// # use cel_antlr_parser::Parser;
+    /// # use cel_parser::Parser;
     /// let expression = Parser::new().parse("foo && size(foo) > 0").unwrap();
     /// let references = expression.references();
     ///
