@@ -334,19 +334,24 @@ impl<'a, T: Recognizer<'a>> ErrorListener<'a, T> for ParserErrorListener {
     fn syntax_error(
         &self,
         _recognizer: &T,
-        _offending_symbol: Option<&<T::TF as TokenFactory<'a>>::Inner>,
+        offending_symbol: Option<&<T::TF as TokenFactory<'a>>::Inner>,
         line: isize,
         column: isize,
         msg: &str,
         _error: Option<&ANTLRError>,
     ) {
-        self.parse_errors.borrow_mut().push(ParseError {
-            source: None,
-            pos: (line, column + 1),
-            msg: format!("Syntax error: {msg}"),
-            expr_id: 0,
-            source_info: None,
-        })
+        println!("{offending_symbol:?}: {msg}");
+        match offending_symbol {
+            Some(offending_symbol)
+                if offending_symbol.get_token_type() == gen::cellexer::WHITESPACE => {}
+            _ => self.parse_errors.borrow_mut().push(ParseError {
+                source: None,
+                pos: (line, column + 1),
+                msg: format!("Syntax error: {msg}"),
+                expr_id: 0,
+                source_info: None,
+            }),
+        }
     }
 }
 
