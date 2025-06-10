@@ -9,8 +9,8 @@ mod macros;
 pub mod context;
 pub use cel_antlr_parser::ast::IdedExpr;
 use cel_antlr_parser::ast::SelectExpr;
-pub use cel_antlr_parser::ParseError;
 use cel_antlr_parser::{Expression, ExpressionReferences, Parser};
+pub use cel_antlr_parser::{ParseError, ParseErrors};
 pub use context::Context;
 pub use functions::FunctionContext;
 pub use objects::{ResolveResult, Value};
@@ -143,7 +143,7 @@ pub struct Program {
 }
 
 impl Program {
-    pub fn compile(source: &str) -> Result<Program, ParseError> {
+    pub fn compile(source: &str) -> Result<Program, ParseErrors> {
         let parser = Parser::default();
         parser
             .parse(source)
@@ -171,7 +171,7 @@ impl Program {
 }
 
 impl TryFrom<&str> for Program {
-    type Error = ParseError;
+    type Error = ParseErrors;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Program::compile(value)

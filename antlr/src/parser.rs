@@ -41,6 +41,22 @@ impl MacroExprHelper<'_> {
 type MacroExpander =
     fn(helper: &mut MacroExprHelper, target: Option<IdedExpr>, args: Vec<IdedExpr>) -> IdedExpr;
 
+#[derive(Debug)]
+pub struct ParseErrors {
+    pub errors: Vec<ParseError>,
+}
+
+impl Display for ParseErrors {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for e in &self.errors {
+            write!(f, "{}", e)?;
+        }
+        Ok(())
+    }
+}
+
+impl Error for ParseErrors {}
+
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct ParseError {
@@ -175,7 +191,7 @@ impl Parser {
         }
     }
 
-    pub fn parse(mut self, source: &str) -> Result<IdedExpr, ParseError> {
+    pub fn parse(mut self, source: &str) -> Result<IdedExpr, ParseErrors> {
         let stream = InputStream::new(source);
         let mut lexer = gen::CELLexer::new(stream);
         lexer.remove_error_listeners();
@@ -197,12 +213,19 @@ impl Parser {
         // todo! might want to avoid this cloning here...
         info.source = source.into();
         let source_info = Rc::new(info);
-        match self.errors.pop() {
-            None => r,
-            Some(mut e) => {
-                e.source_info = Some(source_info.clone());
-                Err(e)
-            }
+        if self.errors.is_empty() {
+            Ok(r.unwrap())
+        } else {
+            Err(ParseErrors {
+                errors: self
+                    .errors
+                    .into_iter()
+                    .map(|mut e: ParseError| {
+                        e.source_info = Some(source_info.clone());
+                        e
+                    })
+                    .collect(),
+            })
         }
     }
 
@@ -1373,7 +1396,7 @@ _?_:_(
             let result = parser.parse(test_case.i);
             if !test_case.p.is_empty() {
                 assert_eq!(
-                    to_go_like_string(result.as_ref().unwrap()),
+                    to_go_like_string(result.as_ref().expect("Expected an AST")),
                     test_case.p,
                     "Expr `{}` failed",
                     test_case.i
@@ -1382,7 +1405,7 @@ _?_:_(
 
             if !test_case.e.is_empty() {
                 assert_eq!(
-                    format!("{}", result.as_ref().err().unwrap()),
+                    format!("{}", result.as_ref().err().expect("Expected an Err!")),
                     test_case.e,
                     "Error on `{}` failed",
                     test_case.i
