@@ -122,7 +122,7 @@ enum TodosError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error("CEL parse error: {0}")]
-    Parse(#[from] cel_interpreter::ParseError),
+    Parse(#[from] cel_interpreter::ParseErrors),
     #[error("invalid TODO")]
     Invalid,
 }
