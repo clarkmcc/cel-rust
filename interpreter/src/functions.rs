@@ -644,7 +644,7 @@ mod tests {
             ),
             (
                 "timestamp getMinutes",
-                "timestamp('2023-05-28T00:05:00Z').getMinutes() == 5",
+                " timestamp('2023-05-28T00:05:00Z').getMinutes() == 5",
             ),
             (
                 "timestamp getSeconds",

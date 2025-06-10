@@ -1,4 +1,4 @@
-mod cellexer;
+pub(crate) mod cellexer;
 pub use cellexer::*;
 mod cellistener;
 //pub use cellistener::*;
