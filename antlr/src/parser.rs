@@ -17,10 +17,15 @@ use crate::gen::{
 use crate::reference::Val;
 use crate::{ast, gen, macros, parse};
 use antlr4rust::common_token_stream::CommonTokenStream;
+use antlr4rust::error_listener::ErrorListener;
+use antlr4rust::errors::ANTLRError;
 use antlr4rust::parser::ParserNodeType;
+use antlr4rust::recognizer::Recognizer;
 use antlr4rust::token::{CommonToken, Token};
+use antlr4rust::token_factory::TokenFactory;
 use antlr4rust::tree::{ParseTree, ParseTreeVisitorCompat, VisitChildren};
-use antlr4rust::InputStream;
+use antlr4rust::{InputStream, Parser as AntlrParser};
+use std::cell::RefCell;
 use std::error::Error;
 use std::fmt::Display;
 use std::mem;
@@ -77,7 +82,7 @@ impl Display for ParseError {
         if let Some(info) = &self.source_info {
             if let Some(line) = info.snippet(self.pos.0 - 1) {
                 write!(f, "\n| {}", line)?;
-                write!(f, "\n| ^")?;
+                write!(f, "\n| {:.>width$}", "^", width = self.pos.1 as usize)?;
             }
         }
         Ok(())
@@ -195,9 +200,15 @@ impl Parser {
         let stream = InputStream::new(source);
         let mut lexer = gen::CELLexer::new(stream);
         lexer.remove_error_listeners();
-        // lexer.add_error_listener()
+        // lexer.add_error_listener(Box::new(ParserErrorListener{}));
+
+        let parse_errors = Rc::new(RefCell::new(Vec::<ParseError>::new()));
 
         let mut prsr = gen::CELParser::new(CommonTokenStream::new(lexer));
+        prsr.remove_error_listeners();
+        prsr.add_error_listener(Box::new(ParserErrorListener {
+            parse_errors: parse_errors.clone(),
+        }));
         let r = match prsr.start() {
             Ok(t) => Ok(self.visit(t.deref())),
             Err(e) => Err(ParseError {
@@ -213,12 +224,15 @@ impl Parser {
         // todo! might want to avoid this cloning here...
         info.source = source.into();
         let source_info = Rc::new(info);
-        if self.errors.is_empty() {
+
+        let mut errors = parse_errors.take();
+        errors.extend(self.errors);
+
+        if errors.is_empty() {
             Ok(r.unwrap())
         } else {
             Err(ParseErrors {
-                errors: self
-                    .errors
+                errors: errors
                     .into_iter()
                     .map(|mut e: ParseError| {
                         e.source_info = Some(source_info.clone());
@@ -304,6 +318,30 @@ impl Parser {
             source_info: None,
         });
         expr
+    }
+}
+
+struct ParserErrorListener {
+    parse_errors: Rc<RefCell<Vec<ParseError>>>,
+}
+
+impl<'a, T: Recognizer<'a>> ErrorListener<'a, T> for ParserErrorListener {
+    fn syntax_error(
+        &self,
+        _recognizer: &T,
+        _offending_symbol: Option<&<T::TF as TokenFactory<'a>>::Inner>,
+        line: isize,
+        column: isize,
+        msg: &str,
+        _error: Option<&ANTLRError>,
+    ) {
+        self.parse_errors.borrow_mut().push(ParseError {
+            source: None,
+            pos: (line, column + 1),
+            msg: format!("Syntax error: {msg}"),
+            expr_id: 0,
+            source_info: None,
+        })
     }
 }
 
@@ -1389,6 +1427,13 @@ _?_:_(
 | 1.99e90000009
 | ^",
             },
+            TestInfo {
+                i: "{",
+                p: "",
+                e: "ERROR: <input>:1:2: Syntax error: mismatched input '<EOF>' expecting {'[', '{', '}', '(', '.', ',', '-', '!', '?', 'true', 'false', 'null', NUM_FLOAT, NUM_INT, NUM_UINT, STRING, BYTES, IDENTIFIER}
+| {
+| .^",
+            },
         ];
 
         for test_case in test_cases {
@@ -1405,7 +1450,7 @@ _?_:_(
 
             if !test_case.e.is_empty() {
                 assert_eq!(
-                    format!("{}", result.as_ref().err().expect("Expected an Err!")),
+                    format!("{}", result.as_ref().expect_err("Expected an Err!")),
                     test_case.e,
                     "Error on `{}` failed",
                     test_case.i
