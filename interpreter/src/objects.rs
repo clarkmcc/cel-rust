@@ -683,12 +683,9 @@ impl Value {
                             if !Value::resolve(&comprehension.loop_cond, &ctx)?.to_bool() {
                                 break;
                             }
-                            ctx.add_variable(&comprehension.iter_var, item.clone())
-                                .expect("Failed to add iter variable");
-                            let accu = Value::resolve(comprehension.loop_step.deref(), &ctx)
-                                .expect("Failed to resolve loop step");
-                            ctx.add_variable(&comprehension.accu_var, accu)
-                                .expect("Failed to add accu variable");
+                            ctx.add_variable_from_value(&comprehension.iter_var, item.clone());
+                            let accu = Value::resolve(comprehension.loop_step.deref(), &ctx)?;
+                            ctx.add_variable_from_value(&comprehension.accu_var, accu);
                         }
                     }
                     Value::Map(map) => {
@@ -696,12 +693,9 @@ impl Value {
                             if !Value::resolve(&comprehension.loop_cond, &ctx)?.to_bool() {
                                 break;
                             }
-                            ctx.add_variable(&comprehension.iter_var, key.clone())
-                                .expect("Failed to add iter variable");
-                            let accu = Value::resolve(comprehension.loop_step.deref(), &ctx)
-                                .expect("Failed to resolve loop step");
-                            ctx.add_variable(&comprehension.accu_var, accu)
-                                .expect("Failed to add accu variable");
+                            ctx.add_variable_from_value(&comprehension.iter_var, key.clone());
+                            let accu = Value::resolve(comprehension.loop_step.deref(), &ctx)?;
+                            ctx.add_variable_from_value(&comprehension.accu_var, accu);
                         }
                     }
                     t => todo!("Support {t:?}"),

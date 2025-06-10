@@ -402,14 +402,11 @@ impl ParseTreeVisitorCompat<'_> for Parser {
 impl gen::CELVisitorCompat<'_> for Parser {
     fn visit_start(&mut self, ctx: &StartContext<'_>) -> Self::Return {
         match &ctx.expr() {
-            None => {
-                self.report_error::<ParseError, _>(
-                    ctx.start().deref(),
-                    None,
-                    "No `ExprContextAll`!",
-                );
-                IdedExpr::default()
-            }
+            None => self.report_error::<ParseError, _>(
+                ctx.start().deref(),
+                None,
+                "No `ExprContextAll`!",
+            ),
             Some(expr) => self.visit(expr.as_ref()),
         }
     }
@@ -417,34 +414,34 @@ impl gen::CELVisitorCompat<'_> for Parser {
     fn visit_expr(&mut self, ctx: &ExprContext<'_>) -> Self::Return {
         match &ctx.op {
             None => match &ctx.e {
-                None => {
-                    self.report_error::<ParseError, _>(
-                        ctx.start().deref(),
-                        None,
-                        "No `ConditionalOrContextAll`!",
-                    );
-                    IdedExpr::default()
-                }
+                None => self.report_error::<ParseError, _>(
+                    ctx.start().deref(),
+                    None,
+                    "No `ConditionalOrContextAll`!",
+                ),
                 Some(e) => <Self as ParseTreeVisitorCompat>::visit(self, e.as_ref()),
             },
             Some(op) => {
-                if ctx.e.is_none() || ctx.e1.is_none() || ctx.e2.is_none() {
+                if let (Some(e), Some(e1), Some(e2)) = (&ctx.e, &ctx.e1, &ctx.e2) {
+                    let result = self.visit(e.as_ref());
+                    let op_id = self.helper.next_id(op);
+                    let if_true = self.visit(e1.as_ref());
+                    let if_false = self.visit(e2.as_ref());
+                    self.global_call_or_macro(
+                        op_id,
+                        operators::CONDITIONAL.to_string(),
+                        vec![result, if_true, if_false],
+                    )
+                } else {
                     self.report_error::<ParseError, _>(
                         ctx.start().deref(),
                         None,
-                        format!("Incomplete `{}` expression", operators::CONDITIONAL),
-                    );
-                    return IdedExpr::default();
+                        format!(
+                            "Incomplete `ExprContext` for `{}` expression!",
+                            operators::CONDITIONAL
+                        ),
+                    )
                 }
-                let result = self.visit(ctx.e.as_deref().expect("Incomplete expression"));
-                let op_id = self.helper.next_id(op);
-                let if_true = self.visit(ctx.e1.as_deref().expect("Incomplete expression"));
-                let if_false = self.visit(ctx.e2.as_deref().expect("Incomplete expression"));
-                self.global_call_or_macro(
-                    op_id,
-                    operators::CONDITIONAL.to_string(),
-                    vec![result, if_true, if_false],
-                )
             }
         }
     }
@@ -486,14 +483,11 @@ impl gen::CELVisitorCompat<'_> for Parser {
 
     fn visit_conditionalAnd(&mut self, ctx: &ConditionalAndContext<'_>) -> Self::Return {
         let result = match &ctx.e {
-            None => {
-                self.report_error::<ParseError, _>(
-                    ctx.start().deref(),
-                    None,
-                    "No `RelationContextAll`!",
-                );
-                IdedExpr::default()
-            }
+            None => self.report_error::<ParseError, _>(
+                ctx.start().deref(),
+                None,
+                "No `RelationContextAll`!",
+            ),
             Some(e) => <Self as ParseTreeVisitorCompat>::visit(self, e.as_ref()),
         };
         if ctx.ops.is_empty() {
@@ -522,44 +516,40 @@ impl gen::CELVisitorCompat<'_> for Parser {
     fn visit_relation(&mut self, ctx: &RelationContext<'_>) -> Self::Return {
         if ctx.op.is_none() {
             match ctx.calc() {
-                None => {
-                    self.report_error::<ParseError, _>(
-                        ctx.start().deref(),
-                        None,
-                        "No `CalcContextAll`!",
-                    );
-                    IdedExpr::default()
-                }
+                None => self.report_error::<ParseError, _>(
+                    ctx.start().deref(),
+                    None,
+                    "No `CalcContextAll`!",
+                ),
                 Some(calc) => <Self as ParseTreeVisitorCompat>::visit(self, calc.as_ref()),
             }
         } else {
             match &ctx.op {
                 None => <Self as ParseTreeVisitorCompat>::visit_children(self, ctx),
                 Some(op) => {
-                    if ctx.relation(0).is_none() || ctx.op.is_none() || ctx.relation(1).is_none() {
+                    if let (Some(lhs), Some(rhs)) = (ctx.relation(0), ctx.relation(1)) {
+                        let lhs = self.visit(lhs.as_ref());
+                        let op_id = self.helper.next_id(op.as_ref());
+                        let rhs = self.visit(rhs.as_ref());
+                        match operators::find_operator(op.get_text()) {
+                            None => {
+                                self.report_error::<ParseError, _>(
+                                    op.as_ref(),
+                                    None,
+                                    format!("Unknown `{}` operator!", op.get_text()),
+                                );
+                                IdedExpr::default()
+                            }
+                            Some(op) => {
+                                self.global_call_or_macro(op_id, op.to_string(), vec![lhs, rhs])
+                            }
+                        }
+                    } else {
                         self.report_error::<ParseError, _>(
                             ctx.start().deref(),
                             None,
-                            format!("Incomplete `{:?}` relation!", ctx.op),
-                        );
-                    }
-                    let lhs = self.visit(ctx.relation(0).expect("incomplete relation").deref());
-                    let op_id = self
-                        .helper
-                        .next_id(ctx.op.as_deref().expect("incomplete relation"));
-                    let rhs = self.visit(ctx.relation(1).expect("incomplete relation").deref());
-                    match operators::find_operator(op.get_text()) {
-                        None => {
-                            self.report_error::<ParseError, _>(
-                                op,
-                                None,
-                                format!("Unknown `{}` operator!", op.get_text()),
-                            );
-                            IdedExpr::default()
-                        }
-                        Some(op) => {
-                            self.global_call_or_macro(op_id, op.to_string(), vec![lhs, rhs])
-                        }
+                            format!("Incomplete `RelationContext` for `{:?}`!", ctx.op),
+                        )
                     }
                 }
             }
@@ -568,99 +558,164 @@ impl gen::CELVisitorCompat<'_> for Parser {
 
     fn visit_calc(&mut self, ctx: &CalcContext<'_>) -> Self::Return {
         match &ctx.op {
-            None => self.visit(ctx.unary().as_deref().unwrap()),
+            None => match &ctx.unary() {
+                None => self.report_error::<ParseError, _>(
+                    ctx.start().deref(),
+                    None,
+                    "No `UnaryContextAll`!",
+                ),
+                Some(unary) => self.visit(unary.as_ref()),
+            },
             Some(op) => {
-                let lhs = self.visit(ctx.calc(0).unwrap().deref());
-                let op_id = self.helper.next_id(op);
-                let rhs = self.visit(ctx.calc(1).unwrap().deref());
-                self.global_call_or_macro(
-                    op_id,
-                    operators::find_operator(op.get_text())
-                        .expect("operator not found!")
-                        .to_string(),
-                    vec![lhs, rhs],
-                )
+                if let (Some(lhs), Some(rhs)) = (ctx.calc(0), ctx.calc(1)) {
+                    let lhs = self.visit(lhs.as_ref());
+                    let op_id = self.helper.next_id(op);
+                    let rhs = self.visit(rhs.as_ref());
+                    match operators::find_operator(op.get_text()) {
+                        None => self.report_error::<ParseError, _>(
+                            op,
+                            None,
+                            format!("Unknown `{}` operator!", op.get_text()),
+                        ),
+                        Some(op) => {
+                            self.global_call_or_macro(op_id, op.to_string(), vec![lhs, rhs])
+                        }
+                    }
+                } else {
+                    self.report_error::<ParseError, _>(
+                        ctx.start().deref(),
+                        None,
+                        "Incomplete `CalcContext`!",
+                    )
+                }
             }
         }
     }
 
     fn visit_MemberExpr(&mut self, ctx: &MemberExprContext<'_>) -> Self::Return {
-        <Self as ParseTreeVisitorCompat>::visit(self, ctx.member().as_deref().unwrap())
+        match &ctx.member() {
+            None => {
+                self.report_error::<ParseError, _>(&ctx.start(), None, "No `MemberContextAll`!")
+            }
+            Some(ctx) => <Self as ParseTreeVisitorCompat>::visit(self, ctx.as_ref()),
+        }
     }
 
     fn visit_LogicalNot(&mut self, ctx: &LogicalNotContext<'_>) -> Self::Return {
-        if ctx.ops.len() % 2 == 0 {
-            self.visit(ctx.member().as_deref().unwrap());
-        }
-        let op_id = self.helper.next_id(&ctx.ops[0]);
-        let target = self.visit(ctx.member().as_deref().unwrap());
-        self.global_call_or_macro(op_id, operators::LOGICAL_NOT.to_string(), vec![target])
-    }
-
-    fn visit_Negate(&mut self, ctx: &NegateContext<'_>) -> Self::Return {
-        if ctx.ops.len() % 2 == 0 {
-            self.visit(ctx.member().as_deref().unwrap());
-        }
-        let op_id = self.helper.next_id(&ctx.ops[0]);
-        let target = self.visit(ctx.member().as_deref().unwrap());
-        self.global_call_or_macro(op_id, operators::NEGATE.to_string(), vec![target])
-    }
-
-    fn visit_MemberCall(&mut self, ctx: &MemberCallContext<'_>) -> Self::Return {
-        let operand = self.visit(ctx.member().as_deref().unwrap());
-        // Handle the error case where no valid identifier is specified.
-        // if ctx.id.is_none() {}
-        let id = ctx.id.as_deref().unwrap().get_text();
-
-        let op_id = self.helper.next_id(ctx.open.as_deref().unwrap());
-        let args = ctx
-            .args
-            .iter()
-            .flat_map(|arg| &arg.e)
-            .map(|arg| self.visit(arg.deref()))
-            .collect::<Vec<IdedExpr>>();
-        self.receiver_call_or_macro(op_id, id.to_string(), operand, args)
-    }
-
-    fn visit_Select(&mut self, ctx: &SelectContext<'_>) -> Self::Return {
-        let operand = self.visit(ctx.member().as_deref().unwrap());
-        // if ctx.id.is_none() || ctx.op.is_none() {
-        // ?
-        // }
-        let field = ctx.id.as_deref().unwrap().get_text();
-        self.helper.next_expr(
-            ctx.op.as_deref().unwrap(),
-            Expr::Select(SelectExpr {
-                operand: Box::new(operand),
-                field,
-                test: false,
-            }),
-        )
-    }
-
-    fn visit_PrimaryExpr(&mut self, ctx: &PrimaryExprContext<'_>) -> Self::Return {
-        <Self as ParseTreeVisitorCompat>::visit(self, ctx.primary().as_deref().unwrap())
-    }
-
-    fn visit_Index(&mut self, ctx: &IndexContext<'_>) -> Self::Return {
-        let target = self.visit(ctx.member().as_deref().unwrap());
-        match &ctx.op {
-            None => IdedExpr {
-                id: 0,
-                expr: Expr::default(),
-            },
-            Some(op) => {
-                let op_id = self.helper.next_id(op);
-                let index = self.visit(ctx.index.as_deref().unwrap());
-                self.global_call_or_macro(op_id, operators::INDEX.to_string(), vec![target, index])
+        match &ctx.member() {
+            None => {
+                self.report_error::<ParseError, _>(&ctx.start(), None, "No `MemberContextAll`!");
+                IdedExpr::default()
+            }
+            Some(member) => {
+                if ctx.ops.len() % 2 == 0 {
+                    self.visit(member.as_ref());
+                }
+                let op_id = self.helper.next_id(&ctx.ops[0]);
+                let target = self.visit(member.as_ref());
+                self.global_call_or_macro(op_id, operators::LOGICAL_NOT.to_string(), vec![target])
             }
         }
     }
 
+    fn visit_Negate(&mut self, ctx: &NegateContext<'_>) -> Self::Return {
+        match &ctx.member() {
+            None => {
+                self.report_error::<ParseError, _>(&ctx.start(), None, "No `MemberContextAll`!")
+            }
+            Some(member) => {
+                if ctx.ops.len() % 2 == 0 {
+                    self.visit(member.as_ref());
+                }
+                let op_id = self.helper.next_id(&ctx.ops[0]);
+                let target = self.visit(member.as_ref());
+                self.global_call_or_macro(op_id, operators::NEGATE.to_string(), vec![target])
+            }
+        }
+    }
+
+    fn visit_MemberCall(&mut self, ctx: &MemberCallContext<'_>) -> Self::Return {
+        if let (Some(operand), Some(id), Some(open)) = (&ctx.member(), &ctx.id, &ctx.open) {
+            let operand = self.visit(operand.as_ref());
+            let id = id.get_text();
+            let op_id = self.helper.next_id(open.as_ref());
+            let args = ctx
+                .args
+                .iter()
+                .flat_map(|arg| &arg.e)
+                .map(|arg| self.visit(arg.deref()))
+                .collect::<Vec<IdedExpr>>();
+            self.receiver_call_or_macro(op_id, id.to_string(), operand, args)
+        } else {
+            self.report_error::<ParseError, _>(
+                &ctx.start(),
+                None,
+                "Incomplete `MemberCallContext`!",
+            )
+        }
+    }
+
+    fn visit_Select(&mut self, ctx: &SelectContext<'_>) -> Self::Return {
+        if let (Some(member), Some(id), Some(op)) = (&ctx.member(), &ctx.id, &ctx.op) {
+            let operand = self.visit(member.as_ref());
+            let field = id.get_text();
+            self.helper.next_expr(
+                op.as_ref(),
+                Expr::Select(SelectExpr {
+                    operand: Box::new(operand),
+                    field,
+                    test: false,
+                }),
+            )
+        } else {
+            self.report_error::<ParseError, _>(&ctx.start(), None, "Incomplete `SelectContext`!")
+        }
+    }
+
+    fn visit_PrimaryExpr(&mut self, ctx: &PrimaryExprContext<'_>) -> Self::Return {
+        match &ctx.primary() {
+            None => {
+                self.report_error::<ParseError, _>(&ctx.start(), None, "No `PrimaryContextAll`!")
+            }
+            Some(primary) => <Self as ParseTreeVisitorCompat>::visit(self, primary.as_ref()),
+        }
+    }
+
+    fn visit_Index(&mut self, ctx: &IndexContext<'_>) -> Self::Return {
+        if let (Some(member), Some(index)) = (&ctx.member(), &ctx.index) {
+            let target = self.visit(member.as_ref());
+            match &ctx.op {
+                None => IdedExpr {
+                    id: 0,
+                    expr: Expr::default(),
+                },
+                Some(op) => {
+                    let op_id = self.helper.next_id(op);
+                    let index = self.visit(index.as_ref());
+                    self.global_call_or_macro(
+                        op_id,
+                        operators::INDEX.to_string(),
+                        vec![target, index],
+                    )
+                }
+            }
+        } else {
+            self.report_error::<ParseError, _>(&ctx.start(), None, "Incomplete `IndexContext`!")
+        }
+    }
+
     fn visit_Ident(&mut self, ctx: &IdentContext<'_>) -> Self::Return {
-        let id = ctx.id.clone().unwrap().text;
-        self.helper
-            .next_expr(ctx.id.as_deref().unwrap(), Expr::Ident(id.to_string()))
+        match &ctx.id {
+            None => {
+                self.report_error::<ParseError, _>(&ctx.start(), None, "No `Identifier`!");
+                IdedExpr::default()
+            }
+            Some(id) => {
+                let ident = id.clone().text;
+                self.helper
+                    .next_expr(id.deref(), Expr::Ident(ident.to_string()))
+            }
+        }
     }
 
     fn visit_GlobalCall(&mut self, ctx: &GlobalCallContext<'_>) -> Self::Return {
@@ -671,7 +726,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
                 if ctx.leadingDot.is_some() {
                     id = format!(".{}", id);
                 }
-                let op_id = self.helper.next_id(ctx.op.as_deref().unwrap());
+                let op_id = self.helper.next_id_for_token(ctx.op.as_deref());
                 let args = ctx
                     .args
                     .iter()
@@ -684,11 +739,21 @@ impl gen::CELVisitorCompat<'_> for Parser {
     }
 
     fn visit_Nested(&mut self, ctx: &NestedContext<'_>) -> Self::Return {
-        self.visit(ctx.e.as_deref().unwrap())
+        match &ctx.e {
+            None => {
+                self.report_error::<ParseError, _>(
+                    ctx.start().deref(),
+                    None,
+                    "No `ExprContextAll`!",
+                );
+                IdedExpr::default()
+            }
+            Some(e) => self.visit(e.as_ref()),
+        }
     }
 
     fn visit_CreateList(&mut self, ctx: &CreateListContext<'_>) -> Self::Return {
-        let list_id = self.helper.next_id(ctx.op.as_deref().unwrap());
+        let list_id = self.helper.next_id_for_token(ctx.op.as_deref());
         let elements = match &ctx.elems {
             None => Vec::default(),
             Some(elements) => self.list_initializer_list(elements.deref()),
@@ -700,7 +765,7 @@ impl gen::CELVisitorCompat<'_> for Parser {
     }
 
     fn visit_CreateStruct(&mut self, ctx: &CreateStructContext<'_>) -> Self::Return {
-        let struct_id = self.helper.next_id(ctx.op.as_deref().unwrap());
+        let struct_id = self.helper.next_id_for_token(ctx.op.as_deref());
         let entries = match &ctx.entries {
             Some(entries) => self.map_initializer_list(entries.deref()),
             None => Vec::default(),
@@ -722,7 +787,13 @@ impl gen::CELVisitorCompat<'_> for Parser {
         if ctx.leadingDot.is_some() {
             message_name = format!(".{}", message_name);
         }
-        let op_id = self.helper.next_id(ctx.op.as_deref().unwrap());
+        let op_id = match &ctx.op {
+            None => {
+                self.report_error::<ParseError, _>(&ctx.start(), None, "No `CommonToken`!");
+                return IdedExpr::default();
+            }
+            Some(op) => self.helper.next_id(op.as_ref()),
+        };
         let entries = match &ctx.entries {
             None => vec![],
             Some(entries) => self.field_initializer_list(entries),
@@ -783,21 +854,35 @@ impl gen::CELVisitorCompat<'_> for Parser {
     }
 
     fn visit_String(&mut self, ctx: &StringContext<'_>) -> Self::Return {
-        self.helper.next_expr(
-            ctx.tok.as_deref().expect("Has to have string!"),
-            Expr::Literal(Val::String(
-                parse::parse_string(&ctx.get_text()).expect("invalid string"),
-            )),
-        )
+        let token = ctx.tok.as_deref().expect("Has to have string!");
+        match parse::parse_string(&ctx.get_text()) {
+            Ok(string) => self
+                .helper
+                .next_expr(token, Expr::Literal(Val::String(string))),
+            Err(e) => self.report_error::<ParseError, _>(
+                token,
+                None,
+                format!("invalid string literal: {e:?}"),
+            ),
+        }
     }
 
     fn visit_Bytes(&mut self, ctx: &BytesContext<'_>) -> Self::Return {
+        let token = ctx.tok.as_deref().expect("Has to have bytes!");
         let string = ctx.get_text();
-        let bytes = parse::parse_bytes(&string[2..string.len() - 1]).unwrap();
-        self.helper.next_expr(
-            ctx.tok.as_deref().expect("Has to have bytes!"),
-            Expr::Literal(Val::Bytes(bytes)),
-        )
+        match parse::parse_bytes(&string[2..string.len() - 1]) {
+            Ok(bytes) => self
+                .helper
+                .next_expr(token, Expr::Literal(Val::Bytes(bytes))),
+            Err(e) => {
+                self.report_error::<ParseError, _>(
+                    token,
+                    None,
+                    format!("invalid bytes literal: {e:?}"),
+                );
+                IdedExpr::default()
+            }
+        }
     }
 
     fn visit_BoolTrue(&mut self, ctx: &BoolTrueContext<'_>) -> Self::Return {
@@ -843,6 +928,13 @@ impl ParserHelper {
             .add_offset(id, token.start as u32, token.stop as u32);
         self.next_id += 1;
         id
+    }
+
+    fn next_id_for_token(&mut self, token: Option<&CommonToken>) -> u64 {
+        match token {
+            None => 0,
+            Some(token) => self.next_id(token),
+        }
     }
 
     fn next_id_for(&mut self, id: u64) -> u64 {
