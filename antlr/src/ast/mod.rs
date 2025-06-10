@@ -115,9 +115,10 @@ pub struct ComprehensionExpr {
     pub result: Box<IdedExpr>,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct SourceInfo {
     offsets: BTreeMap<u64, OffsetRange>,
+    pub source: String,
 }
 
 impl SourceInfo {
@@ -128,8 +129,13 @@ impl SourceInfo {
     pub fn offset_for(&self, id: u64) -> Option<(u32, u32)> {
         self.offsets.get(&id).map(|range| (range.start, range.stop))
     }
+
+    pub fn snippet(&self, line: isize) -> Option<&str> {
+        self.source.lines().nth(line as usize)
+    }
 }
 
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct OffsetRange {
     pub start: u32,
     pub stop: u32,

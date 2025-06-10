@@ -25,6 +25,7 @@ use std::error::Error;
 use std::fmt::Display;
 use std::mem;
 use std::ops::Deref;
+use std::rc::Rc;
 
 pub struct MacroExprHelper<'a> {
     helper: &'a mut ParserHelper,
@@ -40,12 +41,30 @@ impl MacroExprHelper<'_> {
 type MacroExpander =
     fn(helper: &mut MacroExprHelper, target: Option<IdedExpr>, args: Vec<IdedExpr>) -> IdedExpr;
 
+#[allow(dead_code)]
 #[derive(Debug)]
-pub struct ParseError {}
+pub struct ParseError {
+    source: Option<Box<dyn Error>>,
+    pos: (isize, isize),
+    msg: String,
+    expr_id: u64,
+    source_info: Option<Rc<SourceInfo>>,
+}
 
 impl Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Parse error")
+        write!(
+            f,
+            "ERROR: <input>:{}:{}: {}",
+            self.pos.0, self.pos.1, self.msg
+        )?;
+        if let Some(info) = &self.source_info {
+            if let Some(line) = info.snippet(self.pos.0 - 1) {
+                write!(f, "\n| {}", line)?;
+                write!(f, "\n| ^")?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -54,6 +73,7 @@ impl Error for ParseError {}
 pub struct Parser {
     ast: ast::Ast,
     helper: ParserHelper,
+    errors: Vec<ParseError>,
 }
 
 impl Parser {
@@ -63,6 +83,7 @@ impl Parser {
                 expr: IdedExpr::default(),
             },
             helper: ParserHelper::default(),
+            errors: Vec::default(),
         }
     }
 
@@ -161,9 +182,27 @@ impl Parser {
         // lexer.add_error_listener()
 
         let mut prsr = gen::CELParser::new(CommonTokenStream::new(lexer));
-        match prsr.start() {
+        let r = match prsr.start() {
             Ok(t) => Ok(self.visit(t.deref())),
-            Err(_) => Err(ParseError {}),
+            Err(e) => Err(ParseError {
+                source: Some(Box::new(e)),
+                pos: (0, 0),
+                msg: "UNKNOWN".to_string(),
+                expr_id: 0,
+                source_info: None,
+            }),
+        };
+
+        let mut info = self.helper.source_info;
+        // todo! might want to avoid this cloning here...
+        info.source = source.into();
+        let source_info = Rc::new(info);
+        match self.errors.pop() {
+            None => r,
+            Some(mut e) => {
+                e.source_info = Some(source_info.clone());
+                Err(e)
+            }
         }
     }
 
@@ -225,6 +264,23 @@ impl Parser {
             .iter()
             .map(|e| self.visit(e.e.as_deref().unwrap()))
             .collect()
+    }
+
+    fn report_error<E: Error + 'static, S: Into<String>>(
+        &mut self,
+        token: &CommonToken,
+        e: Option<E>,
+        s: S,
+    ) -> IdedExpr {
+        let expr = self.helper.next_expr(token, Expr::default());
+        self.errors.push(ParseError {
+            source: e.map(|e| e.into()),
+            pos: (token.line, token.column + 1),
+            msg: s.into(),
+            expr_id: expr.id,
+            source_info: None,
+        });
+        expr
     }
 }
 
@@ -512,12 +568,16 @@ impl gen::CELVisitorCompat<'_> for Parser {
 
     fn visit_Int(&mut self, ctx: &IntContext<'_>) -> Self::Return {
         let string = ctx.get_text();
-        let val = if let Some(string) = string.strip_prefix("0x") {
+        let val = match if let Some(string) = string.strip_prefix("0x") {
             i64::from_str_radix(string, 16)
         } else {
             string.parse::<i64>()
-        }
-        .unwrap();
+        } {
+            Ok(v) => v,
+            Err(e) => {
+                return self.report_error(ctx.tok.as_ref().unwrap(), Some(e), "invalid int literal")
+            }
+        };
         self.helper
             .next_expr(ctx.tok.as_deref().unwrap(), Expr::Literal(Val::Int(val)))
     }
@@ -525,21 +585,39 @@ impl gen::CELVisitorCompat<'_> for Parser {
     fn visit_Uint(&mut self, ctx: &UintContext<'_>) -> Self::Return {
         let mut string = ctx.get_text();
         string.truncate(string.len() - 1);
-        let val = if let Some(string) = string.strip_prefix("0x") {
+        let val = match if let Some(string) = string.strip_prefix("0x") {
             u64::from_str_radix(string, 16)
         } else {
             string.parse::<u64>()
-        }
-        .unwrap();
+        } {
+            Ok(v) => v,
+            Err(e) => {
+                return self.report_error(
+                    ctx.tok.as_ref().unwrap(),
+                    Some(e),
+                    "invalid uint literal",
+                )
+            }
+        };
         self.helper
             .next_expr(ctx.tok.as_deref().unwrap(), Expr::Literal(Val::UInt(val)))
     }
 
     fn visit_Double(&mut self, ctx: &DoubleContext<'_>) -> Self::Return {
-        self.helper.next_expr(
-            ctx.tok.as_deref().unwrap(),
-            Expr::Literal(Val::Double(ctx.get_text().parse::<f64>().unwrap())),
-        )
+        let string = ctx.get_text();
+        match string.parse::<f64>() {
+            Ok(d) if d.is_finite() => self
+                .helper
+                .next_expr(ctx.tok.as_deref().unwrap(), Expr::Literal(Val::Double(d))),
+            Err(e) => {
+                self.report_error(ctx.tok.as_ref().unwrap(), Some(e), "invalid double literal")
+            }
+            _ => self.report_error(
+                ctx.tok.as_ref().unwrap(),
+                None::<ParseError>,
+                "invalid double literal",
+            ),
+        }
     }
 
     fn visit_String(&mut self, ctx: &StringContext<'_>) -> Self::Return {
@@ -685,9 +763,9 @@ mod tests {
 
         // P contains the type/id adorned debug output of the expression tree.
         p: &'static str,
-        // E contains the expected error output for a failed parse, or "" if the parse is expected to be successful.
-        // e: String,
 
+        // E contains the expected error output for a failed parse, or "" if the parse is expected to be successful.
+        e: &'static str,
         // L contains the expected source adorned debug output of the expression tree.
         // l: String,
 
@@ -703,46 +781,57 @@ mod tests {
             TestInfo {
                 i: r#""A""#,
                 p: r#""A"^#1:*expr.Constant_StringValue#"#,
+                e: "",
             },
             TestInfo {
                 i: r#"true"#,
                 p: r#"true^#1:*expr.Constant_BoolValue#"#,
+                e: "",
             },
             TestInfo {
                 i: r#"false"#,
                 p: r#"false^#1:*expr.Constant_BoolValue#"#,
+                e: "",
             },
             TestInfo {
                 i: "0",
                 p: "0^#1:*expr.Constant_Int64Value#",
+                e: "",
             },
             TestInfo {
                 i: "42",
                 p: "42^#1:*expr.Constant_Int64Value#",
+                e: "",
             },
             TestInfo {
                 i: "0xF",
                 p: "15^#1:*expr.Constant_Int64Value#",
+                e: "",
             },
             TestInfo {
                 i: "0u",
                 p: "0u^#1:*expr.Constant_Uint64Value#",
+                e: "",
             },
             TestInfo {
                 i: "23u",
                 p: "23u^#1:*expr.Constant_Uint64Value#",
+                e: "",
             },
             TestInfo {
                 i: "24u",
                 p: "24u^#1:*expr.Constant_Uint64Value#",
+                e: "",
             },
             TestInfo {
                 i: "0xFu",
                 p: "15u^#1:*expr.Constant_Uint64Value#",
+                e: "",
             },
             TestInfo {
                 i: "-1",
                 p: "-1^#1:*expr.Constant_Int64Value#",
+                e: "",
             },
             TestInfo {
                 i: "4--4",
@@ -750,6 +839,7 @@ mod tests {
     4^#1:*expr.Constant_Int64Value#,
     -4^#3:*expr.Constant_Int64Value#
 )^#2:*expr.Expr_CallExpr#"#,
+                e: "",
             },
             TestInfo {
                 i: "4--4.1",
@@ -757,28 +847,34 @@ mod tests {
     4^#1:*expr.Constant_Int64Value#,
     -4.1^#3:*expr.Constant_DoubleValue#
 )^#2:*expr.Expr_CallExpr#"#,
+                e: "",
             },
             TestInfo {
                 i: r#"b"abc""#,
                 p: r#"b"abc"^#1:*expr.Constant_BytesValue#"#,
+                e: "",
             },
             TestInfo {
                 i: "23.39",
                 p: "23.39^#1:*expr.Constant_DoubleValue#",
+                e: "",
             },
             TestInfo {
                 i: "!a",
                 p: "!_(
     a^#2:*expr.Expr_IdentExpr#
 )^#1:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "null",
                 p: "null^#1:*expr.Constant_NullValue#",
+                e: "",
             },
             TestInfo {
                 i: "a",
                 p: "a^#1:*expr.Expr_IdentExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a?b:c",
@@ -787,6 +883,7 @@ mod tests {
     b^#3:*expr.Expr_IdentExpr#,
     c^#4:*expr.Expr_IdentExpr#
 )^#2:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a || b",
@@ -794,6 +891,7 @@ mod tests {
     a^#1:*expr.Expr_IdentExpr#,
     b^#2:*expr.Expr_IdentExpr#
 )^#3:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a || b || c || d || e || f ",
@@ -813,6 +911,7 @@ mod tests {
         f^#10:*expr.Expr_IdentExpr#
     )^#11:*expr.Expr_CallExpr#
 )^#7:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a && b",
@@ -820,6 +919,7 @@ mod tests {
     a^#1:*expr.Expr_IdentExpr#,
     b^#2:*expr.Expr_IdentExpr#
 )^#3:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a && b && c && d && e && f && g",
@@ -842,6 +942,7 @@ mod tests {
         g^#12:*expr.Expr_IdentExpr#
     )^#13:*expr.Expr_CallExpr#
 )^#9:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a && b && c && d || e && f && g && h",
@@ -867,6 +968,7 @@ mod tests {
         )^#14:*expr.Expr_CallExpr#
     )^#12:*expr.Expr_CallExpr#
 )^#15:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a + b",
@@ -874,6 +976,7 @@ mod tests {
     a^#1:*expr.Expr_IdentExpr#,
     b^#3:*expr.Expr_IdentExpr#
 )^#2:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a - b",
@@ -881,6 +984,7 @@ mod tests {
     a^#1:*expr.Expr_IdentExpr#,
     b^#3:*expr.Expr_IdentExpr#
 )^#2:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a * b",
@@ -888,6 +992,7 @@ mod tests {
     a^#1:*expr.Expr_IdentExpr#,
     b^#3:*expr.Expr_IdentExpr#
 )^#2:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a / b",
@@ -895,6 +1000,7 @@ mod tests {
     a^#1:*expr.Expr_IdentExpr#,
     b^#3:*expr.Expr_IdentExpr#
 )^#2:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a % b",
@@ -902,6 +1008,7 @@ mod tests {
     a^#1:*expr.Expr_IdentExpr#,
     b^#3:*expr.Expr_IdentExpr#
 )^#2:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a in b",
@@ -909,6 +1016,7 @@ mod tests {
     a^#1:*expr.Expr_IdentExpr#,
     b^#3:*expr.Expr_IdentExpr#
 )^#2:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a == b",
@@ -916,6 +1024,7 @@ mod tests {
     a^#1:*expr.Expr_IdentExpr#,
     b^#3:*expr.Expr_IdentExpr#
 )^#2:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a != b",
@@ -923,6 +1032,7 @@ mod tests {
     a^#1:*expr.Expr_IdentExpr#,
     b^#3:*expr.Expr_IdentExpr#
 )^#2:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a > b",
@@ -930,6 +1040,7 @@ mod tests {
     a^#1:*expr.Expr_IdentExpr#,
     b^#3:*expr.Expr_IdentExpr#
 )^#2:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a >= b",
@@ -937,6 +1048,7 @@ mod tests {
     a^#1:*expr.Expr_IdentExpr#,
     b^#3:*expr.Expr_IdentExpr#
 )^#2:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a < b",
@@ -944,6 +1056,7 @@ mod tests {
     a^#1:*expr.Expr_IdentExpr#,
     b^#3:*expr.Expr_IdentExpr#
 )^#2:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a <= b",
@@ -951,14 +1064,17 @@ mod tests {
     a^#1:*expr.Expr_IdentExpr#,
     b^#3:*expr.Expr_IdentExpr#
 )^#2:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a.b",
                 p: "a^#1:*expr.Expr_IdentExpr#.b^#2:*expr.Expr_SelectExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a.b.c",
                 p: "a^#1:*expr.Expr_IdentExpr#.b^#2:*expr.Expr_SelectExpr#.c^#3:*expr.Expr_SelectExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a[b]",
@@ -966,24 +1082,29 @@ mod tests {
     a^#1:*expr.Expr_IdentExpr#,
     b^#3:*expr.Expr_IdentExpr#
 )^#2:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "(a)",
                 p: "a^#1:*expr.Expr_IdentExpr#",
+                e: "",
             },
             TestInfo {
                 i: "((a))",
                 p: "a^#1:*expr.Expr_IdentExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a()",
                 p: "a()^#1:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a(b)",
                 p: "a(
     b^#2:*expr.Expr_IdentExpr#
 )^#1:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a(b, c)",
@@ -991,26 +1112,31 @@ mod tests {
     b^#2:*expr.Expr_IdentExpr#,
     c^#3:*expr.Expr_IdentExpr#
 )^#1:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a.b()",
                 p: "a^#1:*expr.Expr_IdentExpr#.b()^#2:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "a.b(c)",
                 p: "a^#1:*expr.Expr_IdentExpr#.b(
     c^#3:*expr.Expr_IdentExpr#
 )^#2:*expr.Expr_CallExpr#",
+                e: "",
             },
             TestInfo {
                 i: "foo{ }",
                 p: "foo{}^#1:*expr.Expr_StructExpr#",
+                e: "",
             },
             TestInfo {
                 i: "foo{ a:b }",
                 p: "foo{
     a:b^#3:*expr.Expr_IdentExpr#^#2:*expr.Expr_CreateStruct_Entry#
 }^#1:*expr.Expr_StructExpr#",
+                e: "",
             },
             TestInfo {
                 i: "foo{ a:b, c:d }",
@@ -1018,10 +1144,12 @@ mod tests {
     a:b^#3:*expr.Expr_IdentExpr#^#2:*expr.Expr_CreateStruct_Entry#,
     c:d^#5:*expr.Expr_IdentExpr#^#4:*expr.Expr_CreateStruct_Entry#
 }^#1:*expr.Expr_StructExpr#",
+                e: "",
             },
             TestInfo {
                 i: "{}",
                 p: "{}^#1:*expr.Expr_StructExpr#",
+                e: "",
             },
             TestInfo {
                 i: "{a: b, c: d}",
@@ -1029,16 +1157,19 @@ mod tests {
     a^#3:*expr.Expr_IdentExpr#:b^#4:*expr.Expr_IdentExpr#^#2:*expr.Expr_CreateStruct_Entry#,
     c^#6:*expr.Expr_IdentExpr#:d^#7:*expr.Expr_IdentExpr#^#5:*expr.Expr_CreateStruct_Entry#
 }^#1:*expr.Expr_StructExpr#",
+                e: "",
             },
             TestInfo {
                 i: "[]",
                 p: "[]^#1:*expr.Expr_ListExpr#",
+                e: "",
             },
             TestInfo {
                 i: "[a]",
                 p: "[
     a^#2:*expr.Expr_IdentExpr#
 ]^#1:*expr.Expr_ListExpr#",
+                e: "",
             },
             TestInfo {
                 i: "[a, b, c]",
@@ -1047,10 +1178,12 @@ mod tests {
     b^#3:*expr.Expr_IdentExpr#,
     c^#4:*expr.Expr_IdentExpr#
 ]^#1:*expr.Expr_ListExpr#",
+                e: "",
             },
             TestInfo {
                 i: "has(m.f)",
                 p: "m^#2:*expr.Expr_IdentExpr#.f~test-only~^#4:*expr.Expr_SelectExpr#",
+                e: "",
             },
             TestInfo {
                 i: "m.exists(v, f)",
@@ -1076,6 +1209,7 @@ _||_(
 )^#10:*expr.Expr_CallExpr#,
 // Result
 @result^#11:*expr.Expr_IdentExpr#)^#12:*expr.Expr_ComprehensionExpr#",
+                e: "",
             },
             TestInfo {
                 i: "m.all(v, f)",
@@ -1099,6 +1233,7 @@ _&&_(
 )^#9:*expr.Expr_CallExpr#,
 // Result
 @result^#10:*expr.Expr_IdentExpr#)^#11:*expr.Expr_ComprehensionExpr#",
+                e: "",
             },
             TestInfo {
                 i: "m.existsOne(v, f)",
@@ -1126,7 +1261,8 @@ _?_:_(
 _==_(
     @result^#12:*expr.Expr_IdentExpr#,
     1^#13:*expr.Constant_Int64Value#
-)^#14:*expr.Expr_CallExpr#)^#15:*expr.Expr_ComprehensionExpr#",  
+)^#14:*expr.Expr_CallExpr#)^#15:*expr.Expr_ComprehensionExpr#",
+                e: "",
             },
             TestInfo {
                 i: "m.map(v, f)",
@@ -1150,6 +1286,7 @@ _+_(
 )^#9:*expr.Expr_CallExpr#,
 // Result
 @result^#10:*expr.Expr_IdentExpr#)^#11:*expr.Expr_ComprehensionExpr#",
+                e: "",
             },
             TestInfo {
                 i: "m.map(v, p, f)",
@@ -1177,6 +1314,7 @@ _?_:_(
 )^#12:*expr.Expr_CallExpr#,
 // Result
 @result^#13:*expr.Expr_IdentExpr#)^#14:*expr.Expr_ComprehensionExpr#",
+                e: "",
             },
             TestInfo {
                 i: "m.filter(v, p)",
@@ -1204,18 +1342,52 @@ _?_:_(
 )^#11:*expr.Expr_CallExpr#,
 // Result
 @result^#12:*expr.Expr_IdentExpr#)^#13:*expr.Expr_ComprehensionExpr#",
+                e: "",
+            },
+            // Parse error tests
+            TestInfo {
+                i: "0xFFFFFFFFFFFFFFFFF",
+                p: "",
+                e: "ERROR: <input>:1:1: invalid int literal
+| 0xFFFFFFFFFFFFFFFFF
+| ^",
+            },
+            TestInfo {
+                i: "0xFFFFFFFFFFFFFFFFFu",
+                p: "",
+                e: "ERROR: <input>:1:1: invalid uint literal
+| 0xFFFFFFFFFFFFFFFFFu
+| ^",
+            },
+            TestInfo {
+                i: "1.99e90000009",
+                p: "",
+                e: "ERROR: <input>:1:1: invalid double literal
+| 1.99e90000009
+| ^",
             },
         ];
 
         for test_case in test_cases {
             let parser = Parser::new();
             let result = parser.parse(test_case.i);
-            assert_eq!(
-                to_go_like_string(&result.unwrap()),
-                test_case.p,
-                "Expr `{}` failed",
-                test_case.i
-            );
+            if !test_case.p.is_empty() {
+                assert_eq!(
+                    to_go_like_string(result.as_ref().unwrap()),
+                    test_case.p,
+                    "Expr `{}` failed",
+                    test_case.i
+                );
+            }
+
+            if !test_case.e.is_empty() {
+                assert_eq!(
+                    format!("{}", result.as_ref().err().unwrap()),
+                    test_case.e,
+                    "Error on `{}` failed",
+                    test_case.i
+                )
+            }
         }
     }
 
