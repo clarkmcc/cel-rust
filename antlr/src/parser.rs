@@ -270,12 +270,20 @@ impl Parser {
                     continue;
                 }
                 Some(ident) => {
-                    let field = ident.get_text().to_string();
+                    let field_name = ident.get_text().to_string();
                     let value = self.visit(ctx.values[i].as_ref());
+                    if let Some(opt) = &field.opt {
+                        self.report_error::<ParseError, _>(
+                            opt.as_ref(),
+                            None,
+                            "unsupported syntax '?'",
+                        );
+                        continue;
+                    }
                     fields.push(IdedEntryExpr {
                         id,
                         expr: EntryExpr::StructField(StructFieldExpr {
-                            field,
+                            field: field_name,
                             value,
                             optional: false,
                         }),
@@ -297,11 +305,12 @@ impl Parser {
             if i >= keys.len() || i >= vals.len() {
                 return vec![];
             }
-            if keys[i].opt.is_some() {
-                todo!("No support for `?` optional")
-            }
             let id = self.helper.next_id(col);
             let key = self.visit(keys[i].as_ref());
+            if let Some(opt) = &keys[i].opt {
+                self.report_error::<ParseError, _>(opt.as_ref(), None, "unsupported syntax '?'");
+                continue;
+            }
             let value = self.visit(vals[i].as_ref());
             entries.push(IdedEntryExpr {
                 id,
@@ -320,8 +329,16 @@ impl Parser {
         for e in &ctx.elems {
             match &e.e {
                 None => return Vec::default(),
-                Some(e) => {
-                    list.push(self.visit(e.as_ref()));
+                Some(exp) => {
+                    if let Some(opt) = &e.opt {
+                        self.report_error::<ParseError, _>(
+                            opt.as_ref(),
+                            None,
+                            "unsupported syntax '?'",
+                        );
+                        continue;
+                    }
+                    list.push(self.visit(exp.as_ref()));
                 }
             }
         }
@@ -360,7 +377,6 @@ impl<'a, T: Recognizer<'a>> ErrorListener<'a, T> for ParserErrorListener {
         msg: &str,
         _error: Option<&ANTLRError>,
     ) {
-        println!("{offending_symbol:?}: {msg}");
         match offending_symbol {
             Some(offending_symbol)
                 if offending_symbol.get_token_type() == gen::cellexer::WHITESPACE => {}
@@ -659,6 +675,13 @@ impl gen::CELVisitorCompat<'_> for Parser {
         if let (Some(member), Some(id), Some(op)) = (&ctx.member(), &ctx.id, &ctx.op) {
             let operand = self.visit(member.as_ref());
             let field = id.get_text();
+            if let Some(_opt) = &ctx.opt {
+                return self.report_error::<ParseError, _>(
+                    op.as_ref(),
+                    None,
+                    "unsupported syntax '.?'",
+                );
+            }
             self.helper.next_expr(
                 op.as_ref(),
                 Expr::Select(SelectExpr {
@@ -685,13 +708,17 @@ impl gen::CELVisitorCompat<'_> for Parser {
         if let (Some(member), Some(index)) = (&ctx.member(), &ctx.index) {
             let target = self.visit(member.as_ref());
             match &ctx.op {
-                None => IdedExpr {
-                    id: 0,
-                    expr: Expr::default(),
-                },
+                None => self.report_error::<ParseError, _>(&ctx.start(), None, "No `Index`!"),
                 Some(op) => {
                     let op_id = self.helper.next_id(op);
                     let index = self.visit(index.as_ref());
+                    if let Some(_opt) = &ctx.opt {
+                        return self.report_error::<ParseError, _>(
+                            op.as_ref(),
+                            None,
+                            "unsupported syntax '[?'",
+                        );
+                    }
                     self.global_call_or_macro(
                         op_id,
                         operators::INDEX.to_string(),
@@ -1654,6 +1681,36 @@ ERROR: <input>:1:7: Syntax error: extraneous input 'b' expecting <EOF>
 ERROR: <input>:1:5: Syntax error: extraneous input 'b' expecting <EOF>
 | a | b
 | ....^",
+            },
+            TestInfo {
+                i: "a.?b && a[?b]",
+                p: "",
+                e: "ERROR: <input>:1:2: unsupported syntax '.?'
+| a.?b && a[?b]
+| .^
+ERROR: <input>:1:10: unsupported syntax '[?'
+| a.?b && a[?b]
+| .........^",
+            },
+            TestInfo {
+                i: "a.?b && a[?b]",
+                p: "",
+                e: "ERROR: <input>:1:2: unsupported syntax '.?'
+| a.?b && a[?b]
+| .^
+ERROR: <input>:1:10: unsupported syntax '[?'
+| a.?b && a[?b]
+| .........^",
+            },
+            TestInfo {
+                i: "Msg{?field: value} && {?'key': value}",
+                p: "",
+                e: "ERROR: <input>:1:5: unsupported syntax '?'
+| Msg{?field: value} && {?'key': value}
+| ....^
+ERROR: <input>:1:24: unsupported syntax '?'
+| Msg{?field: value} && {?'key': value}
+| .......................^",
             },
         ];
 
