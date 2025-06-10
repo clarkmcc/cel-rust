@@ -53,7 +53,10 @@ pub struct ParseErrors {
 
 impl Display for ParseErrors {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for e in &self.errors {
+        for (i, e) in self.errors.iter().enumerate() {
+            if i != 0 {
+                writeln!(f)?;
+            }
             write!(f, "{}", e)?;
         }
         Ok(())
@@ -197,12 +200,13 @@ impl Parser {
     }
 
     pub fn parse(mut self, source: &str) -> Result<IdedExpr, ParseErrors> {
+        let parse_errors = Rc::new(RefCell::new(Vec::<ParseError>::new()));
         let stream = InputStream::new(source);
         let mut lexer = gen::CELLexer::new(stream);
         lexer.remove_error_listeners();
-        // lexer.add_error_listener(Box::new(ParserErrorListener{}));
-
-        let parse_errors = Rc::new(RefCell::new(Vec::<ParseError>::new()));
+        lexer.add_error_listener(Box::new(ParserErrorListener {
+            parse_errors: parse_errors.clone(),
+        }));
 
         let mut prsr = gen::CELParser::new(CommonTokenStream::new(lexer));
         prsr.remove_error_listeners();
@@ -227,6 +231,7 @@ impl Parser {
 
         let mut errors = parse_errors.take();
         errors.extend(self.errors);
+        errors.sort_by(|a, b| a.pos.cmp(&b.pos));
 
         if errors.is_empty() {
             Ok(r.unwrap())
@@ -1433,6 +1438,32 @@ _?_:_(
                 e: "ERROR: <input>:1:2: Syntax error: mismatched input '<EOF>' expecting {'[', '{', '}', '(', '.', ',', '-', '!', '?', 'true', 'false', 'null', NUM_FLOAT, NUM_INT, NUM_UINT, STRING, BYTES, IDENTIFIER}
 | {
 | .^",
+            },
+            TestInfo {
+                i: "*@a | b",
+                p: "",
+                e: "ERROR: <input>:1:1: Syntax error: extraneous input '*' expecting {'[', '{', '(', '.', '-', '!', 'true', 'false', 'null', NUM_FLOAT, NUM_INT, NUM_UINT, STRING, BYTES, IDENTIFIER}
+| *@a | b
+| ^
+ERROR: <input>:1:2: Syntax error: token recognition error at: '@'
+| *@a | b
+| .^
+ERROR: <input>:1:5: Syntax error: token recognition error at: '| '
+| *@a | b
+| ....^
+ERROR: <input>:1:7: Syntax error: extraneous input 'b' expecting <EOF>
+| *@a | b
+| ......^", 
+            },
+            TestInfo {
+                i: "a | b",
+                p: "",
+                e: "ERROR: <input>:1:3: Syntax error: token recognition error at: '| '
+| a | b
+| ..^
+ERROR: <input>:1:5: Syntax error: extraneous input 'b' expecting <EOF>
+| a | b
+| ....^",
             },
         ];
 
