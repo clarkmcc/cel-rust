@@ -20,6 +20,7 @@ use antlr4rust::common_token_stream::CommonTokenStream;
 use antlr4rust::error_listener::ErrorListener;
 use antlr4rust::errors::ANTLRError;
 use antlr4rust::parser::ParserNodeType;
+use antlr4rust::parser_rule_context::ParserRuleContext;
 use antlr4rust::recognizer::Recognizer;
 use antlr4rust::token::{CommonToken, Token};
 use antlr4rust::token_factory::TokenFactory;
@@ -234,7 +235,7 @@ impl Parser {
         errors.sort_by(|a, b| a.pos.cmp(&b.pos));
 
         if errors.is_empty() {
-            Ok(r.unwrap())
+            r.map_err(|e| ParseErrors { errors: vec![e] })
         } else {
             Err(ParseErrors {
                 errors: errors
@@ -258,16 +259,29 @@ impl Parser {
                 return vec![];
             }
             let id = self.helper.next_id(&ctx.cols[i]);
-            let field = field.escapeIdent().unwrap().get_text().to_string();
-            let value = self.visit(ctx.values[i].as_ref());
-            fields.push(IdedEntryExpr {
-                id,
-                expr: EntryExpr::StructField(StructFieldExpr {
-                    field,
-                    value,
-                    optional: false,
-                }),
-            });
+
+            match field.escapeIdent() {
+                None => {
+                    self.report_error::<ParseError, _>(
+                        field.start().deref(),
+                        None,
+                        "unsupported ident type",
+                    );
+                    continue;
+                }
+                Some(ident) => {
+                    let field = ident.get_text().to_string();
+                    let value = self.visit(ctx.values[i].as_ref());
+                    fields.push(IdedEntryExpr {
+                        id,
+                        expr: EntryExpr::StructField(StructFieldExpr {
+                            field,
+                            value,
+                            optional: false,
+                        }),
+                    });
+                }
+            }
         }
         fields
     }
@@ -302,10 +316,16 @@ impl Parser {
     }
 
     fn list_initializer_list(&mut self, ctx: &ListInitContextAll) -> Vec<IdedExpr> {
-        ctx.elems
-            .iter()
-            .map(|e| self.visit(e.e.as_deref().unwrap()))
-            .collect()
+        let mut list = Vec::default();
+        for e in &ctx.elems {
+            match &e.e {
+                None => return Vec::default(),
+                Some(e) => {
+                    list.push(self.visit(e.as_ref()));
+                }
+            }
+        }
+        list
     }
 
     fn report_error<E: Error + 'static, S: Into<String>>(
@@ -381,17 +401,45 @@ impl ParseTreeVisitorCompat<'_> for Parser {
 
 impl gen::CELVisitorCompat<'_> for Parser {
     fn visit_start(&mut self, ctx: &StartContext<'_>) -> Self::Return {
-        self.visit(ctx.expr().as_deref().unwrap())
+        match &ctx.expr() {
+            None => {
+                self.report_error::<ParseError, _>(
+                    ctx.start().deref(),
+                    None,
+                    "No `ExprContextAll`!",
+                );
+                IdedExpr::default()
+            }
+            Some(expr) => self.visit(expr.as_ref()),
+        }
     }
 
     fn visit_expr(&mut self, ctx: &ExprContext<'_>) -> Self::Return {
         match &ctx.op {
-            None => <Self as ParseTreeVisitorCompat>::visit(self, ctx.e.as_deref().unwrap()),
+            None => match &ctx.e {
+                None => {
+                    self.report_error::<ParseError, _>(
+                        ctx.start().deref(),
+                        None,
+                        "No `ConditionalOrContextAll`!",
+                    );
+                    IdedExpr::default()
+                }
+                Some(e) => <Self as ParseTreeVisitorCompat>::visit(self, e.as_ref()),
+            },
             Some(op) => {
-                let result = self.visit(ctx.e.as_deref().unwrap());
+                if ctx.e.is_none() || ctx.e1.is_none() || ctx.e2.is_none() {
+                    self.report_error::<ParseError, _>(
+                        ctx.start().deref(),
+                        None,
+                        format!("Incomplete `{}` expression", operators::CONDITIONAL),
+                    );
+                    return IdedExpr::default();
+                }
+                let result = self.visit(ctx.e.as_deref().expect("Incomplete expression"));
                 let op_id = self.helper.next_id(op);
-                let if_true = self.visit(ctx.e1.as_deref().unwrap());
-                let if_false = self.visit(ctx.e2.as_deref().unwrap());
+                let if_true = self.visit(ctx.e1.as_deref().expect("Incomplete expression"));
+                let if_false = self.visit(ctx.e2.as_deref().expect("Incomplete expression"));
                 self.global_call_or_macro(
                     op_id,
                     operators::CONDITIONAL.to_string(),
@@ -402,15 +450,30 @@ impl gen::CELVisitorCompat<'_> for Parser {
     }
 
     fn visit_conditionalOr(&mut self, ctx: &ConditionalOrContext<'_>) -> Self::Return {
+        let result = match &ctx.e {
+            None => {
+                self.report_error::<ParseError, _>(
+                    ctx.start().deref(),
+                    None,
+                    "No `ConditionalAndContextAll`!",
+                );
+                IdedExpr::default()
+            }
+            Some(e) => <Self as ParseTreeVisitorCompat>::visit(self, e.as_ref()),
+        };
         if ctx.ops.is_empty() {
-            <Self as ParseTreeVisitorCompat>::visit(self, ctx.e.as_deref().unwrap())
+            result
         } else {
-            let result = self.visit(ctx.e.as_deref().unwrap());
             let mut l = self.new_logic_manager(operators::LOGICAL_OR, result);
             let rest = &ctx.e1;
             if ctx.ops.len() > rest.len() {
                 // why is >= not ok?
-                panic!("unexpected character, wanted '||'")
+                self.report_error::<ParseError, _>(
+                    &ctx.start(),
+                    None,
+                    "unexpected character, wanted '||'",
+                );
+                return IdedExpr::default();
             }
             for (i, op) in ctx.ops.iter().enumerate() {
                 let next = self.visit(rest[i].deref());
@@ -422,15 +485,30 @@ impl gen::CELVisitorCompat<'_> for Parser {
     }
 
     fn visit_conditionalAnd(&mut self, ctx: &ConditionalAndContext<'_>) -> Self::Return {
+        let result = match &ctx.e {
+            None => {
+                self.report_error::<ParseError, _>(
+                    ctx.start().deref(),
+                    None,
+                    "No `RelationContextAll`!",
+                );
+                IdedExpr::default()
+            }
+            Some(e) => <Self as ParseTreeVisitorCompat>::visit(self, e.as_ref()),
+        };
         if ctx.ops.is_empty() {
-            <Self as ParseTreeVisitorCompat>::visit(self, ctx.e.as_deref().unwrap())
+            result
         } else {
-            let result = self.visit(ctx.e.as_deref().unwrap());
             let mut l = self.new_logic_manager(operators::LOGICAL_AND, result);
             let rest = &ctx.e1;
             if ctx.ops.len() > rest.len() {
                 // why is >= not ok?
-                panic!("unexpected character, wanted '&&'")
+                self.report_error::<ParseError, _>(
+                    &ctx.start(),
+                    None,
+                    "unexpected character, wanted '&&'",
+                );
+                return IdedExpr::default();
             }
             for (i, op) in ctx.ops.iter().enumerate() {
                 let next = self.visit(rest[i].deref());
@@ -443,21 +521,46 @@ impl gen::CELVisitorCompat<'_> for Parser {
 
     fn visit_relation(&mut self, ctx: &RelationContext<'_>) -> Self::Return {
         if ctx.op.is_none() {
-            <Self as ParseTreeVisitorCompat>::visit(self, ctx.calc().as_deref().unwrap())
+            match ctx.calc() {
+                None => {
+                    self.report_error::<ParseError, _>(
+                        ctx.start().deref(),
+                        None,
+                        "No `CalcContextAll`!",
+                    );
+                    IdedExpr::default()
+                }
+                Some(calc) => <Self as ParseTreeVisitorCompat>::visit(self, calc.as_ref()),
+            }
         } else {
             match &ctx.op {
                 None => <Self as ParseTreeVisitorCompat>::visit_children(self, ctx),
                 Some(op) => {
-                    let lhs = self.visit(ctx.relation(0).unwrap().deref());
-                    let op_id = self.helper.next_id(ctx.op.as_deref().unwrap());
-                    let rhs = self.visit(ctx.relation(1).unwrap().deref());
-                    self.global_call_or_macro(
-                        op_id,
-                        operators::find_operator(op.get_text())
-                            .expect("operator not found!")
-                            .to_string(),
-                        vec![lhs, rhs],
-                    )
+                    if ctx.relation(0).is_none() || ctx.op.is_none() || ctx.relation(1).is_none() {
+                        self.report_error::<ParseError, _>(
+                            ctx.start().deref(),
+                            None,
+                            format!("Incomplete `{:?}` relation!", ctx.op),
+                        );
+                    }
+                    let lhs = self.visit(ctx.relation(0).expect("incomplete relation").deref());
+                    let op_id = self
+                        .helper
+                        .next_id(ctx.op.as_deref().expect("incomplete relation"));
+                    let rhs = self.visit(ctx.relation(1).expect("incomplete relation").deref());
+                    match operators::find_operator(op.get_text()) {
+                        None => {
+                            self.report_error::<ParseError, _>(
+                                op,
+                                None,
+                                format!("Unknown `{}` operator!", op.get_text()),
+                            );
+                            IdedExpr::default()
+                        }
+                        Some(op) => {
+                            self.global_call_or_macro(op_id, op.to_string(), vec![lhs, rhs])
+                        }
+                    }
                 }
             }
         }
@@ -634,66 +737,54 @@ impl gen::CELVisitorCompat<'_> for Parser {
     }
 
     fn visit_ConstantLiteral(&mut self, ctx: &ConstantLiteralContext<'_>) -> Self::Return {
-        <Self as ParseTreeVisitorCompat>::visit(self, ctx.literal().as_deref().unwrap())
+        <Self as ParseTreeVisitorCompat>::visit(
+            self,
+            ctx.literal().as_deref().expect("Has to have literal!"),
+        )
     }
 
     fn visit_Int(&mut self, ctx: &IntContext<'_>) -> Self::Return {
         let string = ctx.get_text();
+        let token = ctx.tok.as_ref().expect("Has to have int!");
         let val = match if let Some(string) = string.strip_prefix("0x") {
             i64::from_str_radix(string, 16)
         } else {
             string.parse::<i64>()
         } {
             Ok(v) => v,
-            Err(e) => {
-                return self.report_error(ctx.tok.as_ref().unwrap(), Some(e), "invalid int literal")
-            }
+            Err(e) => return self.report_error(token, Some(e), "invalid int literal"),
         };
-        self.helper
-            .next_expr(ctx.tok.as_deref().unwrap(), Expr::Literal(Val::Int(val)))
+        self.helper.next_expr(token, Expr::Literal(Val::Int(val)))
     }
 
     fn visit_Uint(&mut self, ctx: &UintContext<'_>) -> Self::Return {
         let mut string = ctx.get_text();
         string.truncate(string.len() - 1);
+        let token = ctx.tok.as_ref().expect("Has to have uint!");
         let val = match if let Some(string) = string.strip_prefix("0x") {
             u64::from_str_radix(string, 16)
         } else {
             string.parse::<u64>()
         } {
             Ok(v) => v,
-            Err(e) => {
-                return self.report_error(
-                    ctx.tok.as_ref().unwrap(),
-                    Some(e),
-                    "invalid uint literal",
-                )
-            }
+            Err(e) => return self.report_error(token, Some(e), "invalid uint literal"),
         };
-        self.helper
-            .next_expr(ctx.tok.as_deref().unwrap(), Expr::Literal(Val::UInt(val)))
+        self.helper.next_expr(token, Expr::Literal(Val::UInt(val)))
     }
 
     fn visit_Double(&mut self, ctx: &DoubleContext<'_>) -> Self::Return {
         let string = ctx.get_text();
+        let token = ctx.tok.as_ref().expect("Has to have double!");
         match string.parse::<f64>() {
-            Ok(d) if d.is_finite() => self
-                .helper
-                .next_expr(ctx.tok.as_deref().unwrap(), Expr::Literal(Val::Double(d))),
-            Err(e) => {
-                self.report_error(ctx.tok.as_ref().unwrap(), Some(e), "invalid double literal")
-            }
-            _ => self.report_error(
-                ctx.tok.as_ref().unwrap(),
-                None::<ParseError>,
-                "invalid double literal",
-            ),
+            Ok(d) if d.is_finite() => self.helper.next_expr(token, Expr::Literal(Val::Double(d))),
+            Err(e) => self.report_error(token, Some(e), "invalid double literal"),
+            _ => self.report_error(token, None::<ParseError>, "invalid double literal"),
         }
     }
 
     fn visit_String(&mut self, ctx: &StringContext<'_>) -> Self::Return {
         self.helper.next_expr(
-            ctx.tok.as_deref().unwrap(),
+            ctx.tok.as_deref().expect("Has to have string!"),
             Expr::Literal(Val::String(
                 parse::parse_string(&ctx.get_text()).expect("invalid string"),
             )),
@@ -704,28 +795,30 @@ impl gen::CELVisitorCompat<'_> for Parser {
         let string = ctx.get_text();
         let bytes = parse::parse_bytes(&string[2..string.len() - 1]).unwrap();
         self.helper.next_expr(
-            ctx.tok.as_deref().unwrap(),
+            ctx.tok.as_deref().expect("Has to have bytes!"),
             Expr::Literal(Val::Bytes(bytes)),
         )
     }
 
     fn visit_BoolTrue(&mut self, ctx: &BoolTrueContext<'_>) -> Self::Return {
         self.helper.next_expr(
-            ctx.tok.as_deref().unwrap(),
+            ctx.tok.as_deref().expect("Has to be `true`!"),
             Expr::Literal(Val::Boolean(true)),
         )
     }
 
     fn visit_BoolFalse(&mut self, ctx: &BoolFalseContext<'_>) -> Self::Return {
         self.helper.next_expr(
-            ctx.tok.as_deref().unwrap(),
+            ctx.tok.as_deref().expect("Has to be `false`!"),
             Expr::Literal(Val::Boolean(false)),
         )
     }
 
     fn visit_Null(&mut self, ctx: &NullContext<'_>) -> Self::Return {
-        self.helper
-            .next_expr(ctx.tok.as_deref().unwrap(), Expr::Literal(Val::Null))
+        self.helper.next_expr(
+            ctx.tok.as_deref().expect("Has to be `null`!"),
+            Expr::Literal(Val::Null),
+        )
     }
 }
 
@@ -784,7 +877,7 @@ struct LogicManager {
 impl LogicManager {
     pub(crate) fn expr(mut self) -> IdedExpr {
         if self.terms.len() == 1 {
-            self.terms.pop().unwrap()
+            self.terms.pop().expect("expected at least one term")
         } else {
             self.balanced_tree(0, self.ops.len() - 1)
         }
