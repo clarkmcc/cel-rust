@@ -1,5 +1,5 @@
 use crate::{ExecutionError, FunctionContext, ResolveResult, Value};
-use cel_antlr_parser::Expression;
+use cel_parser::Expression;
 
 /// Resolver knows how to resolve a [`Value`] from a [`FunctionContext`].
 /// At their core, resolvers are responsible for taking Expressions and

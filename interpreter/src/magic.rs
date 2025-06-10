@@ -1,7 +1,7 @@
 use crate::macros::{impl_conversions, impl_handler};
 use crate::resolvers::{AllArguments, Argument};
 use crate::{ExecutionError, Expression, FunctionContext, ResolveResult, Value};
-use cel_antlr_parser::ast::Expr;
+use cel_parser::ast::Expr;
 use std::collections::HashMap;
 use std::sync::Arc;
 

@@ -3,7 +3,7 @@ use crate::magic::{Arguments, This};
 use crate::objects::Value;
 use crate::resolvers::Resolver;
 use crate::ExecutionError;
-use cel_antlr_parser::Expression;
+use cel_parser::Expression;
 use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::sync::Arc;

@@ -1,7 +1,7 @@
 use crate::magic::{Function, FunctionRegistry, IntoFunction};
 use crate::objects::{TryIntoValue, Value};
 use crate::{functions, ExecutionError};
-use cel_antlr_parser::Expression;
+use cel_parser::Expression;
 use std::collections::HashMap;
 
 /// Context is a collection of variables and functions that can be used

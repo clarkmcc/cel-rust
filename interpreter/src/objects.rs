@@ -1,8 +1,8 @@
 use crate::context::Context;
 use crate::functions::FunctionContext;
 use crate::{ExecutionError, Expression};
-use cel_antlr_parser::ast::{operators, EntryExpr, Expr};
-use cel_antlr_parser::reference::Val;
+use cel_parser::ast::{operators, EntryExpr, Expr};
+use cel_parser::reference::Val;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::{Infallible, TryFrom, TryInto};
