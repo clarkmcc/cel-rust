@@ -1,17 +1,47 @@
 use crate::ast::{operators, CallExpr, ComprehensionExpr, Expr, IdedExpr, ListExpr};
 use crate::reference::Val::{Boolean, Int};
-use crate::{MacroExprHelper, ParseError};
+use crate::{macros, MacroExprHelper, ParseError};
 
-pub fn has_macro_expander(
+pub type MacroExpander = fn(
+    helper: &mut MacroExprHelper,
+    target: Option<IdedExpr>,
+    args: Vec<IdedExpr>,
+) -> Result<IdedExpr, ParseError>;
+
+pub fn find_expander(
+    func_name: &str,
+    target: Option<&IdedExpr>,
+    args: &[IdedExpr],
+) -> Option<MacroExpander> {
+    match func_name {
+        operators::HAS if args.len() == 1 && target.is_none() => Some(macros::has_macro_expander),
+        operators::EXISTS if args.len() == 2 && target.is_some() => {
+            Some(macros::exists_macro_expander)
+        }
+        operators::ALL if args.len() == 2 && target.is_some() => Some(macros::all_macro_expander),
+        operators::EXISTS_ONE | "existsOne" if args.len() == 2 && target.is_some() => {
+            Some(macros::exists_one_macro_expander)
+        }
+        operators::MAP if (args.len() == 2 || args.len() == 3) && target.is_some() => {
+            Some(macros::map_macro_expander)
+        }
+        operators::FILTER if args.len() == 2 && target.is_some() => {
+            Some(macros::filter_macro_expander)
+        }
+        _ => None,
+    }
+}
+
+fn has_macro_expander(
     helper: &mut MacroExprHelper,
     target: Option<IdedExpr>,
     mut args: Vec<IdedExpr>,
 ) -> Result<IdedExpr, ParseError> {
     if target.is_some() {
-        panic!("Got a target when expecting None!")
+        unreachable!("Got a target when expecting `None`!")
     }
     if args.len() != 1 {
-        panic!("Expected a single arg!")
+        unreachable!("Expected a single arg!")
     }
 
     let ided_expr = args.remove(0);
@@ -30,11 +60,18 @@ pub fn has_macro_expander(
     }
 }
 
-pub fn exists_macro_expander(
+fn exists_macro_expander(
     helper: &mut MacroExprHelper,
     target: Option<IdedExpr>,
     mut args: Vec<IdedExpr>,
 ) -> Result<IdedExpr, ParseError> {
+    if target.is_none() {
+        unreachable!("Expected a target, but got `None`!")
+    }
+    if args.len() != 2 {
+        unreachable!("Expected two args!")
+    }
+
     let mut arguments = vec![args.remove(1)];
     let v = extract_ident(args.remove(0), helper)?;
 
@@ -72,11 +109,18 @@ pub fn exists_macro_expander(
         result: result.into(),
     })))
 }
-pub fn all_macro_expander(
+fn all_macro_expander(
     helper: &mut MacroExprHelper,
     target: Option<IdedExpr>,
     mut args: Vec<IdedExpr>,
 ) -> Result<IdedExpr, ParseError> {
+    if target.is_none() {
+        unreachable!("Expected a target, but got `None`!")
+    }
+    if args.len() != 2 {
+        unreachable!("Expected two args!")
+    }
+
     let mut arguments = vec![args.remove(1)];
     let v = extract_ident(args.remove(0), helper)?;
 
@@ -110,11 +154,18 @@ pub fn all_macro_expander(
     })))
 }
 
-pub fn exists_one_macro_expander(
+fn exists_one_macro_expander(
     helper: &mut MacroExprHelper,
     target: Option<IdedExpr>,
     mut args: Vec<IdedExpr>,
 ) -> Result<IdedExpr, ParseError> {
+    if target.is_none() {
+        unreachable!("Expected a target, but got `None`!")
+    }
+    if args.len() != 2 {
+        unreachable!("Expected two args!")
+    }
+
     let mut arguments = vec![args.remove(1)];
     let v = extract_ident(args.remove(0), helper)?;
 
@@ -159,11 +210,18 @@ pub fn exists_one_macro_expander(
     })))
 }
 
-pub fn map_macro_expander(
+fn map_macro_expander(
     helper: &mut MacroExprHelper,
     target: Option<IdedExpr>,
     mut args: Vec<IdedExpr>,
 ) -> Result<IdedExpr, ParseError> {
+    if target.is_none() {
+        unreachable!("Expected a target, but got `None`!")
+    }
+    if args.len() != 2 && args.len() != 3 {
+        unreachable!("Expected two or three args!")
+    }
+
     let func = args.pop().unwrap();
     let v = extract_ident(args.remove(0), helper)?;
 
@@ -211,11 +269,18 @@ pub fn map_macro_expander(
     })))
 }
 
-pub fn filter_macro_expander(
+fn filter_macro_expander(
     helper: &mut MacroExprHelper,
     target: Option<IdedExpr>,
     mut args: Vec<IdedExpr>,
 ) -> Result<IdedExpr, ParseError> {
+    if target.is_none() {
+        unreachable!("Expected a target, but got `None`!")
+    }
+    if args.len() != 2 {
+        unreachable!("Expected two args!")
+    }
+
     let var = args.remove(0);
     let v = extract_ident(var.clone(), helper)?;
     let filter = args.pop().unwrap();
