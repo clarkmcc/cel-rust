@@ -5,11 +5,6 @@ use std::str::Chars;
 /// Error type of [unescape](unescape).
 #[derive(Debug, PartialEq)]
 pub enum ParseSequenceError {
-    InvalidSymbol {
-        symbol: String,
-        index: usize,
-        string: String,
-    },
     // #[error("invalid escape {escape} at {index} in {string}")]
     InvalidEscape {
         escape: String,
@@ -31,18 +26,18 @@ pub enum ParseSequenceError {
 #[derive(Debug, PartialEq, Clone)]
 pub enum ParseUnicodeError {
     // #[error("could not parse {string} as u32 hex: {source}")]
-    ParseHexFailed {
+    Hex {
         // #[source]
         source: ParseIntError,
         string: String,
     },
-    ParseOctFailed {
+    Oct {
         // #[source]
         source: ParseIntError,
         string: String,
     },
     // #[error("could not parse {value} as a unicode char")]
-    ParseUnicodeFailed {
+    Unicode {
         value: u32,
     },
 }
@@ -373,11 +368,11 @@ where
     let unicode_seq: String = chars.take(length).map(|(_, c)| c).collect();
 
     u32::from_str_radix(&unicode_seq, 16)
-        .map_err(|e| ParseUnicodeError::ParseHexFailed {
+        .map_err(|e| ParseUnicodeError::Hex {
             source: e,
             string: unicode_seq,
         })
-        .and_then(|u| char::from_u32(u).ok_or(ParseUnicodeError::ParseUnicodeFailed { value: u }))
+        .and_then(|u| char::from_u32(u).ok_or(ParseUnicodeError::Unicode { value: u }))
 }
 
 fn parse_unicode_oct<I>(first_char: &char, chars: &mut I) -> Result<char, ParseUnicodeError>
@@ -389,15 +384,15 @@ where
     chars.take(2).for_each(|(_, c)| unicode_seq.push(c));
 
     u32::from_str_radix(&unicode_seq, 8)
-        .map_err(|e| ParseUnicodeError::ParseOctFailed {
+        .map_err(|e| ParseUnicodeError::Oct {
             source: e,
             string: unicode_seq,
         })
         .and_then(|u| {
             if u <= 255 {
-                char::from_u32(u).ok_or(ParseUnicodeError::ParseUnicodeFailed { value: u })
+                char::from_u32(u).ok_or(ParseUnicodeError::Unicode { value: u })
             } else {
-                Err(ParseUnicodeError::ParseUnicodeFailed { value: u })
+                Err(ParseUnicodeError::Unicode { value: u })
             }
         })
 }
