@@ -1073,10 +1073,8 @@ mod tests {
         .into();
 
         // Test with CEL because iterator is not implemented for Value::Map
-        let program = Program::compile(
-            "expected.all(key, serialized[key] == expected[key])",
-        )
-        .unwrap();
+        let program =
+            Program::compile("expected.all(key, serialized[key] == expected[key])").unwrap();
         let mut context = Context::default();
         context.add_variable("expected", expected).unwrap();
         context.add_variable("serialized", serialized).unwrap();
