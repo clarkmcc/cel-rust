@@ -130,6 +130,25 @@ impl SourceInfo {
         self.offsets.get(&id).map(|range| (range.start, range.stop))
     }
 
+    pub(crate) fn pos_for(&self, id: u64) -> Option<(isize, isize)> {
+        match self.offset_for(id) {
+            Some((start, _)) => {
+                let start = start as isize;
+                let mut offset = 0;
+                let mut line = 0;
+                for l in self.source.split_inclusive('\n') {
+                    line += 1;
+                    offset += l.len() as isize;
+                    if start < offset {
+                        return Some((line, start + (l.len() as isize) - offset + 1));
+                    }
+                }
+                None
+            }
+            None => None,
+        }
+    }
+
     pub fn snippet(&self, line: isize) -> Option<&str> {
         self.source.lines().nth(line as usize)
     }
