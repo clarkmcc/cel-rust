@@ -5,9 +5,6 @@ pub mod operators;
 
 pub struct Ast {
     pub expr: IdedExpr,
-    //sourceInfo: SourceInfo,
-    //typeMap:    map[int64]*types.Type,
-    //refMap:     map[int64]*ReferenceInfo,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
