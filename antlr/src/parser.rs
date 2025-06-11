@@ -48,12 +48,6 @@ impl MacroExprHelper<'_> {
     }
 }
 
-type MacroExpander = fn(
-    helper: &mut MacroExprHelper,
-    target: Option<IdedExpr>,
-    args: Vec<IdedExpr>,
-) -> Result<IdedExpr, ParseError>;
-
 #[derive(Debug)]
 pub struct ParseErrors {
     pub errors: Vec<ParseError>,
@@ -133,7 +127,7 @@ impl Parser {
         func_name: String,
         args: Vec<IdedExpr>,
     ) -> IdedExpr {
-        match self.macro_expander(&func_name, None, &args) {
+        match macros::find_expander(&func_name, None, &args) {
             None => IdedExpr {
                 id,
                 expr: Expr::Call(CallExpr {
@@ -162,7 +156,7 @@ impl Parser {
         target: IdedExpr,
         args: Vec<IdedExpr>,
     ) -> IdedExpr {
-        match self.macro_expander(&func_name, Some(&target), &args) {
+        match macros::find_expander(&func_name, Some(&target), &args) {
             None => IdedExpr {
                 id,
                 expr: Expr::Call(CallExpr {
@@ -181,35 +175,6 @@ impl Parser {
                     Err(err) => self.report_parse_error(None, err),
                 }
             }
-        }
-    }
-
-    fn macro_expander(
-        &mut self,
-        func_name: &str,
-        target: Option<&IdedExpr>,
-        args: &[IdedExpr],
-    ) -> Option<MacroExpander> {
-        match func_name {
-            operators::HAS if args.len() == 1 && target.is_none() => {
-                Some(macros::has_macro_expander)
-            }
-            operators::EXISTS if args.len() == 2 && target.is_some() => {
-                Some(macros::exists_macro_expander)
-            }
-            operators::ALL if args.len() == 2 && target.is_some() => {
-                Some(macros::all_macro_expander)
-            }
-            operators::EXISTS_ONE | "existsOne" if args.len() == 2 && target.is_some() => {
-                Some(macros::exists_one_macro_expander)
-            }
-            operators::MAP if (args.len() == 2 || args.len() == 3) && target.is_some() => {
-                Some(macros::map_macro_expander)
-            }
-            operators::FILTER if args.len() == 2 && target.is_some() => {
-                Some(macros::filter_macro_expander)
-            }
-            _ => None,
         }
     }
 
