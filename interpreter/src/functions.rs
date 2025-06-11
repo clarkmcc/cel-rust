@@ -456,11 +456,6 @@ mod tests {
         let tests = vec![
             ("map has", "has(foo.bar) == true"),
             ("map not has", "has(foo.baz) == false"),
-            // ("map deep not has", "has(foo.baz.bar) == false"), // todo this isn't correct is it?
-            // as per the go tests:
-            // Parse("has(m.f.d)"):
-            //         got m^#2:*expr.Expr_IdentExpr#.f^#3:*expr.Expr_SelectExpr#.d~test-only~^#5:*expr.Expr_SelectExpr#,
-            // .f IS NOT ~test-only~
         ];
 
         for (name, script) in tests {
