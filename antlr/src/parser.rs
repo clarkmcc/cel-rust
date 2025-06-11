@@ -42,10 +42,17 @@ impl MacroExprHelper<'_> {
     pub fn next_expr(&mut self, expr: Expr) -> IdedExpr {
         self.helper.next_expr_for(self.id, expr)
     }
+
+    pub(crate) fn pos_for(&self, id: u64) -> Option<(isize, isize)> {
+        self.helper.source_info.pos_for(id)
+    }
 }
 
-type MacroExpander =
-    fn(helper: &mut MacroExprHelper, target: Option<IdedExpr>, args: Vec<IdedExpr>) -> IdedExpr;
+type MacroExpander = fn(
+    helper: &mut MacroExprHelper,
+    target: Option<IdedExpr>,
+    args: Vec<IdedExpr>,
+) -> Result<IdedExpr, ParseError>;
 
 #[derive(Debug)]
 pub struct ParseErrors {
@@ -69,11 +76,11 @@ impl Error for ParseErrors {}
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct ParseError {
-    source: Option<Box<dyn Error>>,
-    pos: (isize, isize),
-    msg: String,
-    expr_id: u64,
-    source_info: Option<Rc<SourceInfo>>,
+    pub source: Option<Box<dyn Error>>,
+    pub pos: (isize, isize),
+    pub msg: String,
+    pub expr_id: u64,
+    pub source_info: Option<Rc<SourceInfo>>,
 }
 
 impl Display for ParseError {
@@ -140,7 +147,10 @@ impl Parser {
                     helper: &mut self.helper,
                     id,
                 };
-                expander(&mut helper, None, args)
+                match expander(&mut helper, None, args) {
+                    Ok(expr) => expr,
+                    Err(err) => self.report_parse_error(None, err),
+                }
             }
         }
     }
@@ -166,7 +176,10 @@ impl Parser {
                     helper: &mut self.helper,
                     id,
                 };
-                expander(&mut helper, Some(target), args)
+                match expander(&mut helper, Some(target), args) {
+                    Ok(expr) => expr,
+                    Err(err) => self.report_parse_error(None, err),
+                }
             }
         }
     }
@@ -209,6 +222,9 @@ impl Parser {
             parse_errors: parse_errors.clone(),
         }));
 
+        // todo! might want to avoid this cloning here...
+        self.helper.source_info.source = source.into();
+
         let mut prsr = gen::CELParser::new(CommonTokenStream::new(lexer));
         prsr.remove_error_listeners();
         prsr.add_error_listener(Box::new(ParserErrorListener {
@@ -225,9 +241,7 @@ impl Parser {
             }),
         };
 
-        let mut info = self.helper.source_info;
-        // todo! might want to avoid this cloning here...
-        info.source = source.into();
+        let info = self.helper.source_info;
         let source_info = Rc::new(info);
 
         let mut errors = parse_errors.take();
@@ -351,14 +365,27 @@ impl Parser {
         e: Option<E>,
         s: S,
     ) -> IdedExpr {
-        let expr = self.helper.next_expr(token, Expr::default());
-        self.errors.push(ParseError {
+        let error = ParseError {
             source: e.map(|e| e.into()),
             pos: (token.line, token.column + 1),
             msg: s.into(),
-            expr_id: expr.id,
+            expr_id: 0,
             source_info: None,
-        });
+        };
+        self.report_parse_error(Some(token), error)
+    }
+
+    fn report_parse_error(&mut self, token: Option<&CommonToken>, mut e: ParseError) -> IdedExpr {
+        let expr = if let Some(token) = token {
+            self.helper.next_expr(token, Expr::default())
+        } else {
+            IdedExpr {
+                id: 0,
+                expr: Expr::default(),
+            }
+        };
+        e.expr_id = expr.id;
+        self.errors.push(e);
         expr
     }
 }
@@ -1711,6 +1738,20 @@ ERROR: <input>:1:10: unsupported syntax '[?'
 ERROR: <input>:1:24: unsupported syntax '?'
 | Msg{?field: value} && {?'key': value}
 | .......................^",
+            },
+            TestInfo 	{
+                i: "has(m)",
+                p: "",
+                e: "ERROR: <input>:1:5: invalid argument to has() macro
+| has(m)
+| ....^"
+            },
+            TestInfo {
+                i: "1.all(2, 3)",
+                p: "",
+                e: "ERROR: <input>:1:7: argument must be a simple name
+| 1.all(2, 3)
+| ......^",
             },
         ];
 

@@ -1,12 +1,12 @@
 use crate::ast::{operators, CallExpr, ComprehensionExpr, Expr, IdedExpr, ListExpr};
 use crate::reference::Val::{Boolean, Int};
-use crate::MacroExprHelper;
+use crate::{MacroExprHelper, ParseError};
 
 pub fn has_macro_expander(
     helper: &mut MacroExprHelper,
     target: Option<IdedExpr>,
     mut args: Vec<IdedExpr>,
-) -> IdedExpr {
+) -> Result<IdedExpr, ParseError> {
     if target.is_some() {
         panic!("Got a target when expecting None!")
     }
@@ -14,12 +14,19 @@ pub fn has_macro_expander(
         panic!("Expected a single arg!")
     }
 
-    match args.remove(0).expr {
+    let ided_expr = args.remove(0);
+    match ided_expr.expr {
         Expr::Select(mut select) => {
             select.test = true;
-            helper.next_expr(Expr::Select(select))
+            Ok(helper.next_expr(Expr::Select(select)))
         }
-        e => panic!("Not a select expression: {e:?}"),
+        _ => Err(ParseError {
+            source: None,
+            pos: helper.pos_for(ided_expr.id).unwrap_or_default(),
+            msg: "invalid argument to has() macro".to_string(),
+            expr_id: 0,
+            source_info: None,
+        }),
     }
 }
 
@@ -27,12 +34,9 @@ pub fn exists_macro_expander(
     helper: &mut MacroExprHelper,
     target: Option<IdedExpr>,
     mut args: Vec<IdedExpr>,
-) -> IdedExpr {
+) -> Result<IdedExpr, ParseError> {
     let mut arguments = vec![args.remove(1)];
-    let v = match args.remove(0).expr {
-        Expr::Ident(ident) => ident,
-        _ => panic!("Not an ident expression"),
-    };
+    let v = extract_ident(args.remove(0), helper)?;
 
     let init = helper.next_expr(Expr::Literal(Boolean(false)));
     let result_binding = "@result".to_string();
@@ -57,7 +61,7 @@ pub fn exists_macro_expander(
 
     let result = helper.next_expr(Expr::Ident(result_binding.clone()));
 
-    helper.next_expr(Expr::Comprehension(ComprehensionExpr {
+    Ok(helper.next_expr(Expr::Comprehension(ComprehensionExpr {
         iter_range: Box::new(target.unwrap()),
         iter_var: v,
         iter_var2: None,
@@ -66,18 +70,15 @@ pub fn exists_macro_expander(
         loop_cond: condition.into(),
         loop_step: step.into(),
         result: result.into(),
-    }))
+    })))
 }
 pub fn all_macro_expander(
     helper: &mut MacroExprHelper,
     target: Option<IdedExpr>,
     mut args: Vec<IdedExpr>,
-) -> IdedExpr {
+) -> Result<IdedExpr, ParseError> {
     let mut arguments = vec![args.remove(1)];
-    let v = match args.remove(0).expr {
-        Expr::Ident(ident) => ident,
-        _ => panic!("Not an ident expression"),
-    };
+    let v = extract_ident(args.remove(0), helper)?;
 
     let init = helper.next_expr(Expr::Literal(Boolean(true)));
     let result_binding = "@result".to_string();
@@ -97,7 +98,7 @@ pub fn all_macro_expander(
 
     let result = helper.next_expr(Expr::Ident(result_binding.clone()));
 
-    helper.next_expr(Expr::Comprehension(ComprehensionExpr {
+    Ok(helper.next_expr(Expr::Comprehension(ComprehensionExpr {
         iter_range: Box::new(target.unwrap()),
         iter_var: v,
         iter_var2: None,
@@ -106,19 +107,16 @@ pub fn all_macro_expander(
         loop_cond: condition.into(),
         loop_step: step.into(),
         result: result.into(),
-    }))
+    })))
 }
 
 pub fn exists_one_macro_expander(
     helper: &mut MacroExprHelper,
     target: Option<IdedExpr>,
     mut args: Vec<IdedExpr>,
-) -> IdedExpr {
+) -> Result<IdedExpr, ParseError> {
     let mut arguments = vec![args.remove(1)];
-    let v = match args.remove(0).expr {
-        Expr::Ident(ident) => ident,
-        _ => panic!("Not an ident expression"),
-    };
+    let v = extract_ident(args.remove(0), helper)?;
 
     let init = helper.next_expr(Expr::Literal(Int(0)));
     let result_binding = "@result".to_string();
@@ -149,7 +147,7 @@ pub fn exists_one_macro_expander(
         args: vec![accu, one],
     }));
 
-    helper.next_expr(Expr::Comprehension(ComprehensionExpr {
+    Ok(helper.next_expr(Expr::Comprehension(ComprehensionExpr {
         iter_range: Box::new(target.unwrap()),
         iter_var: v,
         iter_var2: None,
@@ -158,20 +156,16 @@ pub fn exists_one_macro_expander(
         loop_cond: condition.into(),
         loop_step: step.into(),
         result: result.into(),
-    }))
+    })))
 }
 
 pub fn map_macro_expander(
     helper: &mut MacroExprHelper,
     target: Option<IdedExpr>,
     mut args: Vec<IdedExpr>,
-) -> IdedExpr {
+) -> Result<IdedExpr, ParseError> {
     let func = args.pop().unwrap();
-
-    let v = match args.remove(0).expr {
-        Expr::Ident(ident) => ident,
-        _ => panic!("Not an ident expression"),
-    };
+    let v = extract_ident(args.remove(0), helper)?;
 
     let init = helper.next_expr(Expr::List(ListExpr { elements: vec![] }));
     let result_binding = "@result".to_string();
@@ -205,7 +199,7 @@ pub fn map_macro_expander(
 
     let result = helper.next_expr(Expr::Ident(result_binding.clone()));
 
-    helper.next_expr(Expr::Comprehension(ComprehensionExpr {
+    Ok(helper.next_expr(Expr::Comprehension(ComprehensionExpr {
         iter_range: Box::new(target.unwrap()),
         iter_var: v,
         iter_var2: None,
@@ -214,19 +208,16 @@ pub fn map_macro_expander(
         loop_cond: condition.into(),
         loop_step: step.into(),
         result: result.into(),
-    }))
+    })))
 }
 
 pub fn filter_macro_expander(
     helper: &mut MacroExprHelper,
     target: Option<IdedExpr>,
     mut args: Vec<IdedExpr>,
-) -> IdedExpr {
+) -> Result<IdedExpr, ParseError> {
     let var = args.remove(0);
-    let v = match &var.expr {
-        Expr::Ident(ident) => ident.clone(),
-        _ => panic!("Not an ident expression"),
-    };
+    let v = extract_ident(var.clone(), helper)?;
     let filter = args.pop().unwrap();
 
     let init = helper.next_expr(Expr::List(ListExpr { elements: vec![] }));
@@ -254,7 +245,7 @@ pub fn filter_macro_expander(
 
     let result = helper.next_expr(Expr::Ident(result_binding.clone()));
 
-    helper.next_expr(Expr::Comprehension(ComprehensionExpr {
+    Ok(helper.next_expr(Expr::Comprehension(ComprehensionExpr {
         iter_range: Box::new(target.unwrap()),
         iter_var: v,
         iter_var2: None,
@@ -263,5 +254,18 @@ pub fn filter_macro_expander(
         loop_cond: condition.into(),
         loop_step: step.into(),
         result: result.into(),
-    }))
+    })))
+}
+
+fn extract_ident(expr: IdedExpr, helper: &mut MacroExprHelper) -> Result<String, ParseError> {
+    match expr.expr {
+        Expr::Ident(ident) => Ok(ident),
+        _ => Err(ParseError {
+            source: None,
+            pos: helper.pos_for(expr.id).unwrap_or_default(),
+            msg: "argument must be a simple name".to_string(),
+            expr_id: 0,
+            source_info: None,
+        }),
+    }
 }
