@@ -8,7 +8,7 @@ pub mod references;
 pub use ast::IdedExpr as Expression;
 
 mod macros;
-pub mod parse;
+mod parse;
 #[allow(non_snake_case)]
 mod parser;
 
