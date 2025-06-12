@@ -96,8 +96,14 @@ impl Display for ParseError {
 
 impl Error for ParseError {}
 
+#[derive(Debug, Default)]
+pub struct ParserConfig {
+    pub enable_optional_syntax: bool,
+}
+
 pub struct Parser {
     ast: ast::Ast,
+    config: ParserConfig,
     helper: ParserHelper,
     errors: Vec<ParseError>,
 }
@@ -108,6 +114,7 @@ impl Parser {
             ast: ast::Ast {
                 expr: IdedExpr::default(),
             },
+            config: ParserConfig::default(),
             helper: ParserHelper::default(),
             errors: Vec::default(),
         }
@@ -252,12 +259,16 @@ impl Parser {
                     let field_name = ident.get_text().to_string();
                     let value = self.visit(ctx.values[i].as_ref());
                     if let Some(opt) = &field.opt {
-                        self.report_error::<ParseError, _>(
-                            opt.as_ref(),
-                            None,
-                            "unsupported syntax '?'",
-                        );
-                        continue;
+                        if self.config.enable_optional_syntax {
+                            todo!("Support optional syntax!")
+                        } else {
+                            self.report_error::<ParseError, _>(
+                                opt.as_ref(),
+                                None,
+                                "unsupported syntax '?'",
+                            );
+                            continue;
+                        }
                     }
                     fields.push(IdedEntryExpr {
                         id,
@@ -287,8 +298,16 @@ impl Parser {
             let id = self.helper.next_id(col);
             let key = self.visit(keys[i].as_ref());
             if let Some(opt) = &keys[i].opt {
-                self.report_error::<ParseError, _>(opt.as_ref(), None, "unsupported syntax '?'");
-                continue;
+                if self.config.enable_optional_syntax {
+                    todo!("Support optional syntax!")
+                } else {
+                    self.report_error::<ParseError, _>(
+                        opt.as_ref(),
+                        None,
+                        "unsupported syntax '?'",
+                    );
+                    continue;
+                }
             }
             let value = self.visit(vals[i].as_ref());
             entries.push(IdedEntryExpr {
@@ -310,12 +329,16 @@ impl Parser {
                 None => return Vec::default(),
                 Some(exp) => {
                     if let Some(opt) = &e.opt {
-                        self.report_error::<ParseError, _>(
-                            opt.as_ref(),
-                            None,
-                            "unsupported syntax '?'",
-                        );
-                        continue;
+                        if self.config.enable_optional_syntax {
+                            todo!("Support optional syntax!")
+                        } else {
+                            self.report_error::<ParseError, _>(
+                                opt.as_ref(),
+                                None,
+                                "unsupported syntax '?'",
+                            );
+                            continue;
+                        }
                     }
                     list.push(self.visit(exp.as_ref()));
                 }
@@ -668,11 +691,15 @@ impl gen::CELVisitorCompat<'_> for Parser {
             let operand = self.visit(member.as_ref());
             let field = id.get_text();
             if let Some(_opt) = &ctx.opt {
-                return self.report_error::<ParseError, _>(
-                    op.as_ref(),
-                    None,
-                    "unsupported syntax '.?'",
-                );
+                if self.config.enable_optional_syntax {
+                    todo!("Support optional syntax!")
+                } else {
+                    return self.report_error::<ParseError, _>(
+                        op.as_ref(),
+                        None,
+                        "unsupported syntax '.?'",
+                    );
+                }
             }
             self.helper.next_expr(
                 op.as_ref(),
@@ -705,11 +732,15 @@ impl gen::CELVisitorCompat<'_> for Parser {
                     let op_id = self.helper.next_id(op);
                     let index = self.visit(index.as_ref());
                     if let Some(_opt) = &ctx.opt {
-                        return self.report_error::<ParseError, _>(
-                            op.as_ref(),
-                            None,
-                            "unsupported syntax '[?'",
-                        );
+                        if self.config.enable_optional_syntax {
+                            todo!("Support optional syntax!")
+                        } else {
+                            return self.report_error::<ParseError, _>(
+                                op.as_ref(),
+                                None,
+                                "unsupported syntax '[?'",
+                            );
+                        }
                     }
                     self.global_call_or_macro(
                         op_id,
