@@ -514,7 +514,6 @@ impl Value {
                             }
                         }
                         operators::LOGICAL_OR => {
-                            let left = Value::resolve(&call.args[0], ctx)?;
                             return if left.to_bool() {
                                 left.into()
                             } else {
@@ -522,7 +521,6 @@ impl Value {
                             };
                         }
                         operators::LOGICAL_AND => {
-                            let left = Value::resolve(&call.args[0], ctx)?;
                             return if !left.to_bool() {
                                 Value::Bool(false)
                             } else {
