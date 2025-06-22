@@ -110,7 +110,10 @@ impl IdedExpr {
                 comp.result._references(variables, functions);
             }
             Expr::Ident(name) => {
-                variables.insert(name);
+                // todo! Might want to make this "smarter" (are we in a comprehension?) and better encode these in const
+                if !name.starts_with('@') {
+                    variables.insert(name);
+                }
             }
             Expr::List(list) => {
                 for elem in &list.elements {
