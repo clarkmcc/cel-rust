@@ -237,6 +237,13 @@ mod tests {
     }
 
     #[test]
+    fn references() {
+        let p = Program::compile("[1, 1].map(x, x * 2)").unwrap();
+        assert!(p.references().has_variable("x"));
+        assert_eq!(p.references().variables().len(), 1);
+    }
+
+    #[test]
     fn test_execution_errors() {
         let tests = vec![
             (
