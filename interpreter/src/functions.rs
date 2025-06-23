@@ -15,6 +15,7 @@ type Result<T> = std::result::Result<T, ExecutionError>;
 /// It contains references to the target object (if the function is called as
 /// a method), the program context ([`Context`]) which gives functions access
 /// to variables, and the arguments to the function call.
+#[derive(Clone)]
 pub struct FunctionContext<'context> {
     pub name: Arc<String>,
     pub this: Option<Value>,
