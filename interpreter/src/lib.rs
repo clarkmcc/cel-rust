@@ -39,7 +39,7 @@ pub mod extractors {
     pub use crate::magic::{Arguments, Identifier, This};
 }
 
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Clone, Debug, PartialEq)]
 pub enum ExecutionError {
     #[error("Invalid argument count: expected {expected}, got {actual}")]
     InvalidArgumentCount { expected: usize, actual: usize },
