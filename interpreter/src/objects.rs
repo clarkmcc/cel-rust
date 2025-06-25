@@ -1118,56 +1118,38 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_int_math() {
-        test_execution_error("1 / 0", ExecutionError::DivisionByZero(1.into()));
-
-        test_execution_error("1 % 0", ExecutionError::RemainderByZero(1.into()));
-
-        test_execution_error(
-            &format!("{} + 1", i64::MAX),
-            ExecutionError::IntegerOverflow("add", i64::MAX.into(), 1.into()),
-        );
-
-        test_execution_error(
-            &format!("{} - 1", i64::MIN),
-            ExecutionError::IntegerOverflow("sub", i64::MIN.into(), 1.into()),
-        );
-
-        test_execution_error(
-            &format!("{} * 2", i64::MAX),
-            ExecutionError::IntegerOverflow("mul", i64::MAX.into(), 2.into()),
-        );
-
-        test_execution_error(
-            &format!("{} / -1", i64::MIN),
-            ExecutionError::IntegerOverflow("div", i64::MIN.into(), (-1).into()),
-        );
-
-        test_execution_error(
-            &format!("{} % -1", i64::MIN),
-            ExecutionError::IntegerOverflow("rem", i64::MIN.into(), (-1).into()),
-        );
+    fn invalid_int_math() {
+        use ExecutionError::*;
+    
+        let cases = [
+            ("1 / 0", DivisionByZero(1.into())),
+            ("1 % 0", RemainderByZero(1.into())),
+            (&format!("{} + 1",  i64::MAX), IntegerOverflow("add", i64::MAX.into(), 1.into())),
+            (&format!("{} - 1",  i64::MIN), IntegerOverflow("sub", i64::MIN.into(), 1.into())),
+            (&format!("{} * 2",  i64::MAX), IntegerOverflow("mul", i64::MAX.into(), 2.into())),
+            (&format!("{} / -1", i64::MIN), IntegerOverflow("div", i64::MIN.into(), (-1).into())),
+            (&format!("{} % -1", i64::MIN), IntegerOverflow("rem", i64::MIN.into(), (-1).into())),
+        ];
+    
+        for (expr, err) in cases {
+            test_execution_error(expr, err);
+        }
     }
-
+    
     #[test]
-    fn test_invalid_uint_math() {
-        test_execution_error("1u / 0u", ExecutionError::DivisionByZero(1u64.into()));
-
-        test_execution_error("1u % 0u", ExecutionError::RemainderByZero(1u64.into()));
-
-        test_execution_error(
-            &format!("{}u + 1u", u64::MAX),
-            ExecutionError::IntegerOverflow("add", u64::MAX.into(), 1u64.into()),
-        );
-
-        test_execution_error(
-            "0u - 1u",
-            ExecutionError::IntegerOverflow("sub", 0u64.into(), 1u64.into()),
-        );
-
-        test_execution_error(
-            &format!("{}u * 2u", u64::MAX),
-            ExecutionError::IntegerOverflow("mul", u64::MAX.into(), 2u64.into()),
-        );
+    fn invalid_uint_math() {
+        use ExecutionError::*;
+    
+        let cases = [
+            ("1u / 0u", DivisionByZero(1u64.into())),
+            ("1u % 0u", RemainderByZero(1u64.into())),
+            (&format!("{}u + 1u", u64::MAX), IntegerOverflow("add", u64::MAX.into(), 1u64.into())),
+            ("0u - 1u", IntegerOverflow("sub", 0u64.into(), 1u64.into())),
+            (&format!("{}u * 2u", u64::MAX), IntegerOverflow("mul", u64::MAX.into(), 2u64.into())),
+        ];
+    
+        for (expr, err) in cases {
+            test_execution_error(expr, err);
+        }
     }
 }
