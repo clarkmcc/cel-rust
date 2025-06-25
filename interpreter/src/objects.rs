@@ -55,7 +55,7 @@ impl From<String> for Key {
 
 impl From<Arc<String>> for Key {
     fn from(v: Arc<String>) -> Self {
-        Key::String(v.clone())
+        Key::String(v)
     }
 }
 
