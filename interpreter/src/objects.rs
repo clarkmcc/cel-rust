@@ -762,8 +762,15 @@ impl ops::Add<Value> for Value {
     #[inline(always)]
     fn add(self, rhs: Value) -> Self::Output {
         match (self, rhs) {
-            (Value::Int(l), Value::Int(r)) => Value::Int(l + r).into(),
-            (Value::UInt(l), Value::UInt(r)) => Value::UInt(l + r).into(),
+            (Value::Int(l), Value::Int(r)) => l
+                .checked_add(r)
+                .ok_or(ExecutionError::IntegerOverflow("add", l.into(), r.into()))
+                .map(Value::Int),
+
+            (Value::UInt(l), Value::UInt(r)) => l
+                .checked_add(r)
+                .ok_or(ExecutionError::IntegerOverflow("add", l.into(), r.into()))
+                .map(Value::UInt),
 
             // Float matrix
             (Value::Float(l), Value::Float(r)) => Value::Float(l + r).into(),
@@ -792,6 +799,7 @@ impl ops::Add<Value> for Value {
                 }
                 Value::Map(Map { map: Arc::new(new) }).into()
             }
+            // todo! Check for integer overflow in duration math
             #[cfg(feature = "chrono")]
             (Value::Duration(l), Value::Duration(r)) => Value::Duration(l + r).into(),
             #[cfg(feature = "chrono")]
@@ -811,8 +819,15 @@ impl ops::Sub<Value> for Value {
     #[inline(always)]
     fn sub(self, rhs: Value) -> Self::Output {
         match (self, rhs) {
-            (Value::Int(l), Value::Int(r)) => Value::Int(l - r).into(),
-            (Value::UInt(l), Value::UInt(r)) => Value::UInt(l - r).into(),
+            (Value::Int(l), Value::Int(r)) => l
+                .checked_sub(r)
+                .ok_or(ExecutionError::IntegerOverflow("sub", l.into(), r.into()))
+                .map(Value::Int),
+
+            (Value::UInt(l), Value::UInt(r)) => l
+                .checked_sub(r)
+                .ok_or(ExecutionError::IntegerOverflow("sub", l.into(), r.into()))
+                .map(Value::UInt),
 
             // Float matrix
             (Value::Float(l), Value::Float(r)) => Value::Float(l - r).into(),
@@ -840,8 +855,20 @@ impl ops::Div<Value> for Value {
     #[inline(always)]
     fn div(self, rhs: Value) -> Self::Output {
         match (self, rhs) {
-            (Value::Int(l), Value::Int(r)) => Value::Int(l / r).into(),
-            (Value::UInt(l), Value::UInt(r)) => Value::UInt(l / r).into(),
+            (Value::Int(l), Value::Int(r)) => {
+                if r == 0 {
+                    Err(ExecutionError::DivisionByZero(l.into()))
+                } else {
+                    l.checked_div(r)
+                        .ok_or(ExecutionError::IntegerOverflow("div", l.into(), r.into()))
+                        .map(Value::Int)
+                }
+            }
+
+            (Value::UInt(l), Value::UInt(r)) => l
+                .checked_div(r)
+                .ok_or(ExecutionError::DivisionByZero(l.into()))
+                .map(Value::UInt),
 
             // Float matrix
             (Value::Float(l), Value::Float(r)) => Value::Float(l / r).into(),
@@ -863,8 +890,15 @@ impl ops::Mul<Value> for Value {
     #[inline(always)]
     fn mul(self, rhs: Value) -> Self::Output {
         match (self, rhs) {
-            (Value::Int(l), Value::Int(r)) => Value::Int(l * r).into(),
-            (Value::UInt(l), Value::UInt(r)) => Value::UInt(l * r).into(),
+            (Value::Int(l), Value::Int(r)) => l
+                .checked_mul(r)
+                .ok_or(ExecutionError::IntegerOverflow("mul", l.into(), r.into()))
+                .map(Value::Int),
+
+            (Value::UInt(l), Value::UInt(r)) => l
+                .checked_mul(r)
+                .ok_or(ExecutionError::IntegerOverflow("mul", l.into(), r.into()))
+                .map(Value::UInt),
 
             // Float matrix
             (Value::Float(l), Value::Float(r)) => Value::Float(l * r).into(),
@@ -886,8 +920,20 @@ impl ops::Rem<Value> for Value {
     #[inline(always)]
     fn rem(self, rhs: Value) -> Self::Output {
         match (self, rhs) {
-            (Value::Int(l), Value::Int(r)) => Value::Int(l % r).into(),
-            (Value::UInt(l), Value::UInt(r)) => Value::UInt(l % r).into(),
+            (Value::Int(l), Value::Int(r)) => {
+                if r == 0 {
+                    Err(ExecutionError::RemainderByZero(l.into()))
+                } else {
+                    l.checked_rem(r)
+                        .ok_or(ExecutionError::IntegerOverflow("rem", l.into(), r.into()))
+                        .map(Value::Int)
+                }
+            }
+
+            (Value::UInt(l), Value::UInt(r)) => l
+                .checked_rem(r)
+                .ok_or(ExecutionError::RemainderByZero(l.into()))
+                .map(Value::UInt),
 
             // Float matrix
             (Value::Float(l), Value::Float(r)) => Value::Float(l % r).into(),
@@ -1073,5 +1119,62 @@ mod tests {
             value.is_ok(),
             "The AND expression should support short-circuit evaluation."
         );
+    }
+
+    #[test]
+    fn invalid_int_math() {
+        use ExecutionError::*;
+
+        let cases = [
+            ("1 / 0", DivisionByZero(1.into())),
+            ("1 % 0", RemainderByZero(1.into())),
+            (
+                &format!("{} + 1", i64::MAX),
+                IntegerOverflow("add", i64::MAX.into(), 1.into()),
+            ),
+            (
+                &format!("{} - 1", i64::MIN),
+                IntegerOverflow("sub", i64::MIN.into(), 1.into()),
+            ),
+            (
+                &format!("{} * 2", i64::MAX),
+                IntegerOverflow("mul", i64::MAX.into(), 2.into()),
+            ),
+            (
+                &format!("{} / -1", i64::MIN),
+                IntegerOverflow("div", i64::MIN.into(), (-1).into()),
+            ),
+            (
+                &format!("{} % -1", i64::MIN),
+                IntegerOverflow("rem", i64::MIN.into(), (-1).into()),
+            ),
+        ];
+
+        for (expr, err) in cases {
+            test_execution_error(expr, err);
+        }
+    }
+
+    #[test]
+    fn invalid_uint_math() {
+        use ExecutionError::*;
+
+        let cases = [
+            ("1u / 0u", DivisionByZero(1u64.into())),
+            ("1u % 0u", RemainderByZero(1u64.into())),
+            (
+                &format!("{}u + 1u", u64::MAX),
+                IntegerOverflow("add", u64::MAX.into(), 1u64.into()),
+            ),
+            ("0u - 1u", IntegerOverflow("sub", 0u64.into(), 1u64.into())),
+            (
+                &format!("{}u * 2u", u64::MAX),
+                IntegerOverflow("mul", u64::MAX.into(), 2u64.into()),
+            ),
+        ];
+
+        for (expr, err) in cases {
+            test_execution_error(expr, err);
+        }
     }
 }

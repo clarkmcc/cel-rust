@@ -95,6 +95,12 @@ pub enum ExecutionError {
     /// Indicates that a function had an error during execution.
     #[error("Error executing function '{function}': {message}")]
     FunctionError { function: String, message: String },
+    #[error("Division by zero of {0:?}")]
+    DivisionByZero(Value),
+    #[error("Remainder by zero of {0:?}")]
+    RemainderByZero(Value),
+    #[error("Integer overflow from binary operator '{0}': {1:?}, {2:?}")]
+    IntegerOverflow(&'static str, Value, Value),
 }
 
 impl ExecutionError {
