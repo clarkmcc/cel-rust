@@ -40,6 +40,7 @@ pub mod extractors {
 }
 
 #[derive(Error, Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum ExecutionError {
     #[error("Invalid argument count: expected {expected}, got {actual}")]
     InvalidArgumentCount { expected: usize, actual: usize },
