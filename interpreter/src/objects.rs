@@ -713,7 +713,11 @@ impl Value {
     //               Attribute("b")),
     //        FunctionCall([Ident("c")]))
 
-    fn member(self, name: &String, ctx: &Context) -> ResolveResult {
+    fn member(self, name: &str, ctx: &Context) -> ResolveResult {
+        // todo! Ideally we would avoid creating a String just to create a Key for lookup in the
+        // map, but this would require something like the `hashbrown` crate's `Equivalent` trait.
+        let name: Arc<String> = name.to_owned().into();
+
         // This will always either be because we're trying to access
         // a property on self, or a method on self.
         let child = match self {
@@ -724,10 +728,10 @@ impl Value {
         // If the property is both an attribute and a method, then we
         // give priority to the property. Maybe we can implement lookahead
         // to see if the next token is a function call?
-        match (child, ctx.has_function(name)) {
-            (None, false) => ExecutionError::NoSuchKey(name.clone().into()).into(),
+        match (child, ctx.has_function(&name)) {
+            (None, false) => ExecutionError::NoSuchKey(name).into(),
             (Some(child), _) => child.into(),
-            (None, true) => Value::Function(name.clone().into(), Some(self.into())).into(),
+            (None, true) => Value::Function(name, Some(self.into())).into(),
         }
     }
 

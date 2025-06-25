@@ -76,17 +76,17 @@ impl Context<'_> {
         }
     }
 
+    // todo! The Into<String> here is probably unnecessary, as the lookup only requires &str.
     pub fn get_variable<S>(&self, name: S) -> Result<Value, ExecutionError>
     where
         S: Into<String>,
     {
         let name = name.into();
         match self {
-            Context::Child { variables, parent } => variables
-                .get(&name)
-                .cloned()
-                .or_else(|| parent.get_variable(&name).ok())
-                .ok_or_else(|| ExecutionError::UndeclaredReference(name.into())),
+            Context::Child { variables, parent } => match variables.get(&name) {
+                Some(value) => Ok(value.clone()),
+                None => parent.get_variable(name),
+            },
             Context::Root { variables, .. } => variables
                 .get(&name)
                 .cloned()
@@ -94,24 +94,16 @@ impl Context<'_> {
         }
     }
 
-    pub(crate) fn has_function<S>(&self, name: S) -> bool
-    where
-        S: Into<String>,
-    {
-        let name = name.into();
+    pub(crate) fn has_function(&self, name: &str) -> bool {
         match self {
-            Context::Root { functions, .. } => functions.has(&name),
+            Context::Root { functions, .. } => functions.has(name),
             Context::Child { parent, .. } => parent.has_function(name),
         }
     }
 
-    pub(crate) fn get_function<S>(&self, name: S) -> Option<&Function>
-    where
-        S: Into<String>,
-    {
-        let name = name.into();
+    pub(crate) fn get_function(&self, name: &str) -> Option<&Function> {
         match self {
-            Context::Root { functions, .. } => functions.get(&name),
+            Context::Root { functions, .. } => functions.get(name),
             Context::Child { parent, .. } => parent.get_function(name),
         }
     }
