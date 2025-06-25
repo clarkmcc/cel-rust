@@ -1120,34 +1120,55 @@ mod tests {
     #[test]
     fn invalid_int_math() {
         use ExecutionError::*;
-    
+
         let cases = [
             ("1 / 0", DivisionByZero(1.into())),
             ("1 % 0", RemainderByZero(1.into())),
-            (&format!("{} + 1",  i64::MAX), IntegerOverflow("add", i64::MAX.into(), 1.into())),
-            (&format!("{} - 1",  i64::MIN), IntegerOverflow("sub", i64::MIN.into(), 1.into())),
-            (&format!("{} * 2",  i64::MAX), IntegerOverflow("mul", i64::MAX.into(), 2.into())),
-            (&format!("{} / -1", i64::MIN), IntegerOverflow("div", i64::MIN.into(), (-1).into())),
-            (&format!("{} % -1", i64::MIN), IntegerOverflow("rem", i64::MIN.into(), (-1).into())),
+            (
+                &format!("{} + 1", i64::MAX),
+                IntegerOverflow("add", i64::MAX.into(), 1.into()),
+            ),
+            (
+                &format!("{} - 1", i64::MIN),
+                IntegerOverflow("sub", i64::MIN.into(), 1.into()),
+            ),
+            (
+                &format!("{} * 2", i64::MAX),
+                IntegerOverflow("mul", i64::MAX.into(), 2.into()),
+            ),
+            (
+                &format!("{} / -1", i64::MIN),
+                IntegerOverflow("div", i64::MIN.into(), (-1).into()),
+            ),
+            (
+                &format!("{} % -1", i64::MIN),
+                IntegerOverflow("rem", i64::MIN.into(), (-1).into()),
+            ),
         ];
-    
+
         for (expr, err) in cases {
             test_execution_error(expr, err);
         }
     }
-    
+
     #[test]
     fn invalid_uint_math() {
         use ExecutionError::*;
-    
+
         let cases = [
             ("1u / 0u", DivisionByZero(1u64.into())),
             ("1u % 0u", RemainderByZero(1u64.into())),
-            (&format!("{}u + 1u", u64::MAX), IntegerOverflow("add", u64::MAX.into(), 1u64.into())),
+            (
+                &format!("{}u + 1u", u64::MAX),
+                IntegerOverflow("add", u64::MAX.into(), 1u64.into()),
+            ),
             ("0u - 1u", IntegerOverflow("sub", 0u64.into(), 1u64.into())),
-            (&format!("{}u * 2u", u64::MAX), IntegerOverflow("mul", u64::MAX.into(), 2u64.into())),
+            (
+                &format!("{}u * 2u", u64::MAX),
+                IntegerOverflow("mul", u64::MAX.into(), 2u64.into()),
+            ),
         ];
-    
+
         for (expr, err) in cases {
             test_execution_error(expr, err);
         }
