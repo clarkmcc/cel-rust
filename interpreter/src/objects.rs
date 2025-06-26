@@ -774,14 +774,27 @@ impl ops::Add<Value> for Value {
 
             (Value::Float(l), Value::Float(r)) => Value::Float(l + r).into(),
 
-            (Value::List(l), Value::List(r)) => {
-                Value::List(l.iter().chain(r.iter()).cloned().collect::<Vec<_>>().into()).into()
+            (Value::List(mut l), Value::List(mut r)) => {
+                {
+                    // If this is the only reference to `l`, we can append to it in place.
+                    // `l` is replaced with a clone otherwise.
+                    let l = Arc::make_mut(&mut l);
+
+                    // Likewise, if this is the only reference to `r`, we can move its values
+                    // instead of cloning them.
+                    match Arc::get_mut(&mut r) {
+                        Some(r) => l.append(r),
+                        None => l.extend(r.iter().cloned()),
+                    }
+                }
+
+                Ok(Value::List(l))
             }
-            (Value::String(l), Value::String(r)) => {
-                let mut new = String::with_capacity(l.len() + r.len());
-                new.push_str(&l);
-                new.push_str(&r);
-                Value::String(new.into()).into()
+            (Value::String(mut l), Value::String(r)) => {
+                // If this is the only reference to `l`, we can append to it in place.
+                // `l` is replaced with a clone otherwise.
+                Arc::make_mut(&mut l).push_str(&r);
+                Ok(Value::String(l))
             }
             // todo! Check for integer overflow in duration math
             #[cfg(feature = "chrono")]
