@@ -1,0 +1,23 @@
+[package]
+name = "cel-parser-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+arbitrary = { version = "1.4.1", features = ["derive"] }
+libfuzzer-sys = "0.4"
+
+[dependencies.cel-interpreter]
+path = "../interpreter"
+features = ["arbitrary"]
+
+[[bin]]
+name = "value_binop"
+path = "fuzz_targets/value_binop.rs"
+test = false
+doc = false
+bench = false
