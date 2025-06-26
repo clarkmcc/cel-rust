@@ -12,7 +12,6 @@ categories = ["compilers"]
 cel-parser = { path = "../antlr" }
 
 nom = "7.1.3"
-
 chrono = { version = "0.4", default-features = false, features = ["alloc", "serde"], optional = true }
 regex = { version = "1.10.5", optional = true }
 serde = "1.0"
@@ -21,6 +20,14 @@ base64 = { version = "0.22.1", optional = true }
 
 thiserror = "1.0"
 paste = "1.0"
+prost = { version = "0.13", optional = true }
+prost-types = { version = "0.13.2", optional = true }
+prost-wkt = { version = "0.6", optional = true }
+prost-wkt-types = { version = "0.6", optional = true }
+
+[build-dependencies]
+prost-build = { version = "0.13", optional = true }
+prost-wkt-build = { version = "0.6", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
@@ -35,3 +42,4 @@ default = ["regex", "chrono"]
 json = ["dep:serde_json", "dep:base64"]
 regex = ["dep:regex"]
 chrono = ["dep:chrono"]
+proto = ["dep:prost", "dep:prost-types", "dep:prost-build", "dep:prost-wkt", "dep:prost-wkt-build", "dep:prost-wkt-types", "serde/derive"]
