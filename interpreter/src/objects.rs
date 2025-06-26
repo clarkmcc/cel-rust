@@ -772,12 +772,7 @@ impl ops::Add<Value> for Value {
                 .ok_or(ExecutionError::IntegerOverflow("add", l.into(), r.into()))
                 .map(Value::UInt),
 
-            // Float matrix
             (Value::Float(l), Value::Float(r)) => Value::Float(l + r).into(),
-            (Value::Int(l), Value::Float(r)) => Value::Float(l as f64 + r).into(),
-            (Value::Float(l), Value::Int(r)) => Value::Float(l + r as f64).into(),
-            (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 + r).into(),
-            (Value::Float(l), Value::UInt(r)) => Value::Float(l + r as f64).into(),
 
             (Value::List(l), Value::List(r)) => {
                 Value::List(l.iter().chain(r.iter()).cloned().collect::<Vec<_>>().into()).into()
@@ -787,17 +782,6 @@ impl ops::Add<Value> for Value {
                 new.push_str(&l);
                 new.push_str(&r);
                 Value::String(new.into()).into()
-            }
-            // Merge two maps should overwrite keys in the left map with the right map
-            (Value::Map(l), Value::Map(r)) => {
-                let mut new = HashMap::default();
-                for (k, v) in l.map.iter() {
-                    new.insert(k.clone(), v.clone());
-                }
-                for (k, v) in r.map.iter() {
-                    new.insert(k.clone(), v.clone());
-                }
-                Value::Map(Map { map: Arc::new(new) }).into()
             }
             // todo! Check for integer overflow in duration math
             #[cfg(feature = "chrono")]
@@ -829,12 +813,8 @@ impl ops::Sub<Value> for Value {
                 .ok_or(ExecutionError::IntegerOverflow("sub", l.into(), r.into()))
                 .map(Value::UInt),
 
-            // Float matrix
             (Value::Float(l), Value::Float(r)) => Value::Float(l - r).into(),
-            (Value::Int(l), Value::Float(r)) => Value::Float(l as f64 - r).into(),
-            (Value::Float(l), Value::Int(r)) => Value::Float(l - r as f64).into(),
-            (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 - r).into(),
-            (Value::Float(l), Value::UInt(r)) => Value::Float(l - r as f64).into(),
+
             // todo: implement checked sub for these over-flowable operations
             #[cfg(feature = "chrono")]
             (Value::Duration(l), Value::Duration(r)) => Value::Duration(l - r).into(),
@@ -870,12 +850,7 @@ impl ops::Div<Value> for Value {
                 .ok_or(ExecutionError::DivisionByZero(l.into()))
                 .map(Value::UInt),
 
-            // Float matrix
             (Value::Float(l), Value::Float(r)) => Value::Float(l / r).into(),
-            (Value::Int(l), Value::Float(r)) => Value::Float(l as f64 / r).into(),
-            (Value::Float(l), Value::Int(r)) => Value::Float(l / r as f64).into(),
-            (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 / r).into(),
-            (Value::Float(l), Value::UInt(r)) => Value::Float(l / r as f64).into(),
 
             (left, right) => Err(ExecutionError::UnsupportedBinaryOperator(
                 "div", left, right,
@@ -900,12 +875,7 @@ impl ops::Mul<Value> for Value {
                 .ok_or(ExecutionError::IntegerOverflow("mul", l.into(), r.into()))
                 .map(Value::UInt),
 
-            // Float matrix
             (Value::Float(l), Value::Float(r)) => Value::Float(l * r).into(),
-            (Value::Int(l), Value::Float(r)) => Value::Float(l as f64 * r).into(),
-            (Value::Float(l), Value::Int(r)) => Value::Float(l * r as f64).into(),
-            (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 * r).into(),
-            (Value::Float(l), Value::UInt(r)) => Value::Float(l * r as f64).into(),
 
             (left, right) => Err(ExecutionError::UnsupportedBinaryOperator(
                 "mul", left, right,
@@ -934,13 +904,6 @@ impl ops::Rem<Value> for Value {
                 .checked_rem(r)
                 .ok_or(ExecutionError::RemainderByZero(l.into()))
                 .map(Value::UInt),
-
-            // Float matrix
-            (Value::Float(l), Value::Float(r)) => Value::Float(l % r).into(),
-            (Value::Int(l), Value::Float(r)) => Value::Float(l as f64 % r).into(),
-            (Value::Float(l), Value::Int(r)) => Value::Float(l % r as f64).into(),
-            (Value::UInt(l), Value::Float(r)) => Value::Float(l as f64 % r).into(),
-            (Value::Float(l), Value::UInt(r)) => Value::Float(l % r as f64).into(),
 
             (left, right) => Err(ExecutionError::UnsupportedBinaryOperator(
                 "rem", left, right,
